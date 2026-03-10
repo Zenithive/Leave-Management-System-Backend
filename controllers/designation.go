@@ -1,37 +1,42 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/access_role"
 )
-
-type DesignationInput struct {
-	DesignationName string  `json:"designation_name" validate:"required"`
-	Description     *string `json:"description,omitempty"`
-}
 
 // CreateDesignation - POST /api/designations
 // Only ADMIN, SUPERADMIN, and HR can create designations
 func (h *HandlerFunc) CreateDesignation(c *gin.Context) {
 	// 1️ Permission check
 	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		utils.RespondWithError(c, http.StatusForbidden, "only ADMIN, SUPERADMIN, and HR can create designations")
+
+	if err := access_role.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can create designations"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
 	// 2️ Bind input JSON
-	var input DesignationInput
+	var input *models.DesignationInput
+
 	if err := c.ShouldBindJSON(&input); err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
 		return
 	}
 
+	if err := h.Validator.Struct(input); err != nil {
+		utils.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
+		return
+	}
+
 	// 3️ Create designation
-	designationID, err := h.Query.CreateDesignation(input.DesignationName, input.Description)
+	designationID, err := h.Query.CreateDesignation(input)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, "failed to create designation: "+err.Error())
 		return
@@ -91,8 +96,8 @@ func (h *HandlerFunc) GetDesignationByID(c *gin.Context) {
 func (h *HandlerFunc) UpdateDesignation(c *gin.Context) {
 	// 1️ Permission check
 	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		utils.RespondWithError(c, http.StatusForbidden, "only ADMIN, SUPERADMIN, and HR can update designations")
+	if err := access_role.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can update designations"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
@@ -105,14 +110,19 @@ func (h *HandlerFunc) UpdateDesignation(c *gin.Context) {
 	}
 
 	// 3️ Bind input JSON
-	var input DesignationInput
+	var input *models.DesignationInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
 		return
 	}
 
+	if err := h.Validator.Struct(input); err != nil {
+		utils.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
+		return
+	}
+
 	// 4️ Update designation
-	err = h.Query.UpdateDesignation(designationID, input.DesignationName, input.Description)
+	err = h.Query.UpdateDesignation(designationID, input)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, "failed to update designation: "+err.Error())
 		return
@@ -130,16 +140,17 @@ func (h *HandlerFunc) UpdateDesignation(c *gin.Context) {
 func (h *HandlerFunc) DeleteDesignation(c *gin.Context) {
 	// 1️ Permission check
 	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		utils.RespondWithError(c, http.StatusForbidden, "only ADMIN, SUPERADMIN, and HR can delete designations")
+	if err := access_role.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can delete designations"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
 	// 2️ Parse designation ID
 	designationIDStr := c.Param("id")
+	fmt.Println(designationIDStr)
 	designationID, err := uuid.Parse(designationIDStr)
 	if err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "invalid designation ID")
+		utils.RespondWithError(c, http.StatusBadRequest, "invalid designation ID "+err.Error())
 		return
 	}
 

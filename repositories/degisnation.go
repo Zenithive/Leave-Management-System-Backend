@@ -1,30 +1,27 @@
 package repositories
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
+)
 
 // ------------------ DESIGNATION OPERATIONS ------------------
 
-type Designation struct {
-	ID              uuid.UUID `json:"id" db:"id"`
-	DesignationName string    `json:"designation_name" db:"designation_name"`
-	Description     *string   `json:"description,omitempty" db:"description"`
-}
-
 // CreateDesignation inserts a new designation
-func (r *Repository) CreateDesignation(name string, description *string) (string, error) {
+func (r *Repository) CreateDesignation(input *models.DesignationInput) (string, error) {
 	var id string
 	query := `
 		INSERT INTO Tbl_Designation (designation_name, description)
 		VALUES ($1, $2)
 		RETURNING id
 	`
-	err := r.DB.QueryRow(query, name, description).Scan(&id)
+	err := r.DB.QueryRow(query, input.DesignationName, input.Description).Scan(&id)
 	return id, err
 }
 
 // GetAllDesignations fetches all designations
-func (r *Repository) GetAllDesignations() ([]Designation, error) {
-	var designations []Designation
+func (r *Repository) GetAllDesignations() ([]models.Designation, error) {
+	var designations []models.Designation
 	query := `
 		SELECT id, designation_name, description
 		FROM Tbl_Designation
@@ -35,8 +32,8 @@ func (r *Repository) GetAllDesignations() ([]Designation, error) {
 }
 
 // GetDesignationByID fetches a single designation by ID
-func (r *Repository) GetDesignationByID(id uuid.UUID) (*Designation, error) {
-	var designation Designation
+func (r *Repository) GetDesignationByID(id uuid.UUID) (*models.Designation, error) {
+	var designation models.Designation
 	query := `
 		SELECT id, designation_name, description
 		FROM Tbl_Designation
@@ -50,13 +47,13 @@ func (r *Repository) GetDesignationByID(id uuid.UUID) (*Designation, error) {
 }
 
 // UpdateDesignation updates an existing designation
-func (r *Repository) UpdateDesignation(id uuid.UUID, name string, description *string) error {
+func (r *Repository) UpdateDesignation(id uuid.UUID, input *models.DesignationInput) error {
 	query := `
 		UPDATE Tbl_Designation
 		SET designation_name = $1, description = $2
 		WHERE id = $3
 	`
-	_, err := r.DB.Exec(query, name, description, id)
+	_, err := r.DB.Exec(query, input.DesignationName, input.Description, id)
 	return err
 }
 
@@ -65,16 +62,5 @@ func (r *Repository) UpdateDesignation(id uuid.UUID, name string, description *s
 func (r *Repository) DeleteDesignation(id uuid.UUID) error {
 	query := `DELETE FROM Tbl_Designation WHERE id = $1`
 	_, err := r.DB.Exec(query, id)
-	return err
-}
-
-// ------------------ UPDATE EMPLOYEE DESIGNATION ------------------
-func (r *Repository) UpdateEmployeeDesignation(empID uuid.UUID, designationID *uuid.UUID) error {
-	query := `
-		UPDATE Tbl_Employee
-		SET designation_id = $1, updated_at = NOW()
-		WHERE id = $2
-	`
-	_, err := r.DB.Exec(query, designationID, empID)
 	return err
 }

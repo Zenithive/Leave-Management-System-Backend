@@ -30,7 +30,6 @@ func (h *HandlerFunc) GetCompanySettings(c *gin.Context) {
 		fmt.Println("error", err.Error())
 		return
 	}
-	fmt.Println("setting", settings)
 	c.JSON(http.StatusOK, gin.H{
 		"settings": settings,
 	})

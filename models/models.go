@@ -176,20 +176,9 @@ type LeaveResponse struct {
 
 var Validate *validator.Validate
 
-func InitValidator() {
+func InitValidator() *validator.Validate {
 	Validate = validator.New()
-}
-
-// ----------------- DESIGNATION -----------------
-type Designation struct {
-	ID              string  `json:"id" db:"id"`
-	DesignationName string  `json:"designation_name" db:"designation_name"`
-	Description     *string `json:"description,omitempty" db:"description"`
-}
-
-type DesignationInput struct {
-	DesignationName string  `json:"designation_name" validate:"required"`
-	Description     *string `json:"description,omitempty"`
+	return Validate
 }
 
 // CompanySettings struct mapping the DB table

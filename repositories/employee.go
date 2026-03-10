@@ -10,3 +10,14 @@ func (r *Repository) GetEmployeeStatus(employeeID uuid.UUID) (string, error) {
 	`, employeeID)
 	return status, err
 }
+
+// ------------------ UPDATE EMPLOYEE DESIGNATION ------------------
+func (r *Repository) UpdateEmployeeDesignation(empID uuid.UUID, designationID *uuid.UUID) error {
+	query := `
+		UPDATE Tbl_Employee
+		SET designation_id = $1, updated_at = NOW()
+		WHERE id = $2
+	`
+	_, err := r.DB.Exec(query, designationID, empID)
+	return err
+}

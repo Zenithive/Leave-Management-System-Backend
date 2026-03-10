@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
 )
 
 type UpdateRoleInput struct {
@@ -80,7 +81,7 @@ func (h *HandlerFunc) GetEmployeeById(c *gin.Context) {
 
 func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
+	if role != constant.ROLE_SUPER_ADMIN && role != constant.ROLE_ADMIN && role != constant.ROLE_HR {
 		utils.RespondWithError(c, http.StatusUnauthorized, "not permitted")
 		return
 	}

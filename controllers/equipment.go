@@ -335,7 +335,6 @@ func (h *HandlerFunc) GetAllEquipment(c *gin.Context) {
 	}
 
 	data, err := h.Query.GetAllEquipment()
-	fmt.Println("data", data)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, "failed to get equipment: "+err.Error())
 		return
@@ -545,7 +544,6 @@ func (h *HandlerFunc) GetAssignedEquipmentByEmployee(c *gin.Context) {
 	id := c.Param("id")
 	employeeID, err := uuid.Parse(id)
 	data, err := h.Query.GetAssignedEquipmentByEmployee(employeeID)
-	fmt.Println("databy id", data)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return

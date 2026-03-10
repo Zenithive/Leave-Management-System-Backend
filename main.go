@@ -17,10 +17,11 @@ func main() {
 	// Initialize configuration and database
 	env := config.LoadENV()
 	db := database.Connection(env)
+	validator := models.InitValidator()
 
 	repo := repositories.InitializeRepo(db)
 
-	handlerFunc := controllers.NewHandler(env, repo)
+	handlerFunc := controllers.NewHandler(env, repo, validator)
 
 	// Create a new Gin router
 	r := gin.Default()

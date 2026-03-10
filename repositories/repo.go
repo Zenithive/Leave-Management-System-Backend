@@ -146,7 +146,6 @@ func (r *Repository) GetAllEmployees(roleFilter, designationFilter, role string)
 				&emp.UpdatedAt,
 				&emp.DeletedAt,
 			)
-			fmt.Println("salary", emp.Salary)
 			if err != nil {
 				return nil, err
 			}
@@ -179,7 +178,6 @@ func (r *Repository) GetAllEmployees(roleFilter, designationFilter, role string)
 
 		employees = append(employees, emp)
 	}
-	fmt.Println("employee", employees)
 
 	return employees, nil
 }
