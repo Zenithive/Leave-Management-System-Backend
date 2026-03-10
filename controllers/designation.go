@@ -45,7 +45,7 @@ func (h *HandlerFunc) CreateDesignation(c *gin.Context) {
 
 	// 3️ Create designation
 	var designationID string
-	common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		designationID, err = h.Query.CreateDesignation(tx, input)
 		if err != nil {
 			return utils.CustomErr(c, http.StatusInternalServerError, "failed to create designation: "+err.Error())
@@ -56,6 +56,10 @@ func (h *HandlerFunc) CreateDesignation(c *gin.Context) {
 		}
 		return nil
 	})
+	if err != nil {
+		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	// 4️ Response
 	c.JSON(http.StatusCreated, gin.H{
@@ -143,7 +147,7 @@ func (h *HandlerFunc) UpdateDesignation(c *gin.Context) {
 	}
 
 	// 4️ Update designation
-	common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		err = h.Query.UpdateDesignation(tx, designationID, input)
 		if err != nil {
 			return utils.CustomErr(c, http.StatusInternalServerError, "failed to update designation: "+err.Error())
@@ -154,6 +158,10 @@ func (h *HandlerFunc) UpdateDesignation(c *gin.Context) {
 		}
 		return nil
 	})
+	if err != nil {
+		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 	// 5️ Response
 	c.JSON(http.StatusOK, gin.H{
 		"message":        "designation updated successfully",
@@ -179,6 +187,7 @@ func (h *HandlerFunc) DeleteDesignation(c *gin.Context) {
 
 	// 2️ Parse designation ID
 	designationIDStr := c.Param("id")
+
 	designationID, err := uuid.Parse(designationIDStr)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, "invalid designation ID "+err.Error())
@@ -186,7 +195,7 @@ func (h *HandlerFunc) DeleteDesignation(c *gin.Context) {
 	}
 
 	// 3️ Delete designation (will set employee designation_id to NULL due to ON DELETE SET NULL)
-	common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		err = h.Query.DeleteDesignation(tx, designationID)
 		if err != nil {
 			return utils.CustomErr(c, http.StatusInternalServerError, "failed to delete designation: "+err.Error())
@@ -197,6 +206,10 @@ func (h *HandlerFunc) DeleteDesignation(c *gin.Context) {
 		}
 		return nil
 	})
+	if err != nil {
+		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	// 4️ Response
 	c.JSON(http.StatusOK, gin.H{

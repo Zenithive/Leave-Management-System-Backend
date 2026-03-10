@@ -150,16 +150,6 @@ type AuditInput struct {
 	Metadata *string    `json:"metadata,omitempty"` // JSON as string
 }
 
-type Holiday struct {
-	ID        int64     `json:"id" db:"id"`
-	Name      string    `json:"name" db:"name" binding:"required"`
-	Date      time.Time `json:"date" db:"date" binding:"required"` // Input by user
-	Day       string    `json:"day" db:"day"`                      // Automatically calculated
-	Type      string    `json:"type" db:"type"`                    // Default "HOLIDAY"
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
-}
-
 type FullPayslipResponse struct {
 	PayslipID       uuid.UUID `json:"payslip_id"`
 	EmployeeID      uuid.UUID `json:"employee_id"`
@@ -169,7 +159,7 @@ type FullPayslipResponse struct {
 	Year            int       `json:"year"`
 	BasicSalary     float64   `json:"basic_salary"`
 	WorkingDays     int       `json:"working_days"`
-	PaidLeaves      float64   `json:"paid_leaves`
+	PaidLeaves      float64   `json:"paid_leaves"`
 	UnpaidLeaves    float64   `json:"unpaid_leaves"`
 	DeductionAmount float64   `json:"deduction_amount"`
 	NetSalary       float64   `json:"net_salary"`
