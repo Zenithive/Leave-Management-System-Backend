@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/access_role"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
 )
 
@@ -26,8 +27,8 @@ func (h *HandlerFunc) GetEmployee(c *gin.Context) {
 	role, _ := c.Get("role")
 	r := role.(string)
 
-	if r != "SUPERADMIN" && r != "ADMIN" && r != "HR" {
-		utils.RespondWithError(c, http.StatusUnauthorized, "not permitted")
+	if err := access_role.Admin_SuperAdmin_Hr(r, "only ADMIN, SUPERADMIN, and HR can update designations"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
@@ -62,17 +63,14 @@ func (h *HandlerFunc) GetEmployeeById(c *gin.Context) {
 		return
 	}
 
-	// 2️ Fetch employee details
+	// 2️ Fetch employee details (EmployeeResponse has no password)
 	employee, err := h.Query.GetEmployeeByID(empID)
 	if err != nil {
 		utils.RespondWithError(c, 404, "employee not found")
 		return
 	}
 
-	// 3️ Remove password hash (security)
-	employee.Password = ""
-
-	// 4️ Response
+	// 3️ Response
 	c.JSON(200, gin.H{
 		"message":  "employee details fetched successfully",
 		"employee": employee,

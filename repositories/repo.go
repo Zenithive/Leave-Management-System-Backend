@@ -2,13 +2,11 @@ package repositories
 
 import (
 	"database/sql"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
 )
 
 type EmployeeAuthData struct {
@@ -46,140 +44,6 @@ func (r *Repository) GetEmployeeByEmail(email string) (EmployeeAuthData, error) 
 
 	err := r.DB.Get(&emp, query, email)
 	return emp, err
-}
-
-func (r *Repository) GetAllEmployees(roleFilter, designationFilter, role string) ([]models.EmployeeInput, error) {
-	var query string
-
-	if role == constant.ROLE_HR {
-		query = `
-        SELECT 
-            e.id, e.full_name, e.email, e.status,
-            r.type AS role,e.password, e.manager_id, e.designation_id,
-             e.joining_date, e.ending_date,
-            e.created_at, e.updated_at, e.deleted_at
-        FROM Tbl_Employee e
-        JOIN Tbl_Role r ON e.role_id = r.id
-        LEFT JOIN Tbl_Designation d ON e.designation_id = d.id
-        WHERE 1=1 AND e.status = 'active'
-    `
-	}
-	// Build dynamic query with optional filters
-	if role == constant.ROLE_ADMIN || role == constant.ROLE_SUPER_ADMIN {
-		query = `
-        SELECT 
-            e.id, e.full_name, e.email, e.status,
-            r.type AS role, e.password, e.manager_id, e.designation_id,
-            e.salary, e.joining_date, e.ending_date,
-            e.created_at, e.updated_at, e.deleted_at
-        FROM Tbl_Employee e
-        JOIN Tbl_Role r ON e.role_id = r.id
-        LEFT JOIN Tbl_Designation d ON e.designation_id = d.id
-        WHERE 1=1  AND e.status = 'active'
-    `
-	}
-
-	args := []interface{}{}
-	argCount := 1
-
-	// Add role filter if provided
-	if roleFilter != "" {
-		query += fmt.Sprintf(" AND r.type = $%d", argCount)
-		args = append(args, roleFilter)
-		argCount++
-	}
-
-	// Add designation filter if provided
-	if designationFilter != "" {
-		query += fmt.Sprintf(" AND d.designation_name = $%d", argCount)
-		args = append(args, designationFilter)
-		argCount++
-	}
-
-	query += " ORDER BY e.full_name"
-
-	rows, err := r.DB.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var employees []models.EmployeeInput
-
-	for rows.Next() {
-		var emp models.EmployeeInput
-
-		if role == constant.ROLE_HR {
-			err := rows.Scan(
-				&emp.ID,
-				&emp.FullName,
-				&emp.Email,
-				&emp.Status,
-				&emp.Role,
-				&emp.Password,
-				&emp.ManagerID,
-				&emp.DesignationID,
-				&emp.JoiningDate,
-				&emp.EndingDate,
-				&emp.CreatedAt,
-				&emp.UpdatedAt,
-				&emp.DeletedAt,
-			)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if role == constant.ROLE_ADMIN || role == constant.ROLE_SUPER_ADMIN {
-			err := rows.Scan(
-				&emp.ID,
-				&emp.FullName,
-				&emp.Email,
-				&emp.Status,
-				&emp.Role,
-				&emp.Password,
-				&emp.ManagerID,
-				&emp.DesignationID,
-				&emp.Salary,
-				&emp.JoiningDate,
-				&emp.EndingDate,
-				&emp.CreatedAt,
-				&emp.UpdatedAt,
-				&emp.DeletedAt,
-			)
-			if err != nil {
-				return nil, err
-			}
-
-		}
-
-		// ------- Fetch manager name if exists -------
-		if emp.ManagerID != nil {
-			var mName string
-			err := r.DB.QueryRow(`
-                SELECT full_name FROM Tbl_Employee WHERE id = $1
-            `, emp.ManagerID).Scan(&mName)
-
-			if err == nil {
-				emp.ManagerName = &mName
-			}
-		}
-
-		// ------- Fetch designation name if exists -------
-		if emp.DesignationID != nil {
-			var dName string
-			err := r.DB.QueryRow(`
-                SELECT designation_name FROM Tbl_Designation WHERE id = $1
-            `, emp.DesignationID).Scan(&dName)
-
-			if err == nil {
-				emp.DesignationName = &dName
-			}
-		}
-
-		employees = append(employees, emp)
-	}
-
-	return employees, nil
 }
 
 // ------------------ GET ADMIN AND EMPLOYEE EMAIL ------------------
@@ -394,19 +258,23 @@ func (r *Repository) GetFinalizedPayslipsByEmployee(id uuid.UUID) (*sql.Rows, er
 }
 
 // ------------------ GET EMPLOYEE BY ID ------------------
-func (r *Repository) GetEmployeeByID(empID uuid.UUID) (*models.EmployeeInput, error) {
-	var emp models.EmployeeInput
+// Returns EmployeeResponse (no password). Use for API and internal checks (role, email, salary).
+func (r *Repository) GetEmployeeByID(empID uuid.UUID) (*models.EmployeeResponse, error) {
+	var emp models.EmployeeResponse
 	query := `
         SELECT 
             e.id, e.full_name, e.email, e.status,
             r.type AS role, e.manager_id, e.designation_id,
-            e.joining_date, e.ending_date,
-            e.created_at, e.updated_at, e.deleted_at
+            e.salary, e.joining_date, e.ending_date,
+            e.created_at, e.updated_at,
+            m.full_name AS manager_name,
+            d.designation_name
         FROM Tbl_Employee e
         JOIN Tbl_Role r ON e.role_id = r.id
-        WHERE e.id = $1 AND  e.status = 'active'
+        LEFT JOIN Tbl_Employee m ON e.manager_id = m.id
+        LEFT JOIN Tbl_Designation d ON e.designation_id = d.id
+        WHERE e.id = $1 AND e.status = 'active'
     `
-
 	err := r.DB.QueryRow(query, empID).Scan(
 		&emp.ID,
 		&emp.FullName,
@@ -415,41 +283,17 @@ func (r *Repository) GetEmployeeByID(empID uuid.UUID) (*models.EmployeeInput, er
 		&emp.Role,
 		&emp.ManagerID,
 		&emp.DesignationID,
+		&emp.Salary,
 		&emp.JoiningDate,
 		&emp.EndingDate,
 		&emp.CreatedAt,
 		&emp.UpdatedAt,
-		&emp.DeletedAt,
+		&emp.ManagerName,
+		&emp.DesignationName,
 	)
-
 	if err != nil {
 		return nil, err
 	}
-
-	// Fetch manager name if exists
-	if emp.ManagerID != nil {
-		var mName string
-		err := r.DB.QueryRow(`
-            SELECT full_name FROM Tbl_Employee WHERE id = $1
-        `, emp.ManagerID).Scan(&mName)
-
-		if err == nil {
-			emp.ManagerName = &mName
-		}
-	}
-
-	// Fetch designation name if exists
-	if emp.DesignationID != nil {
-		var dName string
-		err := r.DB.QueryRow(`
-            SELECT designation_name FROM Tbl_Designation WHERE id = $1
-        `, emp.DesignationID).Scan(&dName)
-
-		if err == nil {
-			emp.DesignationName = &dName
-		}
-	}
-
 	return &emp, nil
 }
 
@@ -486,30 +330,31 @@ func (r *Repository) ChackManagerPermission() (bool, error) {
 }
 
 // ------------------ GET EMPLOYEES BY MANAGER ID ------------------
-func (r *Repository) GetEmployeesByManagerID(managerID uuid.UUID) ([]models.EmployeeInput, error) {
+func (r *Repository) GetEmployeesByManagerID(managerID uuid.UUID) ([]models.EmployeeResponse, error) {
 	query := `
         SELECT 
             e.id, e.full_name, e.email, e.status,
             r.type AS role, e.manager_id, e.designation_id,
             e.salary, e.joining_date, e.ending_date,
-            e.created_at, e.updated_at, e.deleted_at
+            e.created_at, e.updated_at,
+            m.full_name AS manager_name,
+            d.designation_name
         FROM Tbl_Employee e
         JOIN Tbl_Role r ON e.role_id = r.id
+        LEFT JOIN Tbl_Employee m ON e.manager_id = m.id
+        LEFT JOIN Tbl_Designation d ON e.designation_id = d.id
         WHERE e.manager_id = $1
         ORDER BY e.full_name
     `
-
 	rows, err := r.DB.Query(query, managerID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var employees []models.EmployeeInput
-
+	var employees []models.EmployeeResponse
 	for rows.Next() {
-		var emp models.EmployeeInput
-
+		var emp models.EmployeeResponse
 		err := rows.Scan(
 			&emp.ID,
 			&emp.FullName,
@@ -523,26 +368,13 @@ func (r *Repository) GetEmployeesByManagerID(managerID uuid.UUID) ([]models.Empl
 			&emp.EndingDate,
 			&emp.CreatedAt,
 			&emp.UpdatedAt,
-			&emp.DeletedAt,
+			&emp.ManagerName,
+			&emp.DesignationName,
 		)
 		if err != nil {
 			return nil, err
 		}
-
-		// Fetch designation name if exists
-		if emp.DesignationID != nil {
-			var dName string
-			err := r.DB.QueryRow(`
-                SELECT designation_name FROM Tbl_Designation WHERE id = $1
-            `, emp.DesignationID).Scan(&dName)
-
-			if err == nil {
-				emp.DesignationName = &dName
-			}
-		}
-
 		employees = append(employees, emp)
 	}
-
 	return employees, nil
 }

@@ -38,7 +38,7 @@ func (s *HandlerFunc) Login(c *gin.Context) {
 				userID, parseErr := uuid.Parse(claims.UserID)
 				if parseErr == nil {
 					emp, empErr := s.Query.GetEmployeeByID(userID)
-					if empErr == nil && (emp.Status == nil || *emp.Status != "deactive") {
+					if empErr == nil && emp.Status != "deactive" {
 						c.JSON(http.StatusOK, gin.H{
 							"success": true,
 							"message": "Already logged in",
@@ -148,7 +148,7 @@ func (s *HandlerFunc) VerifyToken(c *gin.Context) {
 	}
 
 	// Check if employee is still active
-	if emp.Status != nil && *emp.Status == "deactive" {
+	if emp.Status == "deactive" {
 		utils.RespondWithError(c, http.StatusForbidden, "Account is deactivated")
 		return
 	}
@@ -224,7 +224,7 @@ func (s *HandlerFunc) CheckAuthStatus(c *gin.Context) {
 	}
 
 	// Check if user is active
-	if emp.Status != nil && *emp.Status == "deactive" {
+	if emp.Status == "deactive" {
 		c.JSON(http.StatusOK, gin.H{
 			"authenticated": false,
 			"message":       "Account is deactivated",
