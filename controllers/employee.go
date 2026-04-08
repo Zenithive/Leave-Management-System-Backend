@@ -22,32 +22,48 @@ type UpdateManagerInput struct {
 }
 
 // GetEmployees - GET /api/employees
-// Query params: ?role=EMPLOYEE&designation=Senior Developer
+// Query params with optional filtering, sorting, and pagination:
+// ?page=1&page_size=10&name=john&email=john@&role=EMPLOYEE&designation=Senior Developer
+// &status=active&manager_name=smith&sort_by=joining_date&sort_order=desc
 func (h *HandlerFunc) GetEmployee(c *gin.Context) {
 	role, _ := c.Get("role")
 	r := role.(string)
 
-	if err := access_role.Admin_SuperAdmin_Hr(r, "only ADMIN, SUPERADMIN, and HR can update designations"); err != nil {
+	if err := access_role.Admin_SuperAdmin_Hr(r, "only ADMIN, SUPERADMIN, and HR can view employees"); err != nil {
 		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
-	// Get filter parameters from query string
-	roleFilter := c.Query("role")               // e.g., ?role=EMPLOYEE
-	designationFilter := c.Query("designation") // e.g., ?designation=Senior Developer
+	// Bind query parameters to filter struct
+	var params models.EmployeeFilterParams
+	if err := c.ShouldBindQuery(&params); err != nil {
+		utils.RespondWithError(c, http.StatusBadRequest, "invalid query parameters: "+err.Error())
+		return
+	}
 
-	employees, err := h.Query.GetAllEmployees(roleFilter, designationFilter, r)
+	// Get employees with filters, sorting, and pagination
+	result, err := h.Query.GetAllEmployees(params, r)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	c.JSON(200, gin.H{
-		"message":   "Employees fetched",
-		"employees": employees,
+		"message":     "Employees fetched successfully",
+		"employees":   result.Employees,
+		"total_count": result.TotalCount,
+		"page":        result.Page,
+		"page_size":   result.PageSize,
+		"total_pages": result.TotalPages,
 		"filters": gin.H{
-			"role":        roleFilter,
-			"designation": designationFilter,
+			"name":         params.Name,
+			"email":        params.Email,
+			"role":         params.Role,
+			"designation":  params.Designation,
+			"status":       params.Status,
+			"manager_name": params.ManagerName,
+			"sort_by":      params.SortBy,
+			"sort_order":   params.SortOrder,
 		},
 	})
 }
