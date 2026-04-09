@@ -47,27 +47,6 @@ func (q *Repository) GetLeaveTypeByLeaveID(leaveID uuid.UUID) (int, error) {
 	return leaveTypeID, nil
 }
 
-func (r *Repository) GetAllLeaveType() ([]models.LeaveType, error) {
-	var leaveType []models.LeaveType
-	query := `SELECT id, name, is_paid, default_entitlement,  created_at, updated_at FROM Tbl_Leave_type ORDER BY id`
-	err := r.DB.Select(&leaveType, query)
-	return leaveType, err
-}
-
-// Admin add leave type
-
-func (r *Repository) AddLeaveType(tx *sqlx.Tx, input models.LeaveTypeInput) (models.LeaveType, error) {
-	var leave models.LeaveType
-	query := `
-		INSERT INTO Tbl_Leave_type (name, is_paid, default_entitlement)
-		VALUES ($1, $2, $3)
-		RETURNING id, created_at, updated_at
-	`
-	err := tx.QueryRow(query, input.Name, *input.IsPaid, *input.DefaultEntitlement).
-		Scan(&leave.ID, &leave.CreatedAt, &leave.UpdatedAt)
-	return leave, err
-}
-
 // 3. Get leave balance (inside TX)
 func (r *Repository) GetLeaveBalance(tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int) (float64, error) {
 	var balance float64
@@ -319,30 +298,6 @@ func (r *Repository) GetAllLeaveByMonthYear(month, year int) ([]models.LeaveResp
 	return result, err
 }
 
-// UpdateLeaveType - Update leave policy
-func (r *Repository) UpdateLeaveType(tx *sqlx.Tx, leaveTypeID int, input models.LeaveTypeInput) error {
-	query := `
-		UPDATE Tbl_Leave_type 
-		SET name = $1, is_paid = $2, default_entitlement = $3, updated_at = NOW()
-		WHERE id = $4
-	`
-	result, err := tx.Exec(query, input.Name, *input.IsPaid, *input.DefaultEntitlement, leaveTypeID)
-	if err != nil {
-		return err
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rowsAffected == 0 {
-		return sql.ErrNoRows
-	}
-
-	return nil
-}
-
 // GetMyLeavesByMonthYear - Get current user's leaves from given month/year onward (current + future).
 // When month/year is sent as base, returns leaves where start_date >= first day of that month.
 func (r *Repository) GetMyLeavesByMonthYear(userID uuid.UUID, month, year int) ([]models.LeaveResponse, error) {
@@ -416,37 +371,6 @@ func (r *Repository) UpdateLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveT
 	if rowsAffected > 0 {
 		fmt.Printf("Updated %d leave balances for leave_type_id=%d (entitlement: %d → %d, year: %d)\n",
 			rowsAffected, leaveTypeID, oldDefaultEntitlement, newDefaultEntitlement, currentYear)
-	}
-
-	return nil
-}
-
-// DeleteLeaveType - Delete leave policy
-func (r *Repository) DeleteLeaveType(tx *sqlx.Tx, leaveTypeID int) error {
-	// Check if leave type is being used in any leave applications
-	var count int
-	err := tx.Get(&count, "SELECT COUNT(*) FROM Tbl_Leave WHERE leave_type_id = $1", leaveTypeID)
-	if err != nil {
-		return err
-	}
-
-	if count > 0 {
-		return sql.ErrNoRows // Using this to indicate constraint violation
-	}
-
-	query := `DELETE FROM Tbl_Leave_type WHERE id = $1`
-	result, err := tx.Exec(query, leaveTypeID)
-	if err != nil {
-		return err
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rowsAffected == 0 {
-		return sql.ErrNoRows
 	}
 
 	return nil

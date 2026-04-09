@@ -34,24 +34,6 @@ type EmployeeInput struct {
 	DesignationName *string    `json:"designation_name,omitempty"` // optional
 }
 
-// ----------------- LEAVE TYPE -----------------
-type LeaveType struct {
-	ID                 int    `json:"id" db:"id"`
-	Name               string `json:"name" db:"name"`
-	IsPaid             bool   `json:"is_paid" db:"is_paid"`
-	DefaultEntitlement int    `json:"default_entitlement" db:"default_entitlement"`
-	// LeaveCount         int       `json:"leave_count" db:"leave_count"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
-}
-
-type LeaveTypeInput struct {
-	Name               string `json:"name" validate:"required"`
-	IsPaid             *bool  `json:"is_paid,omitempty"`
-	DefaultEntitlement *int   `json:"default_entitlement,omitempty"`
-	LeaveCount         *int   `json:"leave_count,omitempty" validate:"omitempty,gt=0"`
-}
-
 // ----------------- LEAVE -----------------
 type LeaveInput struct {
 	EmployeeID    uuid.UUID  `json:"employee_id" validate:"required"`
