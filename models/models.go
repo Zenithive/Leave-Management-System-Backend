@@ -285,7 +285,8 @@ type UpdateAssignmentRequest struct {
 // LeaveUpdateInput is used when an employee edits their own pending leave
 type LeaveUpdateInput struct {
 	LeaveTypeID   int       `json:"leave_type_id" validate:"required"`
-	LeaveTimingID int       `json:"leave_timing_id,omitempty"`
+	LeaveTimingID *int      `json:"leave_timing_id,omitempty"`
+	LeaveTiming   *string   `json:"leave_timing,omitempty"`
 	StartDate     time.Time `json:"start_date" validate:"required"`
 	EndDate       time.Time `json:"end_date" validate:"required"`
 	Reason        string    `json:"reason" validate:"required,min=10,max=500"`

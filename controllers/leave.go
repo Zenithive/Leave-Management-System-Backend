@@ -204,7 +204,7 @@ func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
 
 	// If transaction returned an error, stop (CustomErr already responded)
 	if err != nil {
-		utils.RespondWithError(c, 500, "Failed to update settings: "+err.Error())
+		utils.RespondWithError(c, 500, "Failed to update leave: "+err.Error())
 		return
 	}
 
@@ -1493,65 +1493,166 @@ func (h *HandlerFunc) UpdateLeaveTiming(c *gin.Context) {
 	})
 }
 
-// func (h *HandlerFunc) EditMyLeave(c *gin.Context) {
-// 	// 1. Get Leave ID from URL
-// 	leaveID, err := uuid.Parse(c.Param("id"))
-// 	if err != nil {
-// 		utils.RespondWithError(c, 400, "Invalid Leave ID")
-// 		return
-// 	}
+func (h *HandlerFunc) EditMyLeave(c *gin.Context) {
+	// 1. Get Leave ID from URL
+	leaveID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.RespondWithError(c, 400, "Invalid Leave ID")
+		return
+	}
 
-// 	// 2. Get Current Employee ID from Context
-// 	empIDRaw, _ := c.Get("user_id")
-// 	empID, _ := uuid.Parse(empIDRaw.(string))
+	// 2. Get Current Employee ID from Context
+	empIDRaw, _ := c.Get("user_id")
+	empID, _ := uuid.Parse(empIDRaw.(string))
 
-// 	// 3. Bind Input (JSON)
-// 	var input models.LeaveUpdateInput
-// 	if err := c.ShouldBindJSON(&input); err != nil {
-// 		utils.RespondWithError(c, 400, "Invalid input data"+err.Error())
-// 		return
-// 	}
-// 	var id int
-// 	id = input.LeaveTimingID
+	// Validate Employee Status
+	empStatus, err := h.Query.GetEmployeeStatus(empID)
+	if err != nil {
+		utils.RespondWithError(c, 500, "Failed to verify employee status")
+		return
+	}
+	if empStatus == "deactive" {
+		utils.RespondWithError(c, 403, "Your account is deactivated. You cannot edit leave")
+		return
+	}
 
-// 	// Validate Reason
-// 	input.Reason = strings.TrimSpace(input.Reason)
-// 	if len(input.Reason) < 10 {
-// 		utils.RespondWithError(c, 400, "Leave reason must be at least 10 characters long")
-// 		return
-// 	}
-// 	if len(input.Reason) > 500 {
-// 		utils.RespondWithError(c, 400, "Leave reason is too long. Maximum 500 characters allowed")
-// 		return
-// 	}
+	// 3. Bind Input (JSON)
+	var input models.LeaveUpdateInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.RespondWithError(c, 400, "Invalid input data: "+err.Error())
+		return
+	}
 
-// 	// // Validate Dates
-// 	// now := time.Now()
-// 	// cutoff := now.Add(-12 * time.Hour)
+	var leaveTiming time.Time = time.Time{} // Zero value indicates not provided
 
-// 	// if input.StartDate.Before(cutoff) {
-// 	// 	utils.RespondWithError(c, 400, "Start date cannot be earlier than today")
-// 	// 	return
-// 	// }
-// 	if input.EndDate.Before(input.StartDate) {
-// 		utils.RespondWithError(c, 400, "End date cannot be earlier than start date")
-// 		return
-// 	}
+	// If LeaveTiming string is provided, validate it
+	if input.LeaveTiming != nil {
+		leaveTiming, err = service.ValidateLeaveTiming(*input.LeaveTiming)
+		if err != nil {
+			utils.RespondWithError(c, 400, err.Error())
+			return
+		}
+	}
 
-// 	// 4. Execute Transaction
-// 	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
-// 		newDays, err := service.CalculateWorkingDaysWithTiming(h.Query, tx, input.StartDate, input.EndDate, id)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		return h.Query.UpdatePendingLeave(tx, leaveID, empID, input, newDays)
-// 	})
+	// Validate timing ID if provided (must be 1, 2, or 3)
+	if input.LeaveTimingID != nil && (*input.LeaveTimingID < 1 || *input.LeaveTimingID > 3) {
+		utils.RespondWithError(c, 400, "Invalid leave timing ID. Must be 1 (First Half), 2 (Second Half), or 3 (Full Day)")
+		return
+	}
 
-// 	if err != nil {
-// 		// This will trigger if the leave is no longer PENDING
-// 		utils.RespondWithError(c, 403, err.Error())
-// 		return
-// 	}
+	// Validate Reason
+	input.Reason = strings.TrimSpace(input.Reason)
+	if len(input.Reason) < 10 {
+		utils.RespondWithError(c, 400, "Leave reason must be at least 10 characters long")
+		return
+	}
+	if len(input.Reason) > 500 {
+		utils.RespondWithError(c, 400, "Leave reason is too long. Maximum 500 characters allowed")
+		return
+	}
 
-// 	c.JSON(200, gin.H{"message": "Leave updated successfully"})
-// }
+	// Validate Dates
+	if input.EndDate.Before(input.StartDate) {
+		utils.RespondWithError(c, 400, "End date cannot be earlier than start date")
+		return
+	}
+
+	// 4. Execute Transaction
+	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+		// Fetch Leave Type to check IsEarly
+		leaveType, err := h.Query.GetLeaveTypeByIdTx(tx, input.LeaveTypeID)
+		if err == sql.ErrNoRows {
+			return utils.CustomErr(c, 400, "Invalid leave type")
+		}
+		if err != nil {
+			return utils.CustomErr(c, 500, "Failed to fetch leave type: "+err.Error())
+		}
+
+		// Determine timing ID based on IsEarly flag
+		timingID := 3 // Default to Full Day
+		if input.LeaveTimingID != nil {
+			timingID = *input.LeaveTimingID
+		}
+
+		// For IsEarly leave types, timing is not applicable
+		if leaveType.IsEarly != nil && *leaveType.IsEarly {
+			timingID = 3 // Force full day for early leave types
+		}
+
+		// Calculate new working days with timing consideration
+		newDays, err := service.CalculateWorkingDaysWithTiming(h.Query, tx, input.StartDate, input.EndDate, timingID, leaveTiming)
+		if err != nil {
+			return utils.CustomErr(c, 400, err.Error())
+		}
+		if newDays <= 0 {
+			return utils.CustomErr(c, 400, "Calculated leave days must be greater than zero. Please check the dates and timing")
+		}
+
+		// Leave Balance - Skip balance check for IsEarly leave types
+		if leaveType.IsEarly == nil || *leaveType.IsEarly == false {
+			balance, err := h.Query.GetLeaveBalance(tx, empID, input.LeaveTypeID)
+
+			if err == sql.ErrNoRows {
+				// During edit, if balance doesn't exist, it means the leave type is invalid or not assigned
+				return utils.CustomErr(c, 400, "Leave balance not found for this leave type. Please contact HR")
+			} else if err != nil {
+				return utils.CustomErr(c, 500, "Failed to fetch leave balance: "+err.Error())
+			}
+
+			// IMPORTANT: For PENDING leaves, balance is NOT yet deducted
+			// Balance is only deducted when leave status becomes APPROVED
+			// So we need to check if the NEW total days fit within available balance
+
+			// Check if sufficient balance exists for the edited leave
+			if balance < newDays {
+				return utils.CustomErr(c, 400, fmt.Sprintf("Insufficient leave balance. You have %.2f days available but the edited leave requires %.2f days", balance, newDays))
+			}
+		}
+
+		// Check for overlapping leaves (excluding current leave being edited)
+		overlaps, err := h.Query.GetOverlappingLeaves(tx, empID, input.StartDate, input.EndDate)
+		if err != nil {
+			return utils.CustomErr(c, 500, "Failed to check overlapping leave")
+		}
+		// Filter out the current leave being edited
+		for _, ov := range overlaps {
+			if ov.ID != leaveID {
+				return utils.CustomErr(c, 400, fmt.Sprintf(
+					"Overlapping leave exists: %s from %s to %s (Status: %s). Please cancel or modify the existing leave first",
+					ov.LeaveType,
+					ov.StartDate.Format("2006-01-02"),
+					ov.EndDate.Format("2006-01-02"),
+					ov.Status,
+				))
+			}
+		}
+
+		// Update the leave
+		err = h.Query.UpdatePendingLeave(tx, leaveID, empID, input, newDays)
+		if err != nil {
+			return utils.CustomErr(c, 500, "Failed to update leave: "+err.Error())
+		}
+
+		// Log Entry
+		data := &models.Common{
+			Component:  constant.ComponentLeave,
+			Action:     constant.ActionUpdate,
+			FromUserID: empID,
+		}
+		if err := h.Query.AddLog(data, tx); err != nil {
+			return utils.CustomErr(c, 500, "Failed to create leave log: "+err.Error())
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		utils.RespondWithError(c, 500, "Failed to update settings: "+err.Error())
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message":  "Leave updated successfully",
+		"leave_id": leaveID,
+	})
+}
