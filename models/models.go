@@ -38,7 +38,8 @@ type EmployeeInput struct {
 type LeaveInput struct {
 	EmployeeID    uuid.UUID  `json:"employee_id" validate:"required"`
 	LeaveTypeID   int        `json:"leave_type_id" validate:"required"`
-	LeaveTimingID *int       `json:"leave_timing_id,omitempty"` // Optional timing ID (defaults to 3 - Full Day)
+	LeaveTimingID *int       `json:"leave_timing_id,omitempty"`
+	LeaveTiming   *string    `json:"leave_timing,omitempty"`
 	StartDate     time.Time  `json:"start_date" validate:"required"`
 	EndDate       time.Time  `json:"end_date" validate:"required"`
 	Reason        string     `json:"reason" validate:"required,min=10,max=500"` // Enhanced validation
@@ -182,7 +183,8 @@ type Leave struct {
 	ID            uuid.UUID  `db:"id"`
 	EmployeeID    uuid.UUID  `db:"employee_id"`
 	LeaveTypeID   int        `db:"leave_type_id"`
-	LeaveTimingID *int       `db:"half_id"` // Timing ID (references Tbl_Half)
+	LeaveTimingID *int       `db:"half_id"`
+	LeaveTiming   *string    `db:"leave_timing"` // Timing ID (references Tbl_Half)
 	StartDate     time.Time  `db:"start_date"`
 	EndDate       time.Time  `db:"end_date"`
 	Days          float64    `db:"days"`

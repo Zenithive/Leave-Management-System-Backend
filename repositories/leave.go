@@ -13,7 +13,7 @@ import (
 // 1. Get leave type entitlement
 func (r *Repository) GetLeaveTypeByIdTx(tx *sqlx.Tx, leaveTypeID int) (models.LeaveType, error) {
 	var leaves models.LeaveType
-	query := `SELECT id, name, is_paid, default_entitlement,  created_at, updated_at FROM Tbl_Leave_type WHERE id=$1`
+	query := `SELECT id, name, is_paid, default_entitlement, is_early, created_at, updated_at FROM Tbl_Leave_type WHERE id=$1`
 	err := tx.Get(&leaves,
 		query,
 		leaveTypeID,
@@ -24,7 +24,7 @@ func (r *Repository) GetLeaveTypeByIdTx(tx *sqlx.Tx, leaveTypeID int) (models.Le
 // 1. Get leave type entitlement
 func (r *Repository) GetLeaveTypeById(leaveTypeID int) (models.LeaveType, error) {
 	var leaves models.LeaveType
-	query := `SELECT id, name, is_paid, default_entitlement,  created_at, updated_at FROM Tbl_Leave_type WHERE id=$1`
+	query := `SELECT id, name, is_paid, default_entitlement, is_early, created_at, updated_at FROM Tbl_Leave_type WHERE id=$1`
 	err := r.DB.Get(&leaves,
 		query,
 		leaveTypeID,
@@ -111,14 +111,15 @@ func (r *Repository) InsertLeave(
 	startDate, endDate time.Time,
 	days float64,
 	reason string,
+	leaveTiming *string,
 ) (uuid.UUID, error) {
 
 	var leaveID uuid.UUID
 
 	err := tx.QueryRow(`
 		INSERT INTO Tbl_Leave 
-		(employee_id, leave_type_id, half_id, start_date, end_date, days, status, reason)
-		VALUES ($1,$2,$3,$4,$5,$6,'Pending',$7)
+		(employee_id, leave_type_id, half_id, start_date, end_date, days, status, reason, leave_timing)
+		VALUES ($1,$2,$3,$4,$5,$6,'Pending',$7,$8)
 		RETURNING id
 	`,
 		employeeID,
@@ -128,9 +129,16 @@ func (r *Repository) InsertLeave(
 		endDate,
 		days,
 		reason,
+		leaveTiming,
 	).Scan(&leaveID)
 
 	return leaveID, err
+}
+
+func (r *Repository) UpdateLeaveStatus(tx *sql.Tx, leaveID uuid.UUID, status string) error {
+	query := `UPDATE Tbl_Leave SET status = $1, updated_at = NOW() WHERE id = $2`
+	_, err := tx.Exec(query, status, leaveID)
+	return err
 }
 
 func (r *Repository) GetLeaveById(tx *sqlx.Tx, leaveID uuid.UUID) (models.Leave, error) {
