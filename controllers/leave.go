@@ -530,23 +530,34 @@ func (s *HandlerFunc) ActionLeave(c *gin.Context) {
 	// APPROVE ACTION
 	// ========================================
 
-	// Check balance before any approval
-	var currentBalance float64
-	err = tx.Get(&currentBalance, `
-		SELECT closing 
-		FROM Tbl_Leave_balance 
-		WHERE employee_id=$1 AND leave_type_id=$2 
-		AND year = EXTRACT(YEAR FROM CURRENT_DATE)
-	`, leave.EmployeeID, leave.LeaveTypeID)
-
+	// Fetch leave type to check if it's an early leave
+	leaveType, err := s.Query.GetLeaveTypeByIdTx(tx, leave.LeaveTypeID)
 	if err != nil {
-		utils.RespondWithError(c, 500, "Failed to fetch leave balance: "+err.Error())
+		utils.RespondWithError(c, 500, "Failed to fetch leave type: "+err.Error())
 		return
 	}
 
-	if currentBalance < leave.Days {
-		utils.RespondWithError(c, 400, fmt.Sprintf("Cannot approve: Insufficient leave balance. Available: %.1f days, Required: %.1f days", currentBalance, leave.Days))
-		return
+	// Check balance before any approval - SKIP for is_early leave types
+	isEarlyLeave := leaveType.IsEarly != nil && *leaveType.IsEarly
+	
+	if !isEarlyLeave {
+		var currentBalance float64
+		err = tx.Get(&currentBalance, `
+			SELECT closing 
+			FROM Tbl_Leave_balance 
+			WHERE employee_id=$1 AND leave_type_id=$2 
+			AND year = EXTRACT(YEAR FROM CURRENT_DATE)
+		`, leave.EmployeeID, leave.LeaveTypeID)
+
+		if err != nil {
+			utils.RespondWithError(c, 500, "Failed to fetch leave balance: "+err.Error())
+			return
+		}
+
+		if currentBalance < leave.Days {
+			utils.RespondWithError(c, 400, fmt.Sprintf("Cannot approve: Insufficient leave balance. Available: %.1f days, Required: %.1f days", currentBalance, leave.Days))
+			return
+		}
 	}
 
 	// MANAGER APPROVAL (First Level)
@@ -629,12 +640,14 @@ func (s *HandlerFunc) ActionLeave(c *gin.Context) {
 			return
 		}
 
-		// Deduct from leave balance
-		_, err = tx.Exec(`UPDATE Tbl_Leave_balance SET used = used + $3, closing = closing - $3, updated_at = NOW() WHERE employee_id=$1 AND leave_type_id=$2`,
-			leave.EmployeeID, leave.LeaveTypeID, leave.Days)
-		if err != nil {
-			utils.RespondWithError(c, 500, "Failed to update leave balance: "+err.Error())
-			return
+		// Deduct from leave balance - SKIP for is_early leave types
+		if !isEarlyLeave {
+			_, err = tx.Exec(`UPDATE Tbl_Leave_balance SET used = used + $3, closing = closing - $3, updated_at = NOW() WHERE employee_id=$1 AND leave_type_id=$2`,
+				leave.EmployeeID, leave.LeaveTypeID, leave.Days)
+			if err != nil {
+				utils.RespondWithError(c, 500, "Failed to update leave balance: "+err.Error())
+				return
+			}
 		}
 
 		// Fetch employee details
@@ -1096,15 +1109,31 @@ func (h *HandlerFunc) WithdrawLeave(c *gin.Context) {
 			return
 		}
 
-		// Restore leave balance (reverse the deduction)
-		_, err = tx.Exec(`
-			UPDATE Tbl_Leave_balance 
-			SET used = used - $1, closing = closing + $1, updated_at = NOW()
-			WHERE employee_id=$2 AND leave_type_id=$3 AND year = EXTRACT(YEAR FROM CURRENT_DATE)
-		`, leave.Days, leave.EmployeeID, leave.LeaveTypeID)
+		// Fetch leave type to check if it's an early leave
+		leaveTypeID, err := h.Query.GetLeaveTypeByLeaveID(leaveID)
 		if err != nil {
-			utils.RespondWithError(c, 500, "failed to restore leave balance: "+err.Error())
+			utils.RespondWithError(c, 500, "failed to fetch leave type: "+err.Error())
 			return
+		}
+
+		leaveType, err := h.Query.GetLeaveTypeByIdTx(tx, leaveTypeID)
+		if err != nil {
+			utils.RespondWithError(c, 500, "failed to fetch leave type details: "+err.Error())
+			return
+		}
+
+		// Restore leave balance (reverse the deduction) - SKIP for is_early leave types
+		isEarlyLeave := leaveType.IsEarly != nil && *leaveType.IsEarly
+		if !isEarlyLeave {
+			_, err = tx.Exec(`
+				UPDATE Tbl_Leave_balance 
+				SET used = used - $1, closing = closing + $1, updated_at = NOW()
+				WHERE employee_id=$2 AND leave_type_id=$3 AND year = EXTRACT(YEAR FROM CURRENT_DATE)
+			`, leave.Days, leave.EmployeeID, leave.LeaveTypeID)
+			if err != nil {
+				utils.RespondWithError(c, 500, "failed to restore leave balance: "+err.Error())
+				return
+			}
 		}
 
 		// Fetch data BEFORE committing transaction
