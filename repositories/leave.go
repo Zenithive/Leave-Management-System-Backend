@@ -13,7 +13,7 @@ import (
 // 1. Get leave type entitlement
 func (r *Repository) GetLeaveTypeByIdTx(tx *sqlx.Tx, leaveTypeID int) (models.LeaveType, error) {
 	var leaves models.LeaveType
-	query := `SELECT id, name, is_paid, default_entitlement,  created_at, updated_at FROM Tbl_Leave_type WHERE id=$1`
+	query := `SELECT id, name, is_paid, default_entitlement, is_early, created_at, updated_at FROM Tbl_Leave_type WHERE id=$1`
 	err := tx.Get(&leaves,
 		query,
 		leaveTypeID,
@@ -24,7 +24,7 @@ func (r *Repository) GetLeaveTypeByIdTx(tx *sqlx.Tx, leaveTypeID int) (models.Le
 // 1. Get leave type entitlement
 func (r *Repository) GetLeaveTypeById(leaveTypeID int) (models.LeaveType, error) {
 	var leaves models.LeaveType
-	query := `SELECT id, name, is_paid, default_entitlement,  created_at, updated_at FROM Tbl_Leave_type WHERE id=$1`
+	query := `SELECT id, name, is_paid, default_entitlement, is_early, created_at, updated_at FROM Tbl_Leave_type WHERE id=$1`
 	err := r.DB.Get(&leaves,
 		query,
 		leaveTypeID,
@@ -45,27 +45,6 @@ func (q *Repository) GetLeaveTypeByLeaveID(leaveID uuid.UUID) (int, error) {
 	}
 
 	return leaveTypeID, nil
-}
-
-func (r *Repository) GetAllLeaveType() ([]models.LeaveType, error) {
-	var leaveType []models.LeaveType
-	query := `SELECT id, name, is_paid, default_entitlement,  created_at, updated_at FROM Tbl_Leave_type ORDER BY id`
-	err := r.DB.Select(&leaveType, query)
-	return leaveType, err
-}
-
-// Admin add leave type
-
-func (r *Repository) AddLeaveType(tx *sqlx.Tx, input models.LeaveTypeInput) (models.LeaveType, error) {
-	var leave models.LeaveType
-	query := `
-		INSERT INTO Tbl_Leave_type (name, is_paid, default_entitlement)
-		VALUES ($1, $2, $3)
-		RETURNING id, created_at, updated_at
-	`
-	err := tx.QueryRow(query, input.Name, *input.IsPaid, *input.DefaultEntitlement).
-		Scan(&leave.ID, &leave.CreatedAt, &leave.UpdatedAt)
-	return leave, err
 }
 
 // 3. Get leave balance (inside TX)
@@ -132,14 +111,15 @@ func (r *Repository) InsertLeave(
 	startDate, endDate time.Time,
 	days float64,
 	reason string,
+	leaveTiming *string,
 ) (uuid.UUID, error) {
 
 	var leaveID uuid.UUID
 
 	err := tx.QueryRow(`
 		INSERT INTO Tbl_Leave 
-		(employee_id, leave_type_id, half_id, start_date, end_date, days, status, reason)
-		VALUES ($1,$2,$3,$4,$5,$6,'Pending',$7)
+		(employee_id, leave_type_id, half_id, start_date, end_date, days, status, reason, leave_timing)
+		VALUES ($1,$2,$3,$4,$5,$6,'Pending',$7,$8)
 		RETURNING id
 	`,
 		employeeID,
@@ -149,9 +129,16 @@ func (r *Repository) InsertLeave(
 		endDate,
 		days,
 		reason,
+		leaveTiming,
 	).Scan(&leaveID)
 
 	return leaveID, err
+}
+
+func (r *Repository) UpdateLeaveStatus(tx *sql.Tx, leaveID uuid.UUID, status string) error {
+	query := `UPDATE Tbl_Leave SET status = $1, updated_at = NOW() WHERE id = $2`
+	_, err := tx.Exec(query, status, leaveID)
+	return err
 }
 
 func (r *Repository) GetLeaveById(tx *sqlx.Tx, leaveID uuid.UUID) (models.Leave, error) {
@@ -225,32 +212,64 @@ func (r *Repository) UpdateLeaveTiming(tx *sqlx.Tx, id int, timing string) error
 // GetAllEmployeeLeaveByMonthYear - Get employee leaves from given month/year onward (current + future).
 // When month/year is sent as base, returns leaves where start_date >= first day of that month.
 func (r *Repository) GetAllEmployeeLeaveByMonthYear(userID uuid.UUID, month, year int) ([]models.LeaveResponse, error) {
+
 	var result []models.LeaveResponse
+
 	query := `
-		SELECT 
-			l.id,
-			e.full_name AS employee,
-			lt.name AS leave_type,
-			lt.is_paid AS is_paid,
-			COALESCE(h.type, 'FULL') AS leave_timing_type,
-			COALESCE(h.timing, 'Full Day') AS leave_timing,
-			l.start_date,
-			l.end_date,
-			l.days,
-			COALESCE(l.reason, '') AS reason,
-			l.status,
-			l.created_at AS applied_at,
-			approver.full_name AS approval_name
-		FROM Tbl_Leave l
-		INNER JOIN Tbl_Employee e ON l.employee_id = e.id
-		INNER JOIN Tbl_Leave_Type lt ON lt.id = l.leave_type_id
-		LEFT JOIN Tbl_Half h ON l.half_id = h.id
-		LEFT JOIN Tbl_Employee approver ON l.approved_by = approver.id
-		WHERE l.employee_id = $1
-		AND l.start_date >= ($3 || '-' || $2 || '-01')::date
-		ORDER BY l.start_date ASC, l.created_at DESC`
+	SELECT 
+		l.id,
+		e.full_name AS employee,
+		lt.name AS leave_type,
+		l.leave_type_id,
+		lt.is_paid,
+		lt.is_early,
+
+		CASE 
+			WHEN lt.is_early = true 
+			THEN l.leave_timing
+			ELSE COALESCE(h.timing, 'Full Day')
+		END AS leave_timing,
+
+		CASE 
+			WHEN lt.is_early = true 
+			THEN 'EARLY'
+			ELSE COALESCE(h.type, 'FULL')
+		END AS leave_timing_type,
+
+		l.start_date,
+		l.end_date,
+		l.days,
+		COALESCE(l.reason,'') AS reason,
+		l.status,
+		l.created_at AS applied_at,
+		approver.full_name AS approval_name
+
+	FROM Tbl_Leave l
+
+	INNER JOIN Tbl_Employee e
+		ON l.employee_id = e.id
+
+	INNER JOIN Tbl_Leave_Type lt
+		ON lt.id = l.leave_type_id
+
+	LEFT JOIN Tbl_Half h
+		ON l.half_id = h.id
+
+	LEFT JOIN Tbl_Employee approver
+		ON l.approved_by = approver.id
+
+	WHERE 
+		l.employee_id = $1
+		AND EXTRACT(MONTH FROM l.start_date) = $2
+		AND EXTRACT(YEAR FROM l.start_date) = $3
+
+	ORDER BY 
+		l.start_date ASC,
+		l.created_at DESC
+	`
 
 	err := r.DB.Select(&result, query, userID, month, year)
+
 	return result, err
 }
 
@@ -258,121 +277,191 @@ func (r *Repository) GetAllEmployeeLeaveByMonthYear(userID uuid.UUID, month, yea
 // GetAllleavebaseonassignManagerByMonthYear - Get manager's team leaves from given month/year onward (current + future).
 // When month/year is sent as base, returns leaves where start_date >= first day of that month.
 func (r *Repository) GetAllleavebaseonassignManagerByMonthYear(userID uuid.UUID, month, year int) ([]models.LeaveResponse, error) {
+
 	var result []models.LeaveResponse
+
 	query := `
-		SELECT 
-			l.id,
-			e.full_name AS employee,
-			lt.name AS leave_type,
-			lt.is_paid AS is_paid,
-			COALESCE(h.type, 'FULL') AS leave_timing_type,
-			COALESCE(h.timing, 'Full Day') AS leave_timing,
-			l.start_date,
-			l.end_date,
-			l.days,
-			COALESCE(l.reason, '') AS reason,
-			l.status,
-			l.created_at AS applied_at,
-			approver.full_name AS approval_name
-		FROM Tbl_Leave l
-		INNER JOIN Tbl_Employee e ON l.employee_id = e.id
-		INNER JOIN Tbl_Leave_Type lt ON lt.id = l.leave_type_id
-		LEFT JOIN Tbl_Half h ON l.half_id = h.id
-		LEFT JOIN Tbl_Employee approver ON l.approved_by = approver.id
-		WHERE (e.manager_id = $1 OR l.employee_id = $1)
-		AND l.start_date >= ($3 || '-' || $2 || '-01')::date
-		ORDER BY l.start_date ASC, l.created_at DESC`
+	SELECT 
+		l.id,
+		e.full_name AS employee,
+		lt.name AS leave_type,
+		l.leave_type_id,
+		lt.is_paid,
+		lt.is_early,
+
+		CASE 
+			WHEN lt.is_early = true 
+			THEN l.leave_timing
+			ELSE COALESCE(h.timing, 'Full Day')
+		END AS leave_timing,
+
+		CASE 
+			WHEN lt.is_early = true 
+			THEN 'EARLY'
+			ELSE COALESCE(h.type, 'FULL')
+		END AS leave_timing_type,
+
+		l.start_date,
+		l.end_date,
+		l.days,
+		COALESCE(l.reason,'') AS reason,
+		l.status,
+		l.created_at AS applied_at,
+		approver.full_name AS approval_name
+
+	FROM Tbl_Leave l
+
+	INNER JOIN Tbl_Employee e
+		ON l.employee_id = e.id
+
+	INNER JOIN Tbl_Leave_Type lt
+		ON lt.id = l.leave_type_id
+
+	LEFT JOIN Tbl_Half h
+		ON l.half_id = h.id
+
+	LEFT JOIN Tbl_Employee approver
+		ON l.approved_by = approver.id
+
+	WHERE
+		(e.manager_id = $1 OR l.employee_id = $1)
+		AND EXTRACT(MONTH FROM l.start_date) = $2
+		AND EXTRACT(YEAR FROM l.start_date) = $3
+
+	ORDER BY
+		l.start_date ASC,
+		l.created_at DESC
+	`
 
 	err := r.DB.Select(&result, query, userID, month, year)
+
 	return result, err
 }
 
 // GetAllLeaveByMonthYear - Get all leaves from given month/year onward (current + future). Admin/HR/SuperAdmin.
 // When month/year is sent as base, returns leaves where start_date >= first day of that month.
 func (r *Repository) GetAllLeaveByMonthYear(month, year int) ([]models.LeaveResponse, error) {
+
 	var result []models.LeaveResponse
+
 	query := `
-		SELECT 
-			l.id,
-			e.full_name AS employee,
-			lt.name AS leave_type,
-			l.leave_type_id,
-			lt.is_paid AS is_paid,
-			COALESCE(h.type, 'FULL') AS leave_timing_type,
-			COALESCE(h.timing, 'Full Day') AS leave_timing,
-			l.start_date,
-			l.end_date,
-			l.days,
-			COALESCE(l.reason, '') AS reason,
-			l.status,
-			l.created_at AS applied_at,
-			approver.full_name AS approval_name
-		FROM Tbl_Leave l
-		INNER JOIN Tbl_Employee e ON l.employee_id = e.id
-		INNER JOIN Tbl_Leave_Type lt ON lt.id = l.leave_type_id
-		LEFT JOIN Tbl_Half h ON l.half_id = h.id
-		LEFT JOIN Tbl_Employee approver ON l.approved_by = approver.id
-		WHERE l.start_date >= ($2 || '-' || $1 || '-01')::date
-		ORDER BY l.start_date ASC, l.created_at DESC`
+	SELECT 
+		l.id,
+		e.full_name AS employee,
+		lt.name AS leave_type,
+		l.leave_type_id,
+		lt.is_paid,
+		lt.is_early,
+
+		CASE 
+			WHEN lt.is_early = true 
+			THEN l.leave_timing
+			ELSE COALESCE(h.timing, 'Full Day')
+		END AS leave_timing,
+
+		CASE 
+			WHEN lt.is_early = true 
+			THEN 'EARLY'
+			ELSE COALESCE(h.type, 'FULL')
+		END AS leave_timing_type,
+
+		l.start_date,
+		l.end_date,
+		l.days,
+		COALESCE(l.reason,'') AS reason,
+		l.status,
+		l.created_at AS applied_at,
+		approver.full_name AS approval_name
+
+	FROM Tbl_Leave l
+
+	INNER JOIN Tbl_Employee e
+		ON l.employee_id = e.id
+
+	INNER JOIN Tbl_Leave_Type lt
+		ON lt.id = l.leave_type_id
+
+	LEFT JOIN Tbl_Half h
+		ON l.half_id = h.id
+
+	LEFT JOIN Tbl_Employee approver
+		ON l.approved_by = approver.id
+
+	WHERE
+		EXTRACT(MONTH FROM l.start_date) = $1
+		AND EXTRACT(YEAR FROM l.start_date) = $2
+
+	ORDER BY
+		l.start_date ASC,
+		l.created_at DESC
+	`
 
 	err := r.DB.Select(&result, query, month, year)
+
 	return result, err
-}
-
-// UpdateLeaveType - Update leave policy
-func (r *Repository) UpdateLeaveType(tx *sqlx.Tx, leaveTypeID int, input models.LeaveTypeInput) error {
-	query := `
-		UPDATE Tbl_Leave_type 
-		SET name = $1, is_paid = $2, default_entitlement = $3, updated_at = NOW()
-		WHERE id = $4
-	`
-	result, err := tx.Exec(query, input.Name, *input.IsPaid, *input.DefaultEntitlement, leaveTypeID)
-	if err != nil {
-		return err
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rowsAffected == 0 {
-		return sql.ErrNoRows
-	}
-
-	return nil
 }
 
 // GetMyLeavesByMonthYear - Get current user's leaves from given month/year onward (current + future).
 // When month/year is sent as base, returns leaves where start_date >= first day of that month.
 func (r *Repository) GetMyLeavesByMonthYear(userID uuid.UUID, month, year int) ([]models.LeaveResponse, error) {
+
 	var result []models.LeaveResponse
+
 	query := `
-		SELECT 
-			l.id,
-			e.full_name AS employee,
-			lt.name AS leave_type,
-			lt.is_paid AS is_paid,
-			l.leave_type_id,
-			COALESCE(h.type, 'FULL') AS leave_timing_type,
-			COALESCE(h.timing, 'Full Day') AS leave_timing,
-			l.start_date,
-			l.end_date,
-			l.days,
-			COALESCE(l.reason, '') AS reason,
-			l.status,
-			l.created_at AS applied_at,
-			approver.full_name AS approval_name
-		FROM Tbl_Leave l
-		INNER JOIN Tbl_Employee e ON l.employee_id = e.id
-		INNER JOIN Tbl_Leave_Type lt ON lt.id = l.leave_type_id
-		LEFT JOIN Tbl_Half h ON l.half_id = h.id
-		LEFT JOIN Tbl_Employee approver ON l.approved_by = approver.id
-		WHERE l.employee_id = $1
-		AND l.start_date >= MAKE_DATE($3, $2, 1)
-		ORDER BY l.start_date ASC, l.created_at DESC`
+	SELECT 
+		l.id,
+		e.full_name AS employee,
+		lt.name AS leave_type,
+		lt.is_paid,
+		lt.is_early,
+		l.leave_type_id,
+
+		CASE 
+			WHEN lt.is_early = true 
+			THEN l.leave_timing
+			ELSE COALESCE(h.timing, 'Full Day')
+		END AS leave_timing,
+
+		CASE 
+			WHEN lt.is_early = true 
+			THEN 'EARLY'
+			ELSE COALESCE(h.type, 'FULL')
+		END AS leave_timing_type,
+
+		l.start_date,
+		l.end_date,
+		l.days,
+		COALESCE(l.reason, '') AS reason,
+		l.status,
+		l.created_at AS applied_at,
+		approver.full_name AS approval_name
+
+	FROM Tbl_Leave l
+
+	INNER JOIN Tbl_Employee e 
+		ON l.employee_id = e.id
+
+	INNER JOIN Tbl_Leave_Type lt 
+		ON lt.id = l.leave_type_id
+
+	LEFT JOIN Tbl_Half h 
+		ON l.half_id = h.id
+
+	LEFT JOIN Tbl_Employee approver 
+		ON l.approved_by = approver.id
+
+	WHERE 
+		l.employee_id = $1
+		AND EXTRACT(MONTH FROM l.start_date) = $2
+		AND EXTRACT(YEAR FROM l.start_date) = $3
+
+	ORDER BY 
+		l.start_date ASC,
+		l.created_at DESC
+	`
 
 	err := r.DB.Select(&result, query, userID, month, year)
+
 	return result, err
 }
 
@@ -416,37 +505,6 @@ func (r *Repository) UpdateLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveT
 	if rowsAffected > 0 {
 		fmt.Printf("Updated %d leave balances for leave_type_id=%d (entitlement: %d → %d, year: %d)\n",
 			rowsAffected, leaveTypeID, oldDefaultEntitlement, newDefaultEntitlement, currentYear)
-	}
-
-	return nil
-}
-
-// DeleteLeaveType - Delete leave policy
-func (r *Repository) DeleteLeaveType(tx *sqlx.Tx, leaveTypeID int) error {
-	// Check if leave type is being used in any leave applications
-	var count int
-	err := tx.Get(&count, "SELECT COUNT(*) FROM Tbl_Leave WHERE leave_type_id = $1", leaveTypeID)
-	if err != nil {
-		return err
-	}
-
-	if count > 0 {
-		return sql.ErrNoRows // Using this to indicate constraint violation
-	}
-
-	query := `DELETE FROM Tbl_Leave_type WHERE id = $1`
-	result, err := tx.Exec(query, leaveTypeID)
-	if err != nil {
-		return err
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rowsAffected == 0 {
-		return sql.ErrNoRows
 	}
 
 	return nil

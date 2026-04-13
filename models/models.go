@@ -34,29 +34,12 @@ type EmployeeInput struct {
 	DesignationName *string    `json:"designation_name,omitempty"` // optional
 }
 
-// ----------------- LEAVE TYPE -----------------
-type LeaveType struct {
-	ID                 int    `json:"id" db:"id"`
-	Name               string `json:"name" db:"name"`
-	IsPaid             bool   `json:"is_paid" db:"is_paid"`
-	DefaultEntitlement int    `json:"default_entitlement" db:"default_entitlement"`
-	// LeaveCount         int       `json:"leave_count" db:"leave_count"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
-}
-
-type LeaveTypeInput struct {
-	Name               string `json:"name" validate:"required"`
-	IsPaid             *bool  `json:"is_paid,omitempty"`
-	DefaultEntitlement *int   `json:"default_entitlement,omitempty"`
-	LeaveCount         *int   `json:"leave_count,omitempty" validate:"omitempty,gt=0"`
-}
-
 // ----------------- LEAVE -----------------
 type LeaveInput struct {
 	EmployeeID    uuid.UUID  `json:"employee_id" validate:"required"`
 	LeaveTypeID   int        `json:"leave_type_id" validate:"required"`
-	LeaveTimingID *int       `json:"leave_timing_id,omitempty"` // Optional timing ID (defaults to 3 - Full Day)
+	LeaveTimingID *int       `json:"leave_timing_id,omitempty"`
+	LeaveTiming   *string    `json:"leave_timing,omitempty"`
 	StartDate     time.Time  `json:"start_date" validate:"required"`
 	EndDate       time.Time  `json:"end_date" validate:"required"`
 	Reason        string     `json:"reason" validate:"required,min=10,max=500"` // Enhanced validation
@@ -149,14 +132,13 @@ type FullPayslipResponse struct {
 	CreatedAt       string    `json:"created_at"`
 }
 type LeaveResponse struct {
-	ID          string `db:"id" json:"id"`
-	Employee    string `db:"employee" json:"employee"`
-	LeaveType   string `db:"leave_type" json:"leave_type"`
-	LeaveTypeID int    `db:"leave_type_id" json:"leave_type_id"`
-
+	ID              string    `db:"id" json:"id"`
+	Employee        string    `db:"employee" json:"employee"`
+	LeaveType       string    `db:"leave_type" json:"leave_type"`
+	LeaveTypeID     int       `db:"leave_type_id" json:"leave_type_id"`
 	IsPaid          bool      `db:"is_paid" json:"is_paid"`
 	LeaveTimingType string    `db:"leave_timing_type" json:"leave_timing_type"`
-	LeaveTiming     string    `db:"leave_timing" json:"leave_timing"`
+	LeaveTiming     *string   `db:"leave_timing" json:"leave_timing"`
 	StartDate       time.Time `db:"start_date" json:"start_date"`
 	EndDate         time.Time `db:"end_date" json:"end_date"`
 	Days            float64   `db:"days" json:"days"`
@@ -164,6 +146,7 @@ type LeaveResponse struct {
 	Status          string    `db:"status" json:"status"`
 	AppliedAt       time.Time `db:"applied_at" json:"applied_at"`
 	ApprovalName    *string   `db:"approval_name" json:"approval_name,omitempty"`
+	IsEarly         *bool     `db:"is_early" json:"is_early"`
 }
 
 var Validate *validator.Validate
@@ -200,7 +183,8 @@ type Leave struct {
 	ID            uuid.UUID  `db:"id"`
 	EmployeeID    uuid.UUID  `db:"employee_id"`
 	LeaveTypeID   int        `db:"leave_type_id"`
-	LeaveTimingID *int       `db:"half_id"` // Timing ID (references Tbl_Half)
+	LeaveTimingID *int       `db:"half_id"`
+	LeaveTiming   *string    `db:"leave_timing"` // Timing ID (references Tbl_Half)
 	StartDate     time.Time  `db:"start_date"`
 	EndDate       time.Time  `db:"end_date"`
 	Days          float64    `db:"days"`
@@ -301,7 +285,8 @@ type UpdateAssignmentRequest struct {
 // LeaveUpdateInput is used when an employee edits their own pending leave
 type LeaveUpdateInput struct {
 	LeaveTypeID   int       `json:"leave_type_id" validate:"required"`
-	LeaveTimingID int       `json:"leave_timing_id,omitempty"`
+	LeaveTimingID *int      `json:"leave_timing_id,omitempty"`
+	LeaveTiming   *string   `json:"leave_timing,omitempty"`
 	StartDate     time.Time `json:"start_date" validate:"required"`
 	EndDate       time.Time `json:"end_date" validate:"required"`
 	Reason        string    `json:"reason" validate:"required,min=10,max=500"`

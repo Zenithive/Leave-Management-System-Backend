@@ -9,7 +9,7 @@ import (
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/repositories"
 )
 
-func CalculateWorkingDays(Query *repositories.Repository, tx *sqlx.Tx, start, end time.Time) (float64, error) {
+func CalculateWorkingDays(Query *repositories.Repository, tx *sqlx.Tx, start, end time.Time, leaveTiming time.Time) (float64, error) {
 	// 1️ Validate date range
 	if end.Before(start) {
 		return 0, fmt.Errorf("end date cannot be before start date")
@@ -19,11 +19,14 @@ func CalculateWorkingDays(Query *repositories.Repository, tx *sqlx.Tx, start, en
 	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC)
 	end = time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, time.UTC)
 
+	fmt.Println("1s")
+
 	// 2️ Fetch holidays within range
 	holidays, err := Query.GetByFilterHolidayBetwweenTwoDates(tx, start, end)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch holidays: %v", err)
 	}
+	fmt.Println("2s")
 
 	// Convert slice to a map for O(1) lookup
 	holidayMap := make(map[string]bool)
@@ -61,14 +64,18 @@ func CalculateWorkingDays(Query *repositories.Repository, tx *sqlx.Tx, start, en
 
 // CalculateWorkingDaysWithTiming calculates working days based on timing type
 // timingID: 1 = First Half (0.5 days), 2 = Second Half (0.5 days), 3 = Full Day (1.0 days)
-func CalculateWorkingDaysWithTiming(Query *repositories.Repository, tx *sqlx.Tx, start, end time.Time, timingID int) (float64, error) {
+func CalculateWorkingDaysWithTiming(Query *repositories.Repository, tx *sqlx.Tx, start, end time.Time, timingID int, leaveTiming time.Time) (float64, error) {
 	// First calculate the base working days
-	baseDays, err := CalculateWorkingDays(Query, tx, start, end)
+	baseDays, err := CalculateWorkingDays(Query, tx, start, end, leaveTiming)
+	fmt.Println("Base Days:", baseDays)
 	if err != nil {
 		return 0, err
 	}
 
-	// Apply timing multiplier
+	if !leaveTiming.IsZero() {
+		return baseDays, nil
+	}
+
 	switch timingID {
 	case 1, 2: // First Half or Second Half
 		return baseDays * 0.5, nil
@@ -244,4 +251,29 @@ func CalculateLeaveBalances(leaveTypes []LeaveTypeData, balanceRecords []LeaveBa
 	}
 
 	return calculatedBalances
+}
+
+// validateLeaveTiming
+func ValidateLeaveTiming(leaveTiming string) (time.Time, error) {
+
+	// Expected format: "18:02"
+	t, err := time.Parse("15:04", leaveTiming)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid leave_timing format, expected HH:MM")
+	}
+
+	minTime := 10*60 + 0 // 10:00 AM
+	maxTime := 19*60 + 0 // 7:00 PM
+
+	current := t.Hour()*60 + t.Minute()
+
+	if current < minTime {
+		return time.Time{}, fmt.Errorf("leave_timing must be after 10:00 AM")
+	}
+
+	if current > maxTime {
+		return time.Time{}, fmt.Errorf("leave_timing must be before 7:00 PM")
+	}
+
+	return t, nil
 }
