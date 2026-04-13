@@ -5,11 +5,7 @@ services:
     container_name: ums-backend
     ports:
       - "8082:8082"
-    environment:
-      DB_URL: postgresql://postgres.reiwplujhjytvdlowsqq:sanjay110@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true
-      APP_PORT: 8082
-      SECRATE_KEY: sanjay110
-      F_SERVER: http://localhost:8089
-      ALLOW_MANAGER_ADD_LEAVE: "true"
+    env_file:
+      - .env
     restart: unless-stopped
-    
+
