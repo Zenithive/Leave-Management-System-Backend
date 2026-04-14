@@ -27,19 +27,63 @@ func (r *Repository) CreateCategory(tx *sqlx.Tx, data models.EquipmentCategoryRe
 	return nil
 }
 
-// GetAllCategory
-func (r *Repository) GetAllCategory() ([]models.EquipmentCategoryRes, error) {
+// GetAllCategory - supports optional pagination, filtering, and sorting
+// If limit = 0, returns all data. Otherwise returns paginated data with total count
+// Supports search by name and sorting by name or created_at
+func (r *Repository) GetAllCategory(limit, offset int, search, sortBy, sortDir string) ([]models.EquipmentCategoryRes, int64, error) {
 	var res []models.EquipmentCategoryRes
+	var total int64
+	var args []interface{}
+	argIndex := 1
 
-	err := r.DB.Select(&res, `
-		SELECT id, name, description, created_at, updated_at
-		FROM tbl_equipment_category
-		ORDER BY name
-	`)
-	if err != nil {
-		return nil, err
+	// Build WHERE clause for search
+	whereClause := ""
+	if search != "" {
+		whereClause = fmt.Sprintf(" WHERE name ILIKE $%d", argIndex)
+		args = append(args, "%"+search+"%")
+		argIndex++
 	}
-	return res, nil
+
+	// Get total count with search filter
+	countQuery := "SELECT COUNT(*) FROM tbl_equipment_category" + whereClause
+	if len(args) > 0 {
+		err := r.DB.Get(&total, countQuery, args...)
+		if err != nil {
+			return nil, 0, err
+		}
+	} else {
+		err := r.DB.Get(&total, countQuery)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+
+	// Build ORDER BY clause with stable sorting (add id as secondary sort for consistency)
+	orderClause := fmt.Sprintf(" ORDER BY %s %s, id ASC", sortBy, sortDir)
+
+	// Build main query
+	query := "SELECT id, name, description, created_at, updated_at FROM tbl_equipment_category" + whereClause + orderClause
+
+	// Add pagination if requested
+	if limit > 0 {
+		query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIndex, argIndex+1)
+		args = append(args, limit, offset)
+	}
+
+	// Execute query
+	if len(args) > 0 {
+		err := r.DB.Select(&res, query, args...)
+		if err != nil {
+			return nil, 0, err
+		}
+	} else {
+		err := r.DB.Select(&res, query)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+
+	return res, total, nil
 }
 
 // UpdateCategory
@@ -97,26 +141,114 @@ func (r *Repository) CreateEquipment(tx *sqlx.Tx, data models.EquipmentRequest) 
 	return nil
 }
 
-// GetAllEquipment
-func (r *Repository) GetAllEquipment() ([]models.EquipmentRes, error) {
+// GetAllEquipment - supports optional pagination, filtering, and sorting
+// Search: by equipment name and category name
+// Sort: by name, category, price, total_quantity, remaining_quantity, is_shared, purchase_date
+func (r *Repository) GetAllEquipment(limit, offset int, search, sortBy, sortDir string) ([]models.EquipmentRes, int64, error) {
 	res := []models.EquipmentRes{}
+	var total int64
+	var args []interface{}
+	var err error
+	argIndex := 1
 
-	err := r.DB.Select(&res, `
-		SELECT id, name, category_id, is_shared, price,
-		       total_quantity, remaining_quantity,
-		       purchase_date,
-		       created_at, updated_at
-		FROM tbl_equipment
-		ORDER BY name
-	`)
-	return res, err
+	// Build WHERE clause for search (search in equipment name OR category name)
+	whereClause := ""
+	if search != "" {
+		whereClause = fmt.Sprintf(` WHERE (e.name ILIKE $%d OR c.name ILIKE $%d)`, argIndex, argIndex)
+		args = append(args, "%"+search+"%")
+		argIndex++
+	}
+
+	// Get total count with search filter
+	countQuery := `
+		SELECT COUNT(*) 
+		FROM tbl_equipment e
+		LEFT JOIN tbl_equipment_category c ON e.category_id = c.id
+	` + whereClause
+
+	if len(args) > 0 {
+		err = r.DB.Get(&total, countQuery, args...)
+		if err != nil {
+			return nil, 0, err
+		}
+	} else {
+		err = r.DB.Get(&total, countQuery)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+
+	// Map sort fields to actual column names with NULL handling
+	sortFieldMap := map[string]string{
+		"name":               "e.name",
+		"category":           "COALESCE(c.name, '')", // Handle NULL categories
+		"price":              "e.price",
+		"total_quantity":     "e.total_quantity",
+		"remaining_quantity": "e.remaining_quantity",
+		"is_shared":          "e.is_shared",
+		"purchase_date":      "COALESCE(e.purchase_date, '1970-01-01')", // Handle NULL dates
+		"created_at":         "e.created_at",
+	}
+
+	// Validate and get sort field
+	sortField, ok := sortFieldMap[sortBy]
+	if !ok {
+		sortField = "e.name" // Default to equipment name
+	}
+
+	// Build ORDER BY clause with stable sorting (add e.id as secondary sort for consistency)
+	orderClause := fmt.Sprintf(" ORDER BY %s %s, e.id ASC", sortField, sortDir)
+
+	// Build main query
+	query := `
+		SELECT e.id, e.name, e.category_id, e.is_shared, e.price,
+		       e.total_quantity, e.remaining_quantity,
+		       e.purchase_date,
+		       e.created_at, e.updated_at
+		FROM tbl_equipment e
+		LEFT JOIN tbl_equipment_category c ON e.category_id = c.id
+	` + whereClause + orderClause
+
+	// Add pagination if requested
+	if limit > 0 {
+		query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIndex, argIndex+1)
+		args = append(args, limit, offset)
+	}
+
+	// Execute query
+	if len(args) > 0 {
+		err = r.DB.Select(&res, query, args...)
+		if err != nil {
+			return nil, 0, err
+		}
+	} else {
+		err = r.DB.Select(&res, query)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+
+	return res, total, nil
 }
 
-// GetEquipmentByCategory
-func (r *Repository) GetEquipmentByCategory(categoryID uuid.UUID) ([]models.EquipmentRes, error) {
+// GetEquipmentByCategory - supports optional pagination
+// If limit = 0, returns all data. Otherwise returns paginated data with total count
+func (r *Repository) GetEquipmentByCategory(categoryID uuid.UUID, limit, offset int) ([]models.EquipmentRes, int64, error) {
 	res := []models.EquipmentRes{}
+	var total int64
 
-	err := r.DB.Select(&res, `
+	// Get total count
+	err := r.DB.Get(&total, `
+		SELECT COUNT(*) 
+		FROM tbl_equipment 
+		WHERE category_id = $1
+	`, categoryID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Build query with optional pagination
+	query := `
 		SELECT id, name, category_id, is_shared, price,
 		       total_quantity, remaining_quantity,
 		       purchase_date,
@@ -124,9 +256,18 @@ func (r *Repository) GetEquipmentByCategory(categoryID uuid.UUID) ([]models.Equi
 		FROM tbl_equipment
 		WHERE category_id = $1
 		ORDER BY name
-	`, categoryID)
+	`
 
-	return res, err
+	// If limit > 0, add pagination
+	if limit > 0 {
+		query += ` LIMIT $2 OFFSET $3`
+		err = r.DB.Select(&res, query, categoryID, limit, offset)
+	} else {
+		// No pagination - return all
+		err = r.DB.Select(&res, query, categoryID)
+	}
+
+	return res, total, err
 }
 
 // UpdateEquipment
@@ -237,11 +378,20 @@ func (r *Repository) AssignEquipment(tx *sqlx.Tx, req models.AssignEquipmentRequ
 	return err
 }
 
-// GetAllAssignedEquipment
-func (r *Repository) GetAllAssignedEquipment() ([]models.AssignEquipmentResponse, error) {
+// GetAllAssignedEquipment - supports optional pagination
+// If limit = 0, returns all data. Otherwise returns paginated data with total count
+func (r *Repository) GetAllAssignedEquipment(limit, offset int) ([]models.AssignEquipmentResponse, int64, error) {
 	res := []models.AssignEquipmentResponse{}
+	var total int64
 
-	err := r.DB.Select(&res, `
+	// Get total count
+	err := r.DB.Get(&total, `SELECT COUNT(*) FROM tbl_equipment_assignment`)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Build query with optional pagination
+	query := `
 		SELECT 
 		       e.full_name AS employee_name,
 		       e.email AS employee_email,
@@ -254,15 +404,38 @@ func (r *Repository) GetAllAssignedEquipment() ([]models.AssignEquipmentResponse
 		JOIN tbl_equipment eq ON eq.id = ea.equipment_id
 		JOIN tbl_employee ab ON ab.id = ea.assigned_by
 		ORDER BY ea.assigned_at DESC
-	`)
-	return res, err
+	`
+
+	// If limit > 0, add pagination
+	if limit > 0 {
+		query += ` LIMIT $1 OFFSET $2`
+		err = r.DB.Select(&res, query, limit, offset)
+	} else {
+		// No pagination - return all
+		err = r.DB.Select(&res, query)
+	}
+
+	return res, total, err
 }
 
-// GetAssignedEquipmentByEmployee
-func (r *Repository) GetAssignedEquipmentByEmployee(employeeID uuid.UUID) ([]models.AssignEquipmentResponse, error) {
+// GetAssignedEquipmentByEmployee - supports optional pagination
+// If limit = 0, returns all data. Otherwise returns paginated data with total count
+func (r *Repository) GetAssignedEquipmentByEmployee(employeeID uuid.UUID, limit, offset int) ([]models.AssignEquipmentResponse, int64, error) {
 	res := []models.AssignEquipmentResponse{}
+	var total int64
 
-	err := r.DB.Select(&res, `
+	// Get total count
+	err := r.DB.Get(&total, `
+		SELECT COUNT(*) 
+		FROM tbl_equipment_assignment 
+		WHERE employee_id = $1
+	`, employeeID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Build query with optional pagination
+	query := `
 		SELECT 
 		    e.full_name AS employee_name,
 		    e.email AS employee_email,
@@ -276,9 +449,18 @@ func (r *Repository) GetAssignedEquipmentByEmployee(employeeID uuid.UUID) ([]mod
 		JOIN tbl_employee ab ON ab.id = ea.assigned_by
 		WHERE e.id = $1
 		ORDER BY ea.assigned_at DESC
-	`, employeeID)
+	`
 
-	return res, err
+	// If limit > 0, add pagination
+	if limit > 0 {
+		query += ` LIMIT $2 OFFSET $3`
+		err = r.DB.Select(&res, query, employeeID, limit, offset)
+	} else {
+		// No pagination - return all
+		err = r.DB.Select(&res, query, employeeID)
+	}
+
+	return res, total, err
 }
 
 // RemoveEquipment (Return)
@@ -296,9 +478,9 @@ func (r *Repository) RemoveEquipment(tx *sqlx.Tx, req models.RemoveEquipmentRequ
 		ORDER BY assigned_at DESC
 		LIMIT 1
 	`, req.EquipmentID, req.EmployeeID).Scan(&assignmentID, &qty)
-	
+
 	if err != nil {
-		return fmt.Errorf("assignment not found for equipment_id=%s, employee_id=%s: %w", 
+		return fmt.Errorf("assignment not found for equipment_id=%s, employee_id=%s: %w",
 			req.EquipmentID, req.EmployeeID, err)
 	}
 
@@ -358,7 +540,7 @@ func (r *Repository) UpdateAssignment(tx *sqlx.Tx, req models.UpdateAssignmentRe
 		LIMIT 1
 	`, req.EquipmentID, req.FromEmployeeID).Scan(&assignmentID, &currentQty)
 	if err != nil {
-		return fmt.Errorf("assignment not found for equipment_id=%s, employee_id=%s: %w", 
+		return fmt.Errorf("assignment not found for equipment_id=%s, employee_id=%s: %w",
 			req.EquipmentID, req.FromEmployeeID, err)
 	}
 
@@ -513,7 +695,7 @@ func (r *Repository) UpdateAssignment(tx *sqlx.Tx, req models.UpdateAssignmentRe
 	if err != nil {
 		return fmt.Errorf("failed to update assignment quantity: %w", err)
 	}
-	
+
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
 		return fmt.Errorf("assignment id=%s not found", assignmentID)

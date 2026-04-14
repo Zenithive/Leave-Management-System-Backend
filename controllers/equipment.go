@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -83,17 +82,37 @@ func (h *HandlerFunc) GetAllCategory(c *gin.Context) {
 		return
 	}
 
-	// 2️ Fetch categories
-	data, err := h.Query.GetAllCategory()
+	// 2️ Get pagination params (optional)
+	pagination := utils.GetPaginationParams(c)
+
+	// 3️ Get filter params (optional)
+	filters := utils.GetFilterParams(c)
+
+	// 4️ Fetch categories with optional pagination, filtering, and sorting
+	data, total, err := h.Query.GetAllCategory(
+		pagination.PageSize,
+		pagination.Offset,
+		filters.Search,
+		filters.SortBy,
+		filters.SortDir,
+	)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, "failed to get categories: "+err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	// 5️ Build response
+	response := gin.H{
 		"message":    "success",
 		"categories": data,
-	})
+	}
+
+	// Add pagination metadata if pagination was requested
+	if pagination.PageSize > 0 {
+		response["pagination"] = utils.CalculatePaginationResponse(pagination.Page, pagination.PageSize, total)
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // ======================
@@ -279,12 +298,13 @@ func (h *HandlerFunc) CreateEquipment(c *gin.Context) {
 	})
 }
 
-// GetEquipmentByCategory fetches all equipment for a specific category.
+// GetEquipmentByCategory fetches all equipment for a specific category with optional pagination
 // Steps:
 // 1. Check permissions (SUPERADMIN, ADMIN only)
 // 2. Get category ID from query params
-// 3. Call repository to fetch equipment by category
-// 4. Return response
+// 3. Get pagination params (optional)
+// 4. Call repository to fetch equipment by category
+// 5. Return response
 func (h *HandlerFunc) GetEquipmentByCategory(c *gin.Context) {
 	// 1️ Permission check
 	role := c.GetString("role")
@@ -293,7 +313,7 @@ func (h *HandlerFunc) GetEquipmentByCategory(c *gin.Context) {
 		return
 	}
 
-	// 2️ Get category ID from  parameter
+	// 2️ Get category ID from parameter
 	categoryIDStr := c.Query("id")
 	if categoryIDStr == "" {
 		utils.RespondWithError(c, http.StatusBadRequest, "category_id query parameter is required")
@@ -306,26 +326,37 @@ func (h *HandlerFunc) GetEquipmentByCategory(c *gin.Context) {
 		return
 	}
 
-	// 3️ Fetch equipment by category from repository
-	data, err := h.Query.GetEquipmentByCategory(categoryID)
+	// 3️ Get pagination params (optional)
+	pagination := utils.GetPaginationParams(c)
+
+	// 4️ Fetch equipment by category from repository
+	data, total, err := h.Query.GetEquipmentByCategory(categoryID, pagination.PageSize, pagination.Offset)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, "failed to get equipment: "+err.Error())
 		return
 	}
 
-	// 4️ Ensure we return empty array instead of null when no data
+	// 5️ Ensure we return empty array instead of null when no data
 	if data == nil {
 		data = []models.EquipmentRes{}
 	}
 
-	// 5️ Return success response
-	c.JSON(http.StatusOK, gin.H{
+	// 6️ Build response
+	response := gin.H{
 		"message":   "success",
 		"equipment": data,
-	})
+	}
+
+	// Add pagination metadata if pagination was requested
+	if pagination.PageSize > 0 {
+		response["pagination"] = utils.CalculatePaginationResponse(pagination.Page, pagination.PageSize, total)
+	}
+
+	// 7️ Return success response
+	c.JSON(http.StatusOK, response)
 }
 
-// GetAllEquipment fetches all equipment.
+// GetAllEquipment fetches all equipment with optional pagination, filtering, and sorting
 // Permission: SUPERADMIN, ADMIN only
 func (h *HandlerFunc) GetAllEquipment(c *gin.Context) {
 	role := c.GetString("role")
@@ -334,7 +365,20 @@ func (h *HandlerFunc) GetAllEquipment(c *gin.Context) {
 		return
 	}
 
-	data, err := h.Query.GetAllEquipment()
+	// Get pagination params (optional)
+	pagination := utils.GetPaginationParams(c)
+
+	// Get filter params (optional)
+	filters := utils.GetFilterParams(c)
+
+	// Fetch equipment with optional pagination, filtering, and sorting
+	data, total, err := h.Query.GetAllEquipment(
+		pagination.PageSize,
+		pagination.Offset,
+		filters.Search,
+		filters.SortBy,
+		filters.SortDir,
+	)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, "failed to get equipment: "+err.Error())
 		return
@@ -345,10 +389,18 @@ func (h *HandlerFunc) GetAllEquipment(c *gin.Context) {
 		data = []models.EquipmentRes{}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	// Build response
+	response := gin.H{
 		"message":   "success",
 		"equipment": data,
-	})
+	}
+
+	// Add pagination metadata if pagination was requested
+	if pagination.PageSize > 0 {
+		response["pagination"] = utils.CalculatePaginationResponse(pagination.Page, pagination.PageSize, total)
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *HandlerFunc) UpdateEquipment(c *gin.Context) {
@@ -531,24 +583,61 @@ func (h *HandlerFunc) GetAllAssignedEquipment(c *gin.Context) {
 		utils.RespondWithError(c, http.StatusForbidden, "access denied")
 		return
 	}
-	data, err := h.Query.GetAllAssignedEquipment()
-	fmt.Println("data", data)
+
+	// Get pagination params (optional)
+	pagination := utils.GetPaginationParams(c)
+
+	// Fetch assigned equipment with optional pagination
+	data, total, err := h.Query.GetAllAssignedEquipment(pagination.PageSize, pagination.Offset)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": data})
+
+	// Build response
+	response := gin.H{
+		"message": "success",
+		"data":    data,
+	}
+
+	// Add pagination metadata if pagination was requested
+	if pagination.PageSize > 0 {
+		response["pagination"] = utils.CalculatePaginationResponse(pagination.Page, pagination.PageSize, total)
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *HandlerFunc) GetAssignedEquipmentByEmployee(c *gin.Context) {
 	id := c.Param("id")
 	employeeID, err := uuid.Parse(id)
-	data, err := h.Query.GetAssignedEquipmentByEmployee(employeeID)
+	if err != nil {
+		utils.RespondWithError(c, http.StatusBadRequest, "invalid employee ID")
+		return
+	}
+
+	// Get pagination params (optional)
+	pagination := utils.GetPaginationParams(c)
+
+	// Fetch assigned equipment by employee with optional pagination
+	data, total, err := h.Query.GetAssignedEquipmentByEmployee(employeeID, pagination.PageSize, pagination.Offset)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": data})
+
+	// Build response
+	response := gin.H{
+		"message": "success",
+		"data":    data,
+	}
+
+	// Add pagination metadata if pagination was requested
+	if pagination.PageSize > 0 {
+		response["pagination"] = utils.CalculatePaginationResponse(pagination.Page, pagination.PageSize, total)
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // RemoveEquipment removes/returns equipment from an employee
