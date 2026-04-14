@@ -43,24 +43,22 @@ func (r *Repository) GetAllEmployees(params models.EmployeeFilterParams, role st
 	args := []interface{}{}
 	argCount := 1
 
+	// Unified search filter - searches across employee name, email, and manager name
+	// This provides a single search input that searches all three fields with OR logic
+	if params.Search != "" {
+		searchPattern := "%" + params.Search + "%"
+		whereConditions = append(whereConditions, fmt.Sprintf(
+			"(e.full_name ILIKE $%d OR e.email ILIKE $%d OR m.full_name ILIKE $%d)",
+			argCount, argCount, argCount,
+		))
+		args = append(args, searchPattern)
+		argCount++
+	}
+
 	// Status filter (optional - can filter active/inactive or show all)
 	if params.Status != "" {
 		whereConditions = append(whereConditions, fmt.Sprintf("e.status = $%d", argCount))
 		args = append(args, params.Status)
-		argCount++
-	}
-
-	// Name filter (partial match, case-insensitive)
-	if params.Name != "" {
-		whereConditions = append(whereConditions, fmt.Sprintf("e.full_name ILIKE $%d", argCount))
-		args = append(args, "%"+params.Name+"%")
-		argCount++
-	}
-
-	// Email filter (partial match, case-insensitive)
-	if params.Email != "" {
-		whereConditions = append(whereConditions, fmt.Sprintf("e.email ILIKE $%d", argCount))
-		args = append(args, "%"+params.Email+"%")
 		argCount++
 	}
 
@@ -75,13 +73,6 @@ func (r *Repository) GetAllEmployees(params models.EmployeeFilterParams, role st
 	if params.Designation != "" {
 		whereConditions = append(whereConditions, fmt.Sprintf("d.designation_name = $%d", argCount))
 		args = append(args, params.Designation)
-		argCount++
-	}
-
-	// Manager name filter (partial match, case-insensitive)
-	if params.ManagerName != "" {
-		whereConditions = append(whereConditions, fmt.Sprintf("m.full_name ILIKE $%d", argCount))
-		args = append(args, "%"+params.ManagerName+"%")
 		argCount++
 	}
 

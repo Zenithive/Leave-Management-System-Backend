@@ -16,12 +16,10 @@ type EmployeeFilterParams struct {
 	PageSize int `form:"page_size"`
 
 	// Filters
-	Name        string `form:"name"`
-	Email       string `form:"email"`
+	Search      string `form:"search"` // Unified search: searches employee name, email, and manager name
 	Role        string `form:"role"`
 	Designation string `form:"designation"`
 	Status      string `form:"status"` // active/deactive
-	ManagerName string `form:"manager_name"`
 
 	// Sorting
 	SortBy    string `form:"sort_by"`    // joining_date, salary, name, manager_name
