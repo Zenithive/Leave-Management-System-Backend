@@ -33,10 +33,10 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 	employees := r.Group("/api/employee")
 	employees.Use(middleware.AuthMiddleware(h)) // Protect employee routes
 	{
-		employees.GET("/", h.GetEmployee)                                // List all employees (SUPER_ADMIN, ADMIN/HR)
+		employees.GET("", h.GetEmployee)                                 // List all employees (SUPER_ADMIN, ADMIN/HR)
 		employees.GET("/my-team", h.GetMyTeam)                           // Get manager's team members (MANAGER only)
 		employees.GET("/:id", h.GetEmployeeById)                         // Get employee details (Self/Manager/Admin)
-		employees.POST("/", h.CreateEmployee)                            // Create employee (SUPER_ADMIN, ADMIN/HR)
+		employees.POST("", h.CreateEmployee)                             // Create employee (SUPER_ADMIN, ADMIN/HR)
 		employees.PATCH("/:id", h.UpdateEmployeeInfo)                    // Update employee info (SUPER_ADMIN, ADMIN/HR)
 		employees.PATCH("/:id/password", h.UpdateEmployeePassword)       // Update employee password (SUPER_ADMIN, ADMIN, HR)
 		employees.PATCH("/:id/role", h.UpdateEmployeeRole)               // Change employee role (SUPER_ADMIN, ADMIN/HR)
@@ -101,14 +101,14 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 	settings := r.Group("/api/settings")
 	settings.Use(middleware.AuthMiddleware(h)) // Only admin/superadmin
 	{
-		settings.GET("/", h.GetCompanySettings)    // Get current settings
-		settings.PUT("/", h.UpdateCompanySettings) // Update settings
+		settings.GET("", h.GetCompanySettings)    // Get current settings
+		settings.PUT("", h.UpdateCompanySettings) // Update settings
 	}
 	holidays := r.Group("/api/settings/holidays")
 	holidays.Use(middleware.AuthMiddleware(h))
 	{
-		holidays.POST("/", h.AddHoliday)         // SUPERADMIN adds holiday
-		holidays.GET("/", h.GetHolidays)         // List all holidays
+		holidays.POST("", h.AddHoliday)          // SUPERADMIN adds holiday
+		holidays.GET("", h.GetHolidays)          // List all holidays
 		holidays.DELETE("/:id", h.DeleteHoliday) // Remove holiday
 	}
 
@@ -116,8 +116,8 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 	designations := r.Group("/api/designations")
 	designations.Use(middleware.AuthMiddleware(h))
 	{
-		designations.POST("/", h.CreateDesignation)      // Create designation (ADMIN, SUPERADMIN, HR)
-		designations.GET("/", h.GetAllDesignations)      // Get all designations (All authenticated users)
+		designations.POST("", h.CreateDesignation)       // Create designation (ADMIN, SUPERADMIN, HR)
+		designations.GET("", h.GetAllDesignations)       // Get all designations (All authenticated users)
 		designations.GET("/:id", h.GetDesignationByID)   // Get designation by ID (All authenticated users)
 		designations.PATCH("/:id", h.UpdateDesignation)  // Update designation (ADMIN, SUPERADMIN, HR)
 		designations.DELETE("/:id", h.DeleteDesignation) // Delete designation (ADMIN, SUPERADMIN, HR)
@@ -125,7 +125,7 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 	logs := r.Group("/api/logs")
 	logs.Use((middleware.AuthMiddleware(h)))
 	{
-		logs.GET("/", h.GetLogs) // Get logs filtered by days (SUPERADMIN only)
+		logs.GET("", h.GetLogs) // Get logs filtered by days (SUPERADMIN only)
 	}
 	// Category routes
 	catagory := r.Group("/api/catagory")
@@ -134,8 +134,8 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 		// ======================
 		// Category CRUD
 		// ======================
-		catagory.POST("/", h.CreateCategory)      // Create category (ADMIN, SUPERADMIN, HR)
-		catagory.GET("/", h.GetAllCategory)       // Get all categories (ADMIN, SUPERADMIN, HR)
+		catagory.POST("", h.CreateCategory)       // Create category (ADMIN, SUPERADMIN, HR)
+		catagory.GET("", h.GetAllCategory)        // Get all categories (ADMIN, SUPERADMIN, HR)
 		catagory.DELETE("/:id", h.DeleteCategory) // Delete category (ADMIN, SUPERADMIN, HR)
 		catagory.PUT("/:id", h.UpdateCategory)    // Update category (ADMIN, SUPERADMIN, HR)
 
@@ -144,8 +144,8 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 		// ======================
 		equipment := catagory.Group("/equipment")
 		{
-			equipment.POST("/", h.CreateEquipment)                  // Create equipment (ADMIN, SUPERADMIN, HR)
-			equipment.GET("/", h.GetAllEquipment)                   // Get all equipment (ADMIN, SUPERADMIN, HR)
+			equipment.POST("", h.CreateEquipment)                   // Create equipment (ADMIN, SUPERADMIN, HR)
+			equipment.GET("", h.GetAllEquipment)                    // Get all equipment (ADMIN, SUPERADMIN, HR)
 			equipment.GET("/by-category", h.GetEquipmentByCategory) // Get equipment by category ID (query param)
 			equipment.PUT("/:id", h.UpdateEquipment)                // Update equipment (ADMIN, SUPERADMIN, HR)
 			equipment.DELETE("/:id", h.DeleteEquipment)             // Delete equipment (ADMIN, SUPERADMIN, HR)
@@ -153,8 +153,8 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 		// Equipment assignment routes
 		assign := equipment.Group("/assign")
 		{
-			assign.POST("/", h.AssignEquipment)                           // Assign equipment
-			assign.GET("/", h.GetAllAssignedEquipment)                    // Get all assignments
+			assign.POST("", h.AssignEquipment)                            // Assign equipment
+			assign.GET("", h.GetAllAssignedEquipment)                     // Get all assignments
 			assign.GET("/employee/:id", h.GetAssignedEquipmentByEmployee) // Get by employee id
 			assign.DELETE("/remove", h.RemoveEquipment)                   // Remove/return equipment
 			assign.PUT("/update", h.UpdateAssignment)                     // Update assignment (quantity or reassign)

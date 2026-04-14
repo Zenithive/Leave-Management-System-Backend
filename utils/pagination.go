@@ -88,31 +88,22 @@ func CalculatePaginationResponse(page, pageSize int, totalItems int64) Paginatio
 	}
 }
 
-// GetFilterParams extracts filtering and sorting parameters from query string
-// All parameters are optional
-func GetFilterParams(c *gin.Context) FilterParams {
+// GetFilterParams extracts filtering and sorting parameters from query string.
+// validSortFields is a set of allowed sort_by values for the calling entity.
+// Pass nil to skip sort_by validation (not recommended).
+func GetFilterParams(c *gin.Context, validSortFields map[string]bool) FilterParams {
 	search := c.Query("search")
-	sortBy := c.DefaultQuery("sort_by", "name")  // Default sort by name
-	sortDir := c.DefaultQuery("sort_dir", "asc") // Default ascending
+	sortBy := c.DefaultQuery("sort_by", "name")
+	sortDir := c.DefaultQuery("sort_dir", "asc")
 
-	// Validate sort_by (allow common fields, specific validation in repository)
-	validSortFields := map[string]bool{
-		"name":               true,
-		"created_at":         true,
-		"category":           true,
-		"price":              true,
-		"total_quantity":     true,
-		"remaining_quantity": true,
-		"is_shared":          true,
-		"purchase_date":      true,
-	}
-	if !validSortFields[sortBy] {
-		sortBy = "name" // Fallback to name if invalid
+	// Validate sort_by against caller-provided allowed fields
+	if validSortFields != nil && !validSortFields[sortBy] {
+		sortBy = "name"
 	}
 
 	// Validate sort_dir
 	if sortDir != "asc" && sortDir != "desc" {
-		sortDir = "asc" // Fallback to asc if invalid
+		sortDir = "asc"
 	}
 
 	return FilterParams{
@@ -120,4 +111,30 @@ func GetFilterParams(c *gin.Context) FilterParams {
 		SortBy:  sortBy,
 		SortDir: sortDir,
 	}
+}
+
+// CategorySortFields defines valid sort fields for equipment categories
+var CategorySortFields = map[string]bool{
+	"name":       true,
+	"created_at": true,
+}
+
+// EquipmentSortFields defines valid sort fields for equipment
+var EquipmentSortFields = map[string]bool{
+	"name":               true,
+	"category":           true,
+	"price":              true,
+	"total_quantity":     true,
+	"remaining_quantity": true,
+	"is_shared":          true,
+	"purchase_date":      true,
+	"created_at":         true,
+}
+
+// AssignmentSortFields defines valid sort fields for equipment assignments
+var AssignmentSortFields = map[string]bool{
+	"employee_name":  true,
+	"equipment_name": true,
+	"quantity":       true,
+	"assigned_at":    true,
 }

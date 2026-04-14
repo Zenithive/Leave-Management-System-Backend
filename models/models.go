@@ -239,16 +239,16 @@ type EquipmentRequest struct {
 }
 
 type EquipmentRes struct {
-	ID                uuid.UUID `db:"id" json:"id"`
-	Name              string    `db:"name" json:"name"`
-	CategoryID        uuid.UUID `db:"category_id" json:"category_id"`
-	IsShared          bool      `db:"is_shared" json:"is_shared"`
-	Price             float64   `db:"price" json:"price"`
-	TotalQuantity     int       `db:"total_quantity" json:"total_quantity"`
-	RemainingQuantity int       `db:"remaining_quantity" json:"remaining_quantity"`
-	PurchaseDate      time.Time `db:"purchase_date" json:"purchase_date"` // <--- added
-	CreatedAt         time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt         time.Time `db:"updated_at" json:"updated_at"`
+	ID                uuid.UUID  `db:"id" json:"id"`
+	Name              string     `db:"name" json:"name"`
+	CategoryID        uuid.UUID  `db:"category_id" json:"category_id"`
+	IsShared          bool       `db:"is_shared" json:"is_shared"`
+	Price             float64    `db:"price" json:"price"`
+	TotalQuantity     int        `db:"total_quantity" json:"total_quantity"`
+	RemainingQuantity int        `db:"remaining_quantity" json:"remaining_quantity"`
+	PurchaseDate      *time.Time `db:"purchase_date" json:"purchase_date,omitempty"`
+	CreatedAt         time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt         time.Time  `db:"updated_at" json:"updated_at"`
 }
 
 // AssignEquipmentRequest - used when assigning equipment to an employee
@@ -259,12 +259,16 @@ type AssignEquipmentRequest struct {
 	AssignedBy  uuid.UUID `json:"assigned_by" validate:"required"`
 }
 type AssignEquipmentResponse struct {
-	EmployeeName   string    `db:"employee_name" json:"employee_name"`
-	EmployeeEmail  string    `db:"employee_email" json:"employee_email"`
-	EquipmentName  string    `db:"equipment_name" json:"equipment_name"`
-	PurchaseDate   time.Time `db:"purchase_date" json:"purchase_date"` // purchase/buying date
-	Quantity       int       `db:"quantity" json:"quantity"`
-	ApprovedByName string    `db:"approved_by_name" json:"approved_by_name"` // new field
+	AssignmentID   uuid.UUID  `db:"assignment_id" json:"assignment_id"`
+	EmployeeID     uuid.UUID  `db:"employee_id" json:"employee_id"`
+	EmployeeName   string     `db:"employee_name" json:"employee_name"`
+	EmployeeEmail  string     `db:"employee_email" json:"employee_email"`
+	EquipmentID    uuid.UUID  `db:"equipment_id" json:"equipment_id"`
+	EquipmentName  string     `db:"equipment_name" json:"equipment_name"`
+	PurchaseDate   *time.Time `db:"purchase_date" json:"purchase_date,omitempty"`
+	Quantity       int        `db:"quantity" json:"quantity"`
+	AssignedAt     time.Time  `db:"assigned_at" json:"assigned_at"`
+	ApprovedByName string     `db:"approved_by_name" json:"approved_by_name"`
 }
 
 // RemoveEquipmentRequest - used when removing/returning equipment from an employee

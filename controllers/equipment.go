@@ -8,39 +8,26 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/access_role"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/common"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
 )
 
 // ======================
-// Create Equipment Category
+// CATEGORY
 // ======================
+
 func (h *HandlerFunc) CreateCategory(c *gin.Context) {
-	// 1️ Permission check
-	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		utils.RespondWithError(c, http.StatusForbidden, "only ADMIN, SUPERADMIN, and HR can create categories")
+	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can create categories"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
-
-	// 2️ Get Employee ID for logging
-	empIDRaw, ok := c.Get("user_id")
-	if !ok {
-		utils.RespondWithError(c, http.StatusUnauthorized, "employee ID missing")
-		return
-	}
-	empIDStr, ok := empIDRaw.(string)
-	if !ok {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee ID format")
-		return
-	}
-	empID, err := uuid.Parse(empIDStr)
+	empID, err := common.GetEmployeeId(c)
 	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee UUID")
+		utils.RespondWithError(c, http.StatusUnauthorized, err.Error())
 		return
 	}
 
-	// 3️ Bind JSON and validate
 	var req models.EquipmentCategoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
@@ -51,160 +38,61 @@ func (h *HandlerFunc) CreateCategory(c *gin.Context) {
 		return
 	}
 
-	// 4️ Execute transaction
 	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.CreateCategory(tx, req); err != nil {
 			return utils.CustomErr(c, http.StatusInternalServerError, "failed to create category: "+err.Error())
 		}
-		logData := models.NewCommon(constant.EquipmentCategory, constant.ActionCreate, empID)
-		if err := h.Query.AddLog(logData, tx); err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "failed to create log: "+err.Error())
-		}
-		return nil
+		return h.Query.AddLog(models.NewCommon(constant.EquipmentCategory, constant.ActionCreate, empID), tx)
 	}); err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "category created successfully",
-	})
+	c.JSON(http.StatusCreated, gin.H{"message": "category created successfully"})
 }
 
-// ======================
-// Get All Equipment Categories
-// ======================
 func (h *HandlerFunc) GetAllCategory(c *gin.Context) {
-	// 1️ Permission check
-	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		utils.RespondWithError(c, http.StatusForbidden, "only ADMIN, SUPERADMIN, and HR can view categories")
+	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can view categories"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
-	// 2️ Get pagination params (optional)
 	pagination := utils.GetPaginationParams(c)
+	filters := utils.GetFilterParams(c, utils.CategorySortFields)
 
-	// 3️ Get filter params (optional)
-	filters := utils.GetFilterParams(c)
-
-	// 4️ Fetch categories with optional pagination, filtering, and sorting
 	data, total, err := h.Query.GetAllCategory(
-		pagination.PageSize,
-		pagination.Offset,
-		filters.Search,
-		filters.SortBy,
-		filters.SortDir,
+		pagination.PageSize, pagination.Offset,
+		filters.Search, filters.SortBy, filters.SortDir,
 	)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, "failed to get categories: "+err.Error())
 		return
 	}
 
-	// 5️ Build response
-	response := gin.H{
-		"message":    "success",
-		"categories": data,
-	}
-
-	// Add pagination metadata if pagination was requested
+	response := gin.H{"message": "success", "categories": data}
 	if pagination.PageSize > 0 {
 		response["pagination"] = utils.CalculatePaginationResponse(pagination.Page, pagination.PageSize, total)
 	}
-
 	c.JSON(http.StatusOK, response)
 }
 
-// ======================
-// Delete Equipment Category
-// ======================
-func (h *HandlerFunc) DeleteCategory(c *gin.Context) {
-	// 1️ Permission check
-	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		utils.RespondWithError(c, http.StatusForbidden, "only ADMIN, SUPERADMIN, and HR can delete categories")
-		return
-	}
-
-	// 2️ Get Category ID from URL param
-	idStr := c.Param("id")
-	categoryID, err := uuid.Parse(idStr)
-	if err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "invalid category ID")
-		return
-	}
-
-	// 3️ Get Employee ID for logging
-	empIDRaw, ok := c.Get("user_id")
-	if !ok {
-		utils.RespondWithError(c, http.StatusUnauthorized, "employee ID missing")
-		return
-	}
-	empIDStr, ok := empIDRaw.(string)
-	if !ok {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee ID format")
-		return
-	}
-	empID, err := uuid.Parse(empIDStr)
-	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee UUID")
-		return
-	}
-
-	// 4️ Execute deletion in transaction
-	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
-		if err := h.Query.DeleteCategory(tx, categoryID); err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "failed to delete category: "+err.Error())
-		}
-		logData := models.NewCommon(constant.EquipmentCategory, constant.ActionDelete, empID)
-		if err := h.Query.AddLog(logData, tx); err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "failed to create log: "+err.Error())
-		}
-		return nil
-	}); err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "category deleted successfully",
-	})
-}
-
 func (h *HandlerFunc) UpdateCategory(c *gin.Context) {
-	// 1️ Permission check
-	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		utils.RespondWithError(c, http.StatusForbidden, "only ADMIN, SUPERADMIN, and HR can update categories")
+	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can update categories"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
-	// 2️ Get category ID from URL param
-	idStr := c.Param("id")
-	categoryID, err := uuid.Parse(idStr)
+	categoryID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, "invalid category ID")
 		return
 	}
-
-	// 3️ Get employee ID for logging
-	empIDRaw, ok := c.Get("user_id")
-	if !ok {
-		utils.RespondWithError(c, http.StatusUnauthorized, "employee ID missing")
-		return
-	}
-	empIDStr, ok := empIDRaw.(string)
-	if !ok {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee ID format")
-		return
-	}
-	empID, err := uuid.Parse(empIDStr)
+	empID, err := common.GetEmployeeId(c)
 	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee UUID")
+		utils.RespondWithError(c, http.StatusUnauthorized, err.Error())
 		return
 	}
 
-	// 4️ Bind JSON + validate
 	var req models.EquipmentCategoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
@@ -215,57 +103,64 @@ func (h *HandlerFunc) UpdateCategory(c *gin.Context) {
 		return
 	}
 
-	// 5️ Execute transaction
 	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.UpdateCategory(tx, categoryID, req); err != nil {
 			return utils.CustomErr(c, http.StatusInternalServerError, "failed to update category: "+err.Error())
 		}
-
-		logData := models.NewCommon(constant.EquipmentCategory, constant.ActionUpdate, empID)
-		if err := h.Query.AddLog(logData, tx); err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "failed to create log: "+err.Error())
-		}
-
-		return nil
+		return h.Query.AddLog(models.NewCommon(constant.EquipmentCategory, constant.ActionUpdate, empID), tx)
 	}); err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// 6️ Success response
-	c.JSON(http.StatusOK, gin.H{
-		"message": "category updated successfully",
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "category updated successfully"})
 }
 
-// CreateEquipment
+func (h *HandlerFunc) DeleteCategory(c *gin.Context) {
+	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can delete categories"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
+		return
+	}
+
+	categoryID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		utils.RespondWithError(c, http.StatusBadRequest, "invalid category ID")
+		return
+	}
+	empID, err := common.GetEmployeeId(c)
+	if err != nil {
+		utils.RespondWithError(c, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+		if err := h.Query.DeleteCategory(tx, categoryID); err != nil {
+			return utils.CustomErr(c, http.StatusInternalServerError, "failed to delete category: "+err.Error())
+		}
+		return h.Query.AddLog(models.NewCommon(constant.EquipmentCategory, constant.ActionDelete, empID), tx)
+	}); err != nil {
+		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "category deleted successfully"})
+}
+
+// ======================
+// EQUIPMENT
+// ======================
 
 func (h *HandlerFunc) CreateEquipment(c *gin.Context) {
-	// Permission check
-	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		utils.RespondWithError(c, http.StatusForbidden, "only ADMIN, SUPERADMIN, and HR can create equipment")
+	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can create equipment"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
-
-	// Get employee ID for logging
-	empIDRaw, ok := c.Get("user_id")
-	if !ok {
-		utils.RespondWithError(c, http.StatusUnauthorized, "employee ID missing")
-		return
-	}
-	empIDStr, ok := empIDRaw.(string)
-	if !ok {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee ID format")
-		return
-	}
-	empID, err := uuid.Parse(empIDStr)
+	empID, err := common.GetEmployeeId(c)
 	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee UUID")
+		utils.RespondWithError(c, http.StatusUnauthorized, err.Error())
 		return
 	}
 
-	// Bind JSON + validation
 	var req models.EquipmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
@@ -276,167 +171,104 @@ func (h *HandlerFunc) CreateEquipment(c *gin.Context) {
 		return
 	}
 
-	// Execute transaction
 	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.CreateEquipment(tx, req); err != nil {
 			return utils.CustomErr(c, http.StatusInternalServerError, "failed to create equipment: "+err.Error())
 		}
-
-		logData := models.NewCommon(constant.Equipment, constant.ActionCreate, empID)
-		if err := h.Query.AddLog(logData, tx); err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "failed to create log: "+err.Error())
-		}
-
-		return nil
+		return h.Query.AddLog(models.NewCommon(constant.Equipment, constant.ActionCreate, empID), tx)
 	}); err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "equipment created successfully",
-	})
+	c.JSON(http.StatusCreated, gin.H{"message": "equipment created successfully"})
 }
 
-// GetEquipmentByCategory fetches all equipment for a specific category with optional pagination
-// Steps:
-// 1. Check permissions (SUPERADMIN, ADMIN only)
-// 2. Get category ID from query params
-// 3. Get pagination params (optional)
-// 4. Call repository to fetch equipment by category
-// 5. Return response
-func (h *HandlerFunc) GetEquipmentByCategory(c *gin.Context) {
-	// 1️ Permission check
-	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" {
-		utils.RespondWithError(c, http.StatusForbidden, "only ADMIN and SUPERADMIN can view equipment")
+func (h *HandlerFunc) GetAllEquipment(c *gin.Context) {
+	if err := access_role.Admin_SuperAdmin(c.GetString("role"), "only ADMIN and SUPERADMIN can view equipment"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
-	// 2️ Get category ID from parameter
+	pagination := utils.GetPaginationParams(c)
+	filters := utils.GetFilterParams(c, utils.EquipmentSortFields)
+
+	data, total, err := h.Query.GetAllEquipment(
+		pagination.PageSize, pagination.Offset,
+		filters.Search, filters.SortBy, filters.SortDir,
+	)
+	if err != nil {
+		utils.RespondWithError(c, http.StatusInternalServerError, "failed to get equipment: "+err.Error())
+		return
+	}
+	if data == nil {
+		data = []models.EquipmentRes{}
+	}
+
+	response := gin.H{"message": "success", "equipment": data}
+	if pagination.PageSize > 0 {
+		response["pagination"] = utils.CalculatePaginationResponse(pagination.Page, pagination.PageSize, total)
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *HandlerFunc) GetEquipmentByCategory(c *gin.Context) {
+	if err := access_role.Admin_SuperAdmin(c.GetString("role"), "only ADMIN and SUPERADMIN can view equipment"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
+		return
+	}
+
 	categoryIDStr := c.Query("id")
 	if categoryIDStr == "" {
 		utils.RespondWithError(c, http.StatusBadRequest, "category_id query parameter is required")
 		return
 	}
-
 	categoryID, err := uuid.Parse(categoryIDStr)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, "invalid category ID")
 		return
 	}
 
-	// 3️ Get pagination params (optional)
 	pagination := utils.GetPaginationParams(c)
+	filters := utils.GetFilterParams(c, utils.EquipmentSortFields)
 
-	// 4️ Fetch equipment by category from repository
-	data, total, err := h.Query.GetEquipmentByCategory(categoryID, pagination.PageSize, pagination.Offset)
-	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "failed to get equipment: "+err.Error())
-		return
-	}
-
-	// 5️ Ensure we return empty array instead of null when no data
-	if data == nil {
-		data = []models.EquipmentRes{}
-	}
-
-	// 6️ Build response
-	response := gin.H{
-		"message":   "success",
-		"equipment": data,
-	}
-
-	// Add pagination metadata if pagination was requested
-	if pagination.PageSize > 0 {
-		response["pagination"] = utils.CalculatePaginationResponse(pagination.Page, pagination.PageSize, total)
-	}
-
-	// 7️ Return success response
-	c.JSON(http.StatusOK, response)
-}
-
-// GetAllEquipment fetches all equipment with optional pagination, filtering, and sorting
-// Permission: SUPERADMIN, ADMIN only
-func (h *HandlerFunc) GetAllEquipment(c *gin.Context) {
-	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" {
-		utils.RespondWithError(c, http.StatusForbidden, "only ADMIN and SUPERADMIN can view equipment")
-		return
-	}
-
-	// Get pagination params (optional)
-	pagination := utils.GetPaginationParams(c)
-
-	// Get filter params (optional)
-	filters := utils.GetFilterParams(c)
-
-	// Fetch equipment with optional pagination, filtering, and sorting
-	data, total, err := h.Query.GetAllEquipment(
-		pagination.PageSize,
-		pagination.Offset,
-		filters.Search,
-		filters.SortBy,
-		filters.SortDir,
+	data, total, err := h.Query.GetEquipmentByCategory(
+		categoryID,
+		pagination.PageSize, pagination.Offset,
+		filters.Search, filters.SortBy, filters.SortDir,
 	)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, "failed to get equipment: "+err.Error())
 		return
 	}
-
-	// Ensure we return empty array instead of null when no data
 	if data == nil {
 		data = []models.EquipmentRes{}
 	}
 
-	// Build response
-	response := gin.H{
-		"message":   "success",
-		"equipment": data,
-	}
-
-	// Add pagination metadata if pagination was requested
+	response := gin.H{"message": "success", "equipment": data}
 	if pagination.PageSize > 0 {
 		response["pagination"] = utils.CalculatePaginationResponse(pagination.Page, pagination.PageSize, total)
 	}
-
 	c.JSON(http.StatusOK, response)
 }
 
 func (h *HandlerFunc) UpdateEquipment(c *gin.Context) {
-	// Permission check
-	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		utils.RespondWithError(c, http.StatusForbidden, "only ADMIN, SUPERADMIN, and HR can update equipment")
+	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can update equipment"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
-	// Get equipment ID from URL
-	idStr := c.Param("id")
-	equipmentID, err := uuid.Parse(idStr)
+	equipmentID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, "invalid equipment ID")
 		return
 	}
-
-	// Get employee ID for logging
-	empIDRaw, ok := c.Get("user_id")
-	if !ok {
-		utils.RespondWithError(c, http.StatusUnauthorized, "employee ID missing")
-		return
-	}
-	empIDStr, ok := empIDRaw.(string)
-	if !ok {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee ID format")
-		return
-	}
-	empID, err := uuid.Parse(empIDStr)
+	empID, err := common.GetEmployeeId(c)
 	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee UUID")
+		utils.RespondWithError(c, http.StatusUnauthorized, err.Error())
 		return
 	}
 
-	// Bind JSON + validate
 	var req models.EquipmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
@@ -447,111 +279,72 @@ func (h *HandlerFunc) UpdateEquipment(c *gin.Context) {
 		return
 	}
 
-	// Execute transaction
 	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.UpdateEquipment(tx, equipmentID, req); err != nil {
 			return utils.CustomErr(c, http.StatusInternalServerError, "failed to update equipment: "+err.Error())
 		}
-
-		logData := models.NewCommon(constant.Equipment, constant.ActionUpdate, empID)
-		if err := h.Query.AddLog(logData, tx); err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "failed to create log: "+err.Error())
-		}
-
-		return nil
+		return h.Query.AddLog(models.NewCommon(constant.Equipment, constant.ActionUpdate, empID), tx)
 	}); err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "equipment updated successfully",
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "equipment updated successfully"})
 }
 
 func (h *HandlerFunc) DeleteEquipment(c *gin.Context) {
-	// Permission check
-	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		utils.RespondWithError(c, http.StatusForbidden, "only ADMIN, SUPERADMIN, and HR can delete equipment")
+	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can delete equipment"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
-	// Get equipment ID from URL
-	idStr := c.Param("id")
-	equipmentID, err := uuid.Parse(idStr)
+	equipmentID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, "invalid equipment ID")
 		return
 	}
-
-	// Get employee ID for logging
-	empIDRaw, ok := c.Get("user_id")
-	if !ok {
-		utils.RespondWithError(c, http.StatusUnauthorized, "employee ID missing")
-		return
-	}
-	empIDStr, ok := empIDRaw.(string)
-	if !ok {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee ID format")
-		return
-	}
-	empID, err := uuid.Parse(empIDStr)
+	empID, err := common.GetEmployeeId(c)
 	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee UUID")
+		utils.RespondWithError(c, http.StatusUnauthorized, err.Error())
 		return
 	}
 
-	// Execute deletion in transaction
 	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.DeleteEquipment(tx, equipmentID); err != nil {
 			return utils.CustomErr(c, http.StatusInternalServerError, "failed to delete equipment: "+err.Error())
 		}
-
-		logData := models.NewCommon(constant.Equipment, constant.ActionDelete, empID)
-		if err := h.Query.AddLog(logData, tx); err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "failed to create log: "+err.Error())
-		}
-
-		return nil
+		return h.Query.AddLog(models.NewCommon(constant.Equipment, constant.ActionDelete, empID), tx)
 	}); err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "equipment deleted successfully",
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "equipment deleted successfully"})
 }
 
+// ======================
+// ASSIGNMENT
+// ======================
+
 func (h *HandlerFunc) AssignEquipment(c *gin.Context) {
-	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		utils.RespondWithError(c, http.StatusForbidden, "access denied")
+	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "access denied"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
-	empIDRaw, ok := c.Get("user_id")
-	if !ok {
-		utils.RespondWithError(c, http.StatusUnauthorized, "employee ID missing")
-		return
-	}
-	empIDStr, ok := empIDRaw.(string)
-	if !ok {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee ID format")
-		return
-	}
-	empID, err := uuid.Parse(empIDStr)
+	empID, err := common.GetEmployeeId(c)
 	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee UUID")
+		utils.RespondWithError(c, http.StatusUnauthorized, err.Error())
 		return
 	}
 
 	var req models.AssignEquipmentRequest
-	req.AssignedBy = empID
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
+	// Always override assigned_by from auth context — never trust the request body
+	req.AssignedBy = empID
+
 	if err := models.Validate.Struct(&req); err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, "validation error: "+err.Error())
 		return
@@ -561,107 +354,75 @@ func (h *HandlerFunc) AssignEquipment(c *gin.Context) {
 		if err := h.Query.AssignEquipment(tx, req); err != nil {
 			return utils.CustomErr(c, http.StatusInternalServerError, "failed to assign equipment: "+err.Error())
 		}
-		logData := models.NewCommon(constant.EquipmentAssign, constant.ActionCreate, empID)
-		if err := h.Query.AddLog(logData, tx); err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "failed to create log: "+err.Error())
-		}
-		return nil
-
+		return h.Query.AddLog(models.NewCommon(constant.EquipmentAssign, constant.ActionCreate, empID), tx)
 	}); err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "equipment assigned successfully",
-	})
+	c.JSON(http.StatusCreated, gin.H{"message": "equipment assigned successfully"})
 }
 
 func (h *HandlerFunc) GetAllAssignedEquipment(c *gin.Context) {
-	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		utils.RespondWithError(c, http.StatusForbidden, "access denied")
+	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "access denied"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
-	// Get pagination params (optional)
 	pagination := utils.GetPaginationParams(c)
+	filters := utils.GetFilterParams(c, utils.AssignmentSortFields)
 
-	// Fetch assigned equipment with optional pagination
-	data, total, err := h.Query.GetAllAssignedEquipment(pagination.PageSize, pagination.Offset)
+	data, total, err := h.Query.GetAllAssignedEquipment(
+		pagination.PageSize, pagination.Offset,
+		filters.Search, filters.SortBy, filters.SortDir,
+	)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// Build response
-	response := gin.H{
-		"message": "success",
-		"data":    data,
-	}
-
-	// Add pagination metadata if pagination was requested
+	response := gin.H{"message": "success", "data": data}
 	if pagination.PageSize > 0 {
 		response["pagination"] = utils.CalculatePaginationResponse(pagination.Page, pagination.PageSize, total)
 	}
-
 	c.JSON(http.StatusOK, response)
 }
 
 func (h *HandlerFunc) GetAssignedEquipmentByEmployee(c *gin.Context) {
-	id := c.Param("id")
-	employeeID, err := uuid.Parse(id)
+	employeeID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, "invalid employee ID")
 		return
 	}
 
-	// Get pagination params (optional)
 	pagination := utils.GetPaginationParams(c)
+	filters := utils.GetFilterParams(c, utils.AssignmentSortFields)
 
-	// Fetch assigned equipment by employee with optional pagination
-	data, total, err := h.Query.GetAssignedEquipmentByEmployee(employeeID, pagination.PageSize, pagination.Offset)
+	data, total, err := h.Query.GetAssignedEquipmentByEmployee(
+		employeeID,
+		pagination.PageSize, pagination.Offset,
+		filters.Search, filters.SortBy, filters.SortDir,
+	)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// Build response
-	response := gin.H{
-		"message": "success",
-		"data":    data,
-	}
-
-	// Add pagination metadata if pagination was requested
+	response := gin.H{"message": "success", "data": data}
 	if pagination.PageSize > 0 {
 		response["pagination"] = utils.CalculatePaginationResponse(pagination.Page, pagination.PageSize, total)
 	}
-
 	c.JSON(http.StatusOK, response)
 }
 
-// RemoveEquipment removes/returns equipment from an employee
 func (h *HandlerFunc) RemoveEquipment(c *gin.Context) {
-	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		utils.RespondWithError(c, http.StatusForbidden, "access denied")
+	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "access denied"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
-
-	// Get employee ID for logging
-	empIDRaw, ok := c.Get("user_id")
-	if !ok {
-		utils.RespondWithError(c, http.StatusUnauthorized, "employee ID missing")
-		return
-	}
-	empIDStr, ok := empIDRaw.(string)
-	if !ok {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee ID format")
-		return
-	}
-	empID, err := uuid.Parse(empIDStr)
+	empID, err := common.GetEmployeeId(c)
 	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee UUID")
+		utils.RespondWithError(c, http.StatusUnauthorized, err.Error())
 		return
 	}
 
@@ -670,7 +431,6 @@ func (h *HandlerFunc) RemoveEquipment(c *gin.Context) {
 		utils.RespondWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
-
 	if err := models.Validate.Struct(&req); err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, "validation error: "+err.Error())
 		return
@@ -680,54 +440,33 @@ func (h *HandlerFunc) RemoveEquipment(c *gin.Context) {
 		if err := h.Query.RemoveEquipment(tx, req); err != nil {
 			return utils.CustomErr(c, http.StatusInternalServerError, err.Error())
 		}
-
-		logData := models.NewCommon(constant.Equipment, constant.ActionDelete, empID)
-		if err := h.Query.AddLog(logData, tx); err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "failed to create log: "+err.Error())
-		}
-
-		return nil
+		return h.Query.AddLog(models.NewCommon(constant.Equipment, constant.ActionDelete, empID), tx)
 	}); err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "equipment removed successfully",
-	})
+	c.JSON(http.StatusOK, gin.H{"message": "equipment removed successfully"})
 }
 
-// UpdateAssignment handles both quantity updates and reassignments
 func (h *HandlerFunc) UpdateAssignment(c *gin.Context) {
-	role := c.GetString("role")
-	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		utils.RespondWithError(c, http.StatusForbidden, "access denied")
+	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "access denied"); err != nil {
+		utils.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
-
-	// Get employee ID for logging
-	empIDRaw, ok := c.Get("user_id")
-	if !ok {
-		utils.RespondWithError(c, http.StatusUnauthorized, "employee ID missing")
-		return
-	}
-	empIDStr, ok := empIDRaw.(string)
-	if !ok {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee ID format")
-		return
-	}
-	empID, err := uuid.Parse(empIDStr)
+	empID, err := common.GetEmployeeId(c)
 	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee UUID")
+		utils.RespondWithError(c, http.StatusUnauthorized, err.Error())
 		return
 	}
 
 	var req models.UpdateAssignmentRequest
-	req.AssignedBy = empID
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
+	// Always override assigned_by from auth context — never trust the request body
+	req.AssignedBy = empID
 
 	if err := models.Validate.Struct(&req); err != nil {
 		utils.RespondWithError(c, http.StatusBadRequest, "validation error: "+err.Error())
@@ -738,25 +477,15 @@ func (h *HandlerFunc) UpdateAssignment(c *gin.Context) {
 		if err := h.Query.UpdateAssignment(tx, req); err != nil {
 			return utils.CustomErr(c, http.StatusInternalServerError, err.Error())
 		}
-
-		logData := models.NewCommon(constant.Equipment, constant.ActionUpdate, empID)
-		if err := h.Query.AddLog(logData, tx); err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "failed to create log: "+err.Error())
-		}
-
-		return nil
+		return h.Query.AddLog(models.NewCommon(constant.Equipment, constant.ActionUpdate, empID), tx)
 	}); err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// Determine response message based on operation type
 	message := "assignment updated successfully"
 	if req.ToEmployeeID != nil {
 		message = "equipment reassigned successfully"
 	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": message,
-	})
+	c.JSON(http.StatusOK, gin.H{"message": message})
 }
