@@ -198,3 +198,9 @@ func (r *Repository) GetAllEmployees(params models.EmployeeFilterParams, role st
 		TotalPages: totalPages,
 	}, nil
 }
+
+func (r *Repository) GetHrEamil() []string {
+	var hrEmails []string
+	r.DB.Select(&hrEmails, `SELECT e.email FROM Tbl_Employee e JOIN Tbl_Role r ON e.role_id = r.id WHERE r.type = 'HR' AND e.status = 'active'`)
+	return hrEmails
+}

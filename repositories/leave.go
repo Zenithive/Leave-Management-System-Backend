@@ -140,71 +140,24 @@ func (r *Repository) UpdateLeaveStatus(tx *sql.Tx, leaveID uuid.UUID, status str
 	_, err := tx.Exec(query, status, leaveID)
 	return err
 }
+func (r *Repository) UpdateLeaveStatusWithApprover(tx *sql.Tx, leaveID uuid.UUID, status string, approverID uuid.UUID) error {
+	query := `UPDATE Tbl_Leave SET status = $1, approved_by = $2, updated_at = NOW() WHERE id = $3`
+	_, err := tx.Exec(query, status, approverID, leaveID)
+	return err
+}
 
-func (r *Repository) GetLeaveById(tx *sqlx.Tx, leaveID uuid.UUID) (models.Leave, error) {
+func (r *Repository) GetLeaveById(leaveID uuid.UUID) (models.Leave, error) {
 	var leave models.Leave
 	query := `SELECT * FROM Tbl_Leave WHERE id=$1 FOR UPDATE`
-	err := tx.Get(&leave, query, leaveID)
+	err := r.DB.Get(&leave, query, leaveID)
 	return leave, err
 }
 
-// Get All Leave Timming
-// Get All Leave Timing
-func (r *Repository) GetLeaveTiming() ([]models.LeaveTimingResponse, error) {
-	var data []models.LeaveTimingResponse
-	query := `
-		SELECT id, type, timing, created_at, updated_at
-		FROM Tbl_Half
-		ORDER BY id
-	`
-	err := r.DB.Select(&data, query)
-
-	return data, err
-}
-
-// Get Leave Timing By ID
-func (r *Repository) GetLeaveTimingByID(id int) (*models.LeaveTimingResponse, error) {
-	var data models.LeaveTimingResponse
-
-	query := `
-		SELECT *
-		FROM Tbl_Half
-		WHERE id = $1
-	`
-
-	err := r.DB.Get(&data, query, id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, err
-		}
-		return nil, err
-	}
-	return &data, nil
-}
-
-func (r *Repository) UpdateLeaveTiming(tx *sqlx.Tx, id int, timing string) error {
-	query := `
-		UPDATE Tbl_Half
-		SET timing = $1,
-		    updated_at = CURRENT_TIMESTAMP
-		WHERE id = $2
-	`
-
-	res, err := tx.Exec(query, timing, id)
-	if err != nil {
-		return err
-	}
-
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rows == 0 {
-		return sql.ErrNoRows
-	}
-
-	return nil
+func (r *Repository) GetLeaveApprovalNameByEmployeeID(approvalId uuid.UUID) (string, error) {
+	var approvalName string
+	query := `SELECT full_name FROM Tbl_Employee WHERE id=$1`
+	err := r.DB.Get(&approvalName, query, approvalId)
+	return approvalName, err
 }
 
 // rolde base get leave
@@ -550,4 +503,13 @@ func (r *Repository) UpdatePendingLeave(tx *sqlx.Tx, leaveID uuid.UUID, empID uu
 	}
 
 	return nil
+}
+
+func (r *Repository) UpdateLeaveStatusWithResion(tx *sqlx.Tx, withdrawalReason string, currentUserID uuid.UUID, leaveID uuid.UUID, status string) error {
+	_, err := tx.Exec(`
+			UPDATE Tbl_Leave 
+			SET status=$1, reason=$2, approved_by=$3, updated_at=NOW() 
+			WHERE id=$4
+		`, status, withdrawalReason, currentUserID, leaveID)
+	return err
 }
