@@ -21,3 +21,11 @@ const (
 	ROLE_MANAGER     = "MANAGER"
 	ROLE_HR          = "HR"
 )
+
+type BirthdayStatus string
+
+const (
+	StatusToday    BirthdayStatus = "TODAY"
+	StatusUpcoming BirthdayStatus = "UPCOMING"
+	StatusPast     BirthdayStatus = "PAST"
+)

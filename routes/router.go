@@ -44,6 +44,8 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 		employees.PATCH("/:id/designation", h.UpdateEmployeeDesignation) // Assign/update designation (SUPER_ADMIN, ADMIN, HR)
 		employees.PUT("/deactivate/:id", h.DeleteEmployeeStatus)         // Deactivate/Activate employee (SUPER_ADMIN, ADMIN/HR)
 		employees.GET("/:id/reports", h.GetEmployeeReports)              // Get direct reports (Self/Manager/Admin)
+		employees.GET("/birthdays/today", h.GetTodayBirthdays)
+		employees.GET("/birthdays/upcomming", h.GetBirthdays) // filter_type=current_month
 	}
 
 	// ----------------- Leaves -----------------
@@ -106,8 +108,7 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 	{
 		settings.GET("", h.GetCompanySettings)                      // Get current settings
 		settings.PUT("", h.UpdateCompanySettings)                   // Update settings
-		settings.GET("/birthday-preview", h.PreviewBirthdayMessage) // Preview rendered birthday message
-		settings.GET("/birthdays/today", h.GetTodayBirthdays)       // Get today's employee birthdays
+		settings.GET("/birthday-preview", h.PreviewBirthdayMessage) // Preview rendered birthday message      // Get today's employee birthdays
 	}
 	holidays := r.Group("/api/settings/holidays")
 	holidays.Use(middleware.AuthMiddleware(h))

@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/repositories"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/access_role"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/common"
@@ -186,52 +186,11 @@ func (h *HandlerFunc) PreviewBirthdayMessage(c *gin.Context) {
 		return
 	}
 
-	rendered := repositories.RenderBirthdayMessage(tmpl, name, birthDate)
+	rendered := service.RenderBirthdayMessage(tmpl, name, birthDate)
 
 	c.JSON(http.StatusOK, gin.H{
 		"template":     tmpl,
 		"rendered":     rendered,
 		"placeholders": []string{"{name}", "{date}", "{age}"},
-	})
-}
-
-// GetTodayBirthdays - GET /api/settings/birthdays/today
-// Returns all employees whose birthday is today, with their rendered birthday message.
-func (h *HandlerFunc) GetTodayBirthdays(c *gin.Context) {
-
-	tmpl, err := h.Query.GetBirthdayMessageTemplate()
-	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "failed to fetch template: "+err.Error())
-		return
-	}
-
-	employees, err := h.Query.GetTodayBirthdays()
-	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "failed to fetch birthdays: "+err.Error())
-		return
-	}
-
-	type BirthdayEntry struct {
-		ID      string `json:"id"`
-		Name    string `json:"name"`
-		Email   string `json:"email"`
-		Message string `json:"message"`
-	}
-
-	result := make([]BirthdayEntry, 0, len(employees))
-	for _, emp := range employees {
-		result = append(result, BirthdayEntry{
-			ID:      emp.ID,
-			Name:    emp.Name,
-			Email:   emp.Email,
-			Message: repositories.RenderBirthdayMessage(tmpl, emp.Name, emp.BirthDate),
-		})
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "success",
-		"date":    time.Now().Format("2006-01-02"),
-		"total":   len(result),
-		"data":    result,
 	})
 }

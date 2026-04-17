@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -333,9 +334,11 @@ func (r *Repository) ChackManagerPermission() (bool, error) {
 }
 
 // ------------------ GET EMPLOYEES BY MANAGER ID ------------------
-func (r *Repository) GetEmployeesByManagerID(managerID uuid.UUID) ([]models.EmployeeResponse, error) {
-	query := `
-        SELECT 
+func (r *Repository) GetEmployeesByManagerID(managerID uuid.UUID, params models.TeamFilterParams) ([]models.EmployeeResponse, error) {
+	orderBy := resolveEmployeeSort(params.SortBy, params.SortOrder)
+
+	query := fmt.Sprintf(`
+        SELECT
             e.id, e.full_name, e.email, e.status,
             r.type AS role, e.manager_id, e.designation_id,
             e.salary, e.joining_date, e.birth_date, e.ending_date,
@@ -347,35 +350,25 @@ func (r *Repository) GetEmployeesByManagerID(managerID uuid.UUID) ([]models.Empl
         LEFT JOIN Tbl_Employee m ON e.manager_id = m.id
         LEFT JOIN Tbl_Designation d ON e.designation_id = d.id
         WHERE e.manager_id = $1
-        ORDER BY e.full_name
-    `
+        ORDER BY %s
+    `, orderBy)
+
 	rows, err := r.DB.Query(query, managerID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var employees []models.EmployeeResponse
+	employees := []models.EmployeeResponse{}
 	for rows.Next() {
 		var emp models.EmployeeResponse
-		err := rows.Scan(
-			&emp.ID,
-			&emp.FullName,
-			&emp.Email,
-			&emp.Status,
-			&emp.Role,
-			&emp.ManagerID,
-			&emp.DesignationID,
-			&emp.Salary,
-			&emp.JoiningDate,
-			&emp.BirthDate,
-			&emp.EndingDate,
-			&emp.CreatedAt,
-			&emp.UpdatedAt,
-			&emp.ManagerName,
-			&emp.DesignationName,
-		)
-		if err != nil {
+		if err := rows.Scan(
+			&emp.ID, &emp.FullName, &emp.Email, &emp.Status,
+			&emp.Role, &emp.ManagerID, &emp.DesignationID,
+			&emp.Salary, &emp.JoiningDate, &emp.BirthDate, &emp.EndingDate,
+			&emp.CreatedAt, &emp.UpdatedAt,
+			&emp.ManagerName, &emp.DesignationName,
+		); err != nil {
 			return nil, err
 		}
 		employees = append(employees, emp)

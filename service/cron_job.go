@@ -79,10 +79,9 @@ func (s *BirthdayCronService) runBirthdayJob() error {
 
 	// 3. Notify each employee
 	for _, emp := range employees {
-		message := repositories.RenderBirthdayMessage(tmpl, emp.Name, emp.BirthDate)
+		message := RenderBirthdayMessage(tmpl, emp.Name, emp.BirthDate)
 		s.notify(emp.Name, emp.Email, message)
 	}
-
 	return nil
 }
 

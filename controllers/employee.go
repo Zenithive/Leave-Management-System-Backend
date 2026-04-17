@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/access_role"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
@@ -60,6 +61,7 @@ func (h *HandlerFunc) GetEmployee(c *gin.Context) {
 			"role":        params.Role,
 			"designation": params.Designation,
 			"status":      params.Status,
+			"manager":     params.Manager,
 			"sort_by":     params.SortBy,
 			"sort_order":  params.SortOrder,
 		},
@@ -460,7 +462,17 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 		return
 	}
 
-	// 5️ Permission checks
+	// 5️ Validate birth_date — must be in the past (future dates not allowed)
+	if input.BirthDate != nil {
+		today := time.Now().Truncate(24 * time.Hour)
+		bd := input.BirthDate.Truncate(24 * time.Hour)
+		if !bd.Before(today) {
+			utils.RespondWithError(c, 400, "birth_date must be a past date")
+			return
+		}
+	}
+
+	// 6️ Permission checks
 	isAdmin := role == "SUPERADMIN" || role == "ADMIN"
 	isSelf := currentUserID == empID
 
@@ -650,6 +662,7 @@ func (h *HandlerFunc) UpdateEmployeePassword(c *gin.Context) {
 
 // GetMyTeam - GET /api/employee/my-team
 // Manager gets list of employees who report to them
+// Query params: ?sort_by=birth_date&sort_order=asc (or desc)
 func (h *HandlerFunc) GetMyTeam(c *gin.Context) {
 	// 1️ Get current user info
 	currentUserID, _ := uuid.Parse(c.GetString("user_id"))
@@ -661,19 +674,28 @@ func (h *HandlerFunc) GetMyTeam(c *gin.Context) {
 		return
 	}
 
-	// 3️ Fetch team members
-	employees, err := h.Query.GetEmployeesByManagerID(currentUserID)
+	// 3️ Bind sort params
+	var params models.TeamFilterParams
+	if err := c.ShouldBindQuery(&params); err != nil {
+		utils.RespondWithError(c, http.StatusBadRequest, "invalid query parameters: "+err.Error())
+		return
+	}
+
+	// 4️ Fetch team members
+	employees, err := h.Query.GetEmployeesByManagerID(currentUserID, params)
 	if err != nil {
 		utils.RespondWithError(c, 500, "failed to fetch team members: "+err.Error())
 		return
 	}
 
-	// 4️ Response
+	// 5️ Response
 	c.JSON(200, gin.H{
 		"message":      "team members fetched successfully",
 		"manager_id":   currentUserID,
 		"team_count":   len(employees),
 		"team_members": employees,
+		"sort_by":      params.SortBy,
+		"sort_order":   params.SortOrder,
 	})
 }
 
@@ -752,5 +774,67 @@ func (h *HandlerFunc) UpdateEmployeeDesignation(c *gin.Context) {
 		"message":        message,
 		"employee_id":    empID,
 		"designation_id": designationID,
+	})
+}
+
+func (h *HandlerFunc) GetTodayBirthdays(c *gin.Context) {
+
+	tmpl, err := h.Query.GetBirthdayMessageTemplate()
+	if err != nil {
+		utils.RespondWithError(c, http.StatusInternalServerError, "failed to fetch template: "+err.Error())
+		return
+	}
+
+	employees, err := h.Query.GetTodayBirthdays()
+	if err != nil {
+		utils.RespondWithError(c, http.StatusInternalServerError, "failed to fetch birthdays: "+err.Error())
+		return
+	}
+
+	result := make([]models.BirthdayEntry, 0, len(employees))
+	for _, emp := range employees {
+		result = append(result, models.BirthdayEntry{
+			ID:      emp.ID,
+			Name:    emp.Name,
+			Email:   emp.Email,
+			Message: service.RenderBirthdayMessage(tmpl, emp.Name, emp.BirthDate),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "success",
+		"date":    time.Now().Format("2006-01-02"),
+		"total":   len(result),
+		"data":    result,
+	})
+}
+
+// GetBirthdays - GET /api/employee/birthdays/upcomming
+// Query params: ?month=4&year=2026  or  ?year=2027  or  (none = upcoming 30 days)
+func (h *HandlerFunc) GetBirthdays(c *gin.Context) {
+	month := 0
+	year := 0
+
+	if m := c.Query("month"); m != "" {
+		fmt.Sscanf(m, "%d", &month)
+	}
+	if y := c.Query("year"); y != "" {
+		fmt.Sscanf(y, "%d", &year)
+	}
+
+	// 1. Get data from repository
+	rows, err := h.Query.GetBirthdays(month, year)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 2. Business logic in service
+	result := service.Calculation(rows, month, year)
+
+	// 3. Response
+	c.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
 	})
 }

@@ -2,125 +2,140 @@ package repositories
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
 )
 
+// employeeSortMap maps API sort_by keys → safe SQL column expressions.
+// Used by both GetAllEmployees and GetEmployeesByManagerID via resolveSortField.
+var employeeSortMap = map[string]string{
+	"name":         "e.full_name",
+	"email":        "e.email",
+	"joining_date": "e.joining_date",
+	"ending_date":  "COALESCE(e.ending_date, '9999-12-31')",
+	"salary":       "e.salary",
+	"manager_name": "COALESCE(m.full_name, '')",
+	"role":         "r.type",
+	"status":       "e.status",
+}
+
+// birthdaySortExpr returns a SQL ORDER BY expression that sorts employees by upcoming
+// birthday relative to today's (month/day). Ascending = soonest, Descending = furthest.
+// NULLs are always placed last regardless of direction.
+func birthdaySortExpr(order string) string {
+	today := time.Now()
+	dateStr := fmt.Sprintf("%04d-%02d-%02d", today.Year(), int(today.Month()), today.Day())
+
+	if order == "desc" {
+		return fmt.Sprintf(`
+			CASE WHEN e.birth_date IS NULL THEN -1
+			ELSE MOD(
+				CAST(EXTRACT(DOY FROM e.birth_date) AS INT)
+				- CAST(EXTRACT(DOY FROM DATE '%s') AS INT)
+				+ 366, 366
+			) END DESC`, dateStr)
+	}
+	return fmt.Sprintf(`
+		CASE WHEN e.birth_date IS NULL THEN 999999
+		ELSE MOD(
+			CAST(EXTRACT(DOY FROM e.birth_date) AS INT)
+			- CAST(EXTRACT(DOY FROM DATE '%s') AS INT)
+			+ 366, 366
+		) END ASC`, dateStr)
+}
+
+// resolveEmployeeSort returns the final ORDER BY clause for a given sort_by + sort_order.
+// Falls back to "e.full_name ASC" for unknown keys.
+func resolveEmployeeSort(sortBy, sortOrder string) string {
+	dir := "ASC"
+	if sortOrder == "desc" {
+		dir = "DESC"
+	}
+
+	if sortBy == "birth_date" {
+		return birthdaySortExpr(sortOrder)
+	}
+
+	col := resolveSortField(employeeSortMap, sortBy, "e.full_name")
+	return fmt.Sprintf("%s %s", col, dir)
+}
+
 // 1. Get employee status
 func (r *Repository) GetEmployeeStatus(employeeID uuid.UUID) (string, error) {
 	var status string
-	err := r.DB.Get(&status, `
-		SELECT status FROM Tbl_Employee WHERE id=$1
-	`, employeeID)
+	err := r.DB.Get(&status, `SELECT status FROM Tbl_Employee WHERE id=$1`, employeeID)
 	return status, err
 }
 
 // ------------------ UPDATE EMPLOYEE DESIGNATION ------------------
 func (r *Repository) UpdateEmployeeDesignation(empID uuid.UUID, designationID *uuid.UUID) error {
-	query := `
-		UPDATE Tbl_Employee
-		SET designation_id = $1, updated_at = NOW()
-		WHERE id = $2
-	`
-	_, err := r.DB.Exec(query, designationID, empID)
+	_, err := r.DB.Exec(`
+		UPDATE Tbl_Employee SET designation_id = $1, updated_at = NOW() WHERE id = $2
+	`, designationID, empID)
 	return err
 }
 
-// GetAllEmployees returns list of employees with advanced filtering, sorting, and pagination.
-// HR: salary not selected (nil in response). ADMIN/SUPER_ADMIN: salary included.
-// Single query with JOINs for manager_name and designation_name (no N+1).
+// GetAllEmployees returns a paginated, filtered, sorted list of employees.
+// HR: salary is NULL. ADMIN/SUPERADMIN: salary included.
+// Filters: search (name/email/manager), role, designation, status, manager (exact).
+// Sort: name, email, joining_date, ending_date, salary, birth_date, manager_name, role, status.
 func (r *Repository) GetAllEmployees(params models.EmployeeFilterParams, role string) (*models.PaginatedEmployeeResponse, error) {
-	// Salary column based on role
 	salaryCol := "NULL::double precision AS salary"
 	if role == constant.ROLE_ADMIN || role == constant.ROLE_SUPER_ADMIN {
 		salaryCol = "e.salary"
 	}
 
-	// Build WHERE clause dynamically
-	whereConditions := []string{}
+	// Build WHERE conditions dynamically
+	conditions := []string{}
 	args := []interface{}{}
-	argCount := 1
+	n := 1 // arg counter
 
-	// Unified search filter - searches across employee name, email, and manager name
-	// This provides a single search input that searches all three fields with OR logic
 	if params.Search != "" {
-		searchPattern := "%" + params.Search + "%"
-		whereConditions = append(whereConditions, fmt.Sprintf(
+		conditions = append(conditions, fmt.Sprintf(
 			"(e.full_name ILIKE $%d OR e.email ILIKE $%d OR m.full_name ILIKE $%d)",
-			argCount, argCount, argCount,
+			n, n, n,
 		))
-		args = append(args, searchPattern)
-		argCount++
+		args = append(args, "%"+params.Search+"%")
+		n++
 	}
-
-	// Status filter (optional - can filter active/inactive or show all)
 	if params.Status != "" {
-		whereConditions = append(whereConditions, fmt.Sprintf("e.status = $%d", argCount))
+		conditions = append(conditions, fmt.Sprintf("e.status = $%d", n))
 		args = append(args, params.Status)
-		argCount++
+		n++
 	}
-
-	// Role filter (exact match)
 	if params.Role != "" {
-		whereConditions = append(whereConditions, fmt.Sprintf("r.type = $%d", argCount))
+		conditions = append(conditions, fmt.Sprintf("r.type = $%d", n))
 		args = append(args, params.Role)
-		argCount++
+		n++
 	}
-
-	// Designation filter (exact match)
 	if params.Designation != "" {
-		whereConditions = append(whereConditions, fmt.Sprintf("d.designation_name = $%d", argCount))
+		conditions = append(conditions, fmt.Sprintf("d.designation_name = $%d", n))
 		args = append(args, params.Designation)
-		argCount++
+		n++
+	}
+	if params.Manager != "" {
+		conditions = append(conditions, fmt.Sprintf("m.full_name = $%d", n))
+		args = append(args, params.Manager)
+		n++
 	}
 
-	// Build WHERE clause
-	whereClause := ""
-	if len(whereConditions) > 0 {
-		whereClause = "WHERE " + whereConditions[0]
-		for i := 1; i < len(whereConditions); i++ {
-			whereClause += " AND " + whereConditions[i]
-		}
-	}
+	whereClause := buildWhere(conditions)
 
-	// Count total records (for pagination metadata)
-	countQuery := fmt.Sprintf(`
-		SELECT COUNT(*)
+	baseJoins := `
 		FROM Tbl_Employee e
 		JOIN Tbl_Role r ON e.role_id = r.id
 		LEFT JOIN Tbl_Employee m ON e.manager_id = m.id
 		LEFT JOIN Tbl_Designation d ON e.designation_id = d.id
-		%s
-	`, whereClause)
+	`
 
+	// Count total for pagination
 	var totalCount int
-	err := r.DB.Get(&totalCount, countQuery, args...)
-	if err != nil {
+	if err := r.DB.Get(&totalCount,
+		"SELECT COUNT(*) "+baseJoins+whereClause, args...); err != nil {
 		return nil, err
-	}
-
-	// Build ORDER BY clause
-	orderBy := "e.full_name ASC" // default
-	sortMap := map[string]string{
-		"name":         "e.full_name",
-		"email":        "e.email",
-		"joining_date": "e.joining_date",
-		"salary":       "e.salary",
-		"manager_name": "m.full_name",
-		"role":         "r.type",
-		"status":       "e.status",
-	}
-
-	if params.SortBy != "" {
-		if dbColumn, ok := sortMap[params.SortBy]; ok {
-			sortOrder := "ASC"
-			if params.SortOrder == "desc" {
-				sortOrder = "DESC"
-			}
-			orderBy = fmt.Sprintf("%s %s", dbColumn, sortOrder)
-		}
 	}
 
 	// Pagination defaults
@@ -128,31 +143,27 @@ func (r *Repository) GetAllEmployees(params models.EmployeeFilterParams, role st
 		params.Page = 1
 	}
 	if params.PageSize < 1 {
-		params.PageSize = 10 // default page size
+		params.PageSize = 10
 	}
 	if params.PageSize > 100 {
-		params.PageSize = 100 // max page size
+		params.PageSize = 100
 	}
-
 	offset := (params.Page - 1) * params.PageSize
 
-	// Main query with pagination
+	orderBy := resolveEmployeeSort(params.SortBy, params.SortOrder)
+
 	query := fmt.Sprintf(`
-		SELECT 
+		SELECT
 			e.id, e.full_name, e.email, e.status,
 			r.type AS role, e.manager_id, e.designation_id,
 			%s, e.joining_date, e.birth_date, e.ending_date,
 			e.created_at, e.updated_at,
 			m.full_name AS manager_name,
 			d.designation_name
-		FROM Tbl_Employee e
-		JOIN Tbl_Role r ON e.role_id = r.id
-		LEFT JOIN Tbl_Employee m ON e.manager_id = m.id
-		LEFT JOIN Tbl_Designation d ON e.designation_id = d.id
-		%s
+		%s%s
 		ORDER BY %s
 		LIMIT $%d OFFSET $%d
-	`, salaryCol, whereClause, orderBy, argCount, argCount+1)
+	`, salaryCol, baseJoins, whereClause, orderBy, n, n+1)
 
 	args = append(args, params.PageSize, offset)
 
@@ -162,33 +173,21 @@ func (r *Repository) GetAllEmployees(params models.EmployeeFilterParams, role st
 	}
 	defer rows.Close()
 
-	var employees []models.EmployeeResponse
+	employees := []models.EmployeeResponse{}
 	for rows.Next() {
 		var emp models.EmployeeResponse
-		err := rows.Scan(
-			&emp.ID,
-			&emp.FullName,
-			&emp.Email,
-			&emp.Status,
-			&emp.Role,
-			&emp.ManagerID,
-			&emp.DesignationID,
-			&emp.Salary,
-			&emp.JoiningDate,
-			&emp.BirthDate,
-			&emp.EndingDate,
-			&emp.CreatedAt,
-			&emp.UpdatedAt,
-			&emp.ManagerName,
-			&emp.DesignationName,
-		)
-		if err != nil {
+		if err := rows.Scan(
+			&emp.ID, &emp.FullName, &emp.Email, &emp.Status,
+			&emp.Role, &emp.ManagerID, &emp.DesignationID,
+			&emp.Salary, &emp.JoiningDate, &emp.BirthDate, &emp.EndingDate,
+			&emp.CreatedAt, &emp.UpdatedAt,
+			&emp.ManagerName, &emp.DesignationName,
+		); err != nil {
 			return nil, err
 		}
 		employees = append(employees, emp)
 	}
 
-	// Calculate total pages
 	totalPages := (totalCount + params.PageSize - 1) / params.PageSize
 
 	return &models.PaginatedEmployeeResponse{
@@ -200,8 +199,124 @@ func (r *Repository) GetAllEmployees(params models.EmployeeFilterParams, role st
 	}, nil
 }
 
+// buildWhere joins conditions into a WHERE clause string.
+func buildWhere(conditions []string) string {
+	if len(conditions) == 0 {
+		return ""
+	}
+	clause := " WHERE " + conditions[0]
+	for _, c := range conditions[1:] {
+		clause += " AND " + c
+	}
+	return clause
+}
+
 func (r *Repository) GetHrEamil() []string {
 	var hrEmails []string
-	r.DB.Select(&hrEmails, `SELECT e.email FROM Tbl_Employee e JOIN Tbl_Role r ON e.role_id = r.id WHERE r.type = 'HR' AND e.status = 'active'`)
+	r.DB.Select(&hrEmails, `
+		SELECT e.email FROM Tbl_Employee e
+		JOIN Tbl_Role r ON e.role_id = r.id
+		WHERE r.type = 'HR' AND e.status = 'active'
+	`)
 	return hrEmails
+}
+
+// GetTodayBirthdays returns all active employees whose birth_date month+day matches today.
+func (r *Repository) GetTodayBirthdays() ([]models.BirthdayEmployee, error) {
+	rows, err := r.DB.Query(`
+		SELECT id::text, full_name, email, birth_date
+		FROM Tbl_Employee
+		WHERE status = 'active'
+		  AND birth_date IS NOT NULL
+		  AND EXTRACT(MONTH FROM birth_date) = EXTRACT(MONTH FROM CURRENT_DATE)
+		  AND EXTRACT(DAY   FROM birth_date) = EXTRACT(DAY   FROM CURRENT_DATE)
+		ORDER BY full_name
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []models.BirthdayEmployee
+	for rows.Next() {
+		var emp models.BirthdayEmployee
+		if err := rows.Scan(&emp.ID, &emp.Name, &emp.Email, &emp.BirthDate); err != nil {
+			return nil, err
+		}
+		result = append(result, emp)
+	}
+	return result, nil
+}
+
+// GetBirthdays fetches active employees based on month/year calendar filters.
+//
+// month=4&year=2026  → employees whose birth month = April (any year), shown in context of 2026
+// year=2026          → all employees, shown across full year 2026
+// (no params)        → upcoming 30 days from today (year-wrap safe)
+func (r *Repository) GetBirthdays(month, year int) ([]models.BirthdayEmployee, error) {
+	base := `
+	SELECT id::text, full_name, email, birth_date
+	FROM Tbl_Employee
+	WHERE status = 'active'
+	  AND birth_date IS NOT NULL
+	`
+
+	var (
+		query string
+		args  []interface{}
+	)
+
+	switch {
+	case month > 0 && year > 0:
+		// Specific month of a specific year — match by birth month only
+		query = base + `
+		AND EXTRACT(MONTH FROM birth_date) = $1
+		ORDER BY EXTRACT(DAY FROM birth_date)
+		`
+		args = append(args, month)
+
+	case year > 0:
+		// Full year view — return all employees, service will classify by that year
+		query = base + `ORDER BY EXTRACT(MONTH FROM birth_date), EXTRACT(DAY FROM birth_date)`
+
+	default:
+		// Upcoming 30 days (handles year-wrap into next year)
+		// Order by days-from-today so the soonest birthday comes first
+		query = base + `
+		AND (
+			make_date(
+				EXTRACT(YEAR FROM CURRENT_DATE)::int,
+				EXTRACT(MONTH FROM birth_date)::int,
+				EXTRACT(DAY FROM birth_date)::int
+			) BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+			OR
+			make_date(
+				EXTRACT(YEAR FROM CURRENT_DATE)::int + 1,
+				EXTRACT(MONTH FROM birth_date)::int,
+				EXTRACT(DAY FROM birth_date)::int
+			) BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+		)
+		ORDER BY
+			LEAST(
+				make_date(EXTRACT(YEAR FROM CURRENT_DATE)::int,     EXTRACT(MONTH FROM birth_date)::int, EXTRACT(DAY FROM birth_date)::int),
+				make_date(EXTRACT(YEAR FROM CURRENT_DATE)::int + 1, EXTRACT(MONTH FROM birth_date)::int, EXTRACT(DAY FROM birth_date)::int)
+			)
+		`
+	}
+
+	rows, err := r.DB.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []models.BirthdayEmployee
+	for rows.Next() {
+		var emp models.BirthdayEmployee
+		if err := rows.Scan(&emp.ID, &emp.Name, &emp.Email, &emp.BirthDate); err != nil {
+			return nil, err
+		}
+		result = append(result, emp)
+	}
+	return result, nil
 }
