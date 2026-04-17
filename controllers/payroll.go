@@ -25,6 +25,7 @@ type PayrollPreview struct {
 	WorkingDays  int       `json:"working_days"`
 	PaidLeaves   float64   `json:"paid_leaves"`
 	UnpaidLeaves float64   `json:"unpaid_leaves"`
+	EarlyLeaves  float64   `json:"early_leaves"`
 	Deductions   float64   `json:"deductions"`
 	NetSalary    float64   `json:"net_salary"`
 }
@@ -65,11 +66,6 @@ func (h *HandlerFunc) RunPayroll(c *gin.Context) {
 			utils.RespondWithError(c, 400, "Payroll for this month and year is already finalized. Cannot run payroll again.")
 			return
 		}
-
-		// if status == "PREVIEW" {
-		// 	utils.RespondWithError(c, 400, fmt.Sprintf("Payroll for this month and year already exists with status PREVIEW (ID: %s). Please finalize or delete the existing payroll run before creating a new one.", existingRun.ID))
-		// 	return
-		// }
 	}
 	// --- Fetch active employees ---
 	employees, err := h.Query.GetEmployeeByMonthAndYear(input)
@@ -105,13 +101,13 @@ func (h *HandlerFunc) RunPayroll(c *gin.Context) {
 		net := salary - deduction
 
 		previews = append(previews, PayrollPreview{
-			EmployeeID:  emp.ID,
-			Employee:    emp.FullName,
-			BasicSalary: salary,
-			WorkingDays: workingDays,
-			//AbsentDays:  absentDays,
-			PaidLeaves:   leaveSummary.PaidDays,   // Added for UI/Design
-			UnpaidLeaves: leaveSummary.UnpaidDays, // Renamed from AbsentDays
+			EmployeeID:   emp.ID,
+			Employee:     emp.FullName,
+			BasicSalary:  salary,
+			WorkingDays:  workingDays,
+			PaidLeaves:   leaveSummary.PaidDays,
+			UnpaidLeaves: leaveSummary.UnpaidDays,
+			EarlyLeaves:  leaveSummary.EarlyLeaves,
 			Deductions:   deduction,
 			NetSalary:    net,
 		})
@@ -251,9 +247,9 @@ func (h *HandlerFunc) FinalizePayroll(c *gin.Context) {
 		pID := uuid.New()
 		_, err = tx.Exec(`
 			INSERT INTO Tbl_Payslip 
-			(id, payroll_run_id, employee_id, basic_salary, working_days, paid_leaves,unpaid_leaves, deduction_amount, net_salary)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-		`, pID, runID, emp.ID, salary, workingDays, leaveSummary.PaidDays, leaveSummary.UnpaidDays, deduction, net)
+			(id, payroll_run_id, employee_id, basic_salary, working_days, paid_leaves, unpaid_leaves, early_leaves, deduction_amount, net_salary)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		`, pID, runID, emp.ID, salary, workingDays, leaveSummary.PaidDays, leaveSummary.UnpaidDays, leaveSummary.EarlyLeaves, deduction, net)
 
 		if err != nil {
 			utils.RespondWithError(c, 500, "Payslip insert failed: "+err.Error())
@@ -304,6 +300,7 @@ type PayslipReportData struct {
 	WorkingDays  int
 	PaidLeaves   float64
 	UnpaidLeaves float64
+	EarlyLeaves  float64
 	Deductions   float64
 	NetSalary    float64
 }
@@ -448,22 +445,32 @@ func renderAttendanceSummary(pdf *gofpdf.Fpdf, d PayslipReportData, config PDFCo
 	// Reset Text Color for the table
 	pdf.SetTextColor(50, 50, 50)
 
-	// Table Header with consistent borders and bold font
+	// Table Header
 	pdf.SetFont("Arial", "B", 9)
-	// We use 180mm total width (typical for A4 with 15mm margins)
-	pdf.CellFormat(45, 8, "Working Days", "1", 0, "C", false, 0, "")
-	pdf.CellFormat(45, 8, "Paid Leaves", "1", 0, "C", false, 0, "")
-	pdf.CellFormat(45, 8, "Unpaid Leaves", "1", 0, "C", false, 0, "")
-	pdf.CellFormat(45, 8, "Days Present", "1", 1, "C", false, 0, "")
+	pdf.CellFormat(36, 8, "Working Days", "1", 0, "C", false, 0, "")
+	pdf.CellFormat(36, 8, "Paid Leaves", "1", 0, "C", false, 0, "")
+	pdf.CellFormat(36, 8, "Unpaid Leaves", "1", 0, "C", false, 0, "")
+	pdf.CellFormat(36, 8, "Early Leaves", "1", 0, "C", false, 0, "")
+	pdf.CellFormat(36, 8, "Days Present", "1", 1, "C", false, 0, "")
 
 	// Table Data
 	pdf.SetFont("Arial", "", 9)
 	presentDays := float64(d.WorkingDays) - d.UnpaidLeaves
 
-	pdf.CellFormat(45, 8, fmt.Sprintf("%d", d.WorkingDays), "1", 0, "C", false, 0, "")
-	pdf.CellFormat(45, 8, fmt.Sprintf("%.1f", d.PaidLeaves), "1", 0, "C", false, 0, "")
-	pdf.CellFormat(45, 8, fmt.Sprintf("%.1f", d.UnpaidLeaves), "1", 0, "C", false, 0, "")
-	pdf.CellFormat(45, 8, fmt.Sprintf("%.1f", presentDays), "1", 1, "C", false, 0, "")
+	pdf.CellFormat(36, 8, fmt.Sprintf("%d", d.WorkingDays), "1", 0, "C", false, 0, "")
+	pdf.CellFormat(36, 8, fmt.Sprintf("%.1f", d.PaidLeaves), "1", 0, "C", false, 0, "")
+	pdf.CellFormat(36, 8, fmt.Sprintf("%.1f", d.UnpaidLeaves), "1", 0, "C", false, 0, "")
+	pdf.CellFormat(36, 8, fmt.Sprintf("%.1f", d.EarlyLeaves), "1", 0, "C", false, 0, "")
+	pdf.CellFormat(36, 8, fmt.Sprintf("%.1f", presentDays), "1", 1, "C", false, 0, "")
+
+	// Note about early leaves
+	if d.EarlyLeaves > 0 {
+		pdf.Ln(3)
+		pdf.SetFont("Arial", "I", 8)
+		pdf.SetTextColor(100, 100, 100)
+		pdf.CellFormat(0, 5, fmt.Sprintf("  * Early leaves (%.1f) are tracked for attendance only and do not affect salary deductions.", d.EarlyLeaves), "", 1, "L", false, 0, "")
+		pdf.SetTextColor(50, 50, 50)
+	}
 
 	pdf.Ln(5)
 }
@@ -522,13 +529,15 @@ func (h *HandlerFunc) GetPayslipPDF(c *gin.Context) {
 		WorkingDays  int       `db:"working_days"`
 		PaidLeaves   float64   `db:"paid_leaves"`
 		UnpaidLeaves float64   `db:"unpaid_leaves"`
+		EarlyLeaves  float64   `db:"early_leaves"`
 		Deductions   float64   `db:"deduction_amount"`
 		NetSalary    float64   `db:"net_salary"`
 	}
 
 	err = h.Query.DB.Get(&p, `
         SELECT e.id as employee_id, e.full_name, e.email, p.basic_salary, 
-               p.working_days,p.paid_leaves, p.unpaid_leaves, p.deduction_amount, p.net_salary,
+               p.working_days, p.paid_leaves, p.unpaid_leaves, COALESCE(p.early_leaves, 0) as early_leaves,
+               p.deduction_amount, p.net_salary,
                pr.month, pr.year
         FROM Tbl_Payslip p
         JOIN Tbl_Employee e ON e.id = p.employee_id
@@ -551,6 +560,7 @@ func (h *HandlerFunc) GetPayslipPDF(c *gin.Context) {
 		WorkingDays:  p.WorkingDays,
 		PaidLeaves:   p.PaidLeaves,
 		UnpaidLeaves: p.UnpaidLeaves,
+		EarlyLeaves:  p.EarlyLeaves,
 		Deductions:   p.Deductions,
 		NetSalary:    p.NetSalary,
 	}
@@ -579,6 +589,84 @@ func (h *HandlerFunc) GetPayslipPDF(c *gin.Context) {
 	// 4. SERVE FILE
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", "inline; filename=payslip.pdf")
+	pdf.Output(c.Writer)
+}
+
+// PreviewPayslipPDF - GET /api/payroll/payslips/preview
+// Returns a sample payslip PDF with dummy data using real company branding.
+// Only accessible by ADMIN and SUPERADMIN. No DB record is created.
+func (h *HandlerFunc) PreviewPayslipPDF(c *gin.Context) {
+	roleRaw, _ := c.Get("role")
+	role := roleRaw.(string)
+	if role != "SUPERADMIN" && role != "ADMIN" {
+		utils.RespondWithError(c, 403, "Only ADMIN and SUPERADMIN can preview payslip")
+		return
+	}
+
+	// 1. FETCH BRANDING (same as real payslip)
+	var settings models.CompanySettings
+	err := h.Query.DB.Get(&settings, `SELECT company_name, logo_path, primary_color FROM Tbl_Company_Settings LIMIT 1`)
+	if err != nil || settings.CompanyName == "" || strings.EqualFold(settings.CompanyName, "Company") {
+		settings.CompanyName = "ZENITHIVE"
+	}
+
+	r, g, b := HexToRGB(settings.PrimaryColor)
+	config := PDFConfig{
+		PrimaryColor: []int{r, g, b},
+		CompanyName:  settings.CompanyName,
+		LogoPath:     settings.LogoPath,
+	}
+
+	// 2. BUILD DUMMY DATA
+	now := time.Now()
+	workingDays := h.Query.GetCompanyCurrWorkingDays()
+	basicSalary := 50000.0
+	paidLeaves := 1.0
+	unpaidLeaves := 2.0
+	earlyLeaves := 1.0
+	deduction := basicSalary / float64(workingDays) * unpaidLeaves
+	netSalary := basicSalary - deduction
+
+	monthNames := []string{"", "January", "February", "March", "April", "May", "June",
+		"July", "August", "September", "October", "November", "December"}
+
+	data := PayslipReportData{
+		EmployeeID:   "00000000-0000-0000-0000-000000000000",
+		EmployeeName: "John Doe (Sample)",
+		Email:        "john.doe@example.com",
+		Month:        monthNames[int(now.Month())],
+		Year:         now.Year(),
+		BasicSalary:  basicSalary,
+		WorkingDays:  workingDays,
+		PaidLeaves:   paidLeaves,
+		UnpaidLeaves: unpaidLeaves,
+		EarlyLeaves:  earlyLeaves,
+		Deductions:   deduction,
+		NetSalary:    netSalary,
+	}
+
+	// 3. GENERATE PDF using the same render pipeline
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.SetMargins(15, 15, 15)
+	pdf.AddPage()
+	pdf.SetAutoPageBreak(false, 0)
+
+	renderHeaderSection(pdf, data, config)
+	renderEmployeeSection(pdf, data, config)
+
+	earnings := []lineItem{{description: "Basic Salary", amount: data.BasicSalary}}
+	deductions := []lineItem{{description: fmt.Sprintf("Unpaid Leave (%v Days)", data.UnpaidLeaves), amount: data.Deductions}}
+
+	renderTable(pdf, "EARNINGS", earnings, r, g, b)
+	renderTable(pdf, "DEDUCTIONS", deductions, 231, 76, 60)
+
+	renderSummarySection(pdf, data, config)
+	renderAttendanceSummary(pdf, data, config)
+	renderFooterSection(pdf, data)
+
+	// 4. SERVE inline — no file saved, no DB record
+	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", "inline; filename=payslip_preview.pdf")
 	pdf.Output(c.Writer)
 }
 
@@ -894,6 +982,7 @@ func (h *HandlerFunc) GetFinalizedPayslips(c *gin.Context) {
 		WorkingDays     int       `json:"working_days"`
 		PaidLeaves      float64   `json:"paid_leaves"`
 		UnpaidLeaves    float64   `json:"unpaid_leaves"`
+		EarlyLeaves     float64   `json:"early_leaves"`
 		DeductionAmount float64   `json:"deduction_amount"`
 		NetSalary       float64   `json:"net_salary"`
 		PDFPath         string    `json:"pdf_path"`
@@ -916,6 +1005,7 @@ func (h *HandlerFunc) GetFinalizedPayslips(c *gin.Context) {
 			&slip.WorkingDays,
 			&slip.PaidLeaves,
 			&slip.UnpaidLeaves,
+			&slip.EarlyLeaves,
 			&slip.DeductionAmount,
 			&slip.NetSalary,
 			&slip.PDFPath,

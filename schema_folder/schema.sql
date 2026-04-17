@@ -191,6 +191,7 @@ CREATE TABLE IF NOT EXISTS Tbl_Payslip (
     working_days INT,
     unpaid_leaves NUMERIC,  -- Changed from INT to NUMERIC for half-day support
     paid_leaves INT,
+    early_leaves NUMERIC DEFAULT 0,  -- Early leave count (display only, no deduction)
     deduction_amount NUMERIC,
     net_salary NUMERIC,
     pdf_path TEXT,

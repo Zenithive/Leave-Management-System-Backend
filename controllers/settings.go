@@ -189,8 +189,8 @@ func (h *HandlerFunc) PreviewBirthdayMessage(c *gin.Context) {
 	rendered := repositories.RenderBirthdayMessage(tmpl, name, birthDate)
 
 	c.JSON(http.StatusOK, gin.H{
-		"template": tmpl,
-		"rendered": rendered,
+		"template":     tmpl,
+		"rendered":     rendered,
 		"placeholders": []string{"{name}", "{date}", "{age}"},
 	})
 }
@@ -198,10 +198,6 @@ func (h *HandlerFunc) PreviewBirthdayMessage(c *gin.Context) {
 // GetTodayBirthdays - GET /api/settings/birthdays/today
 // Returns all employees whose birthday is today, with their rendered birthday message.
 func (h *HandlerFunc) GetTodayBirthdays(c *gin.Context) {
-	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "not authorized"); err != nil {
-		utils.RespondWithError(c, http.StatusForbidden, err.Error())
-		return
-	}
 
 	tmpl, err := h.Query.GetBirthdayMessageTemplate()
 	if err != nil {

@@ -85,6 +85,9 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 		payroll.POST("/run", h.RunPayroll)
 		// POST /api/payroll/run
 
+		// Preview payslip PDF with dummy data (ADMIN/SUPERADMIN only, no DB record)
+		payroll.GET("/payslips/preview", h.PreviewPayslipPDF)
+
 		// Finalize payroll for a specific payroll run ID
 		payroll.POST("/:id/finalize", h.FinalizePayroll)
 		// POST /api/payroll/{id}/finalize
