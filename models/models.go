@@ -25,6 +25,7 @@ type EmployeeInput struct {
 	DesignationID   *uuid.UUID `json:"designation_id,omitempty"` // optional UUID
 	Salary          *float64   `json:"salary,omitempty"`         // optional
 	JoiningDate     *time.Time `json:"joining_date,omitempty"`   // optional
+	BirthDate       *time.Time `json:"birth_date,omitempty"`     // optional
 	EndingDate      *time.Time `json:"ending_date,omitempty"`    // optional
 	Status          *string    `json:"status,omitempty"`         // optional, new field
 	CreatedAt       *time.Time `json:"created_at,omitempty"`     // optional
@@ -168,15 +169,19 @@ type CompanySettings struct {
 	LogoPath       string `db:"logo_path" json:"logo_path"`
 	PrimaryColor   string `db:"primary_color" json:"primary_color"`
 	SecondaryColor string `db:"secondary_color" json:"secondary_color"`
+
+	// Birthday message template — supports {name}, {date}, {age} placeholders
+	BirthdayMessageTemplate string `db:"birthday_message_template" json:"birthday_message_template"`
 }
 
 type CompanyField struct {
-	WorkingDaysPerMonth  int    `form:"WorkingDaysPerMonth" json:"working_days_per_month"`
-	AllowManagerAddLeave bool   `form:"AllowManagerAddLeave" json:"allow_manager_add_leave"`
-	CompanyName          string `form:"CompanyName" json:"company_name"`
-	PrimaryColor         string `form:"PrimaryColor" json:"primary_color"`     // e.g., "#2c3e50"
-	SecondaryColor       string `form:"SecondaryColor" json:"secondary_color"` // e.g., "#ecf0f1"
-	LogoPath             string `json:"logo_path"`
+	WorkingDaysPerMonth     int    `form:"WorkingDaysPerMonth" json:"working_days_per_month"`
+	AllowManagerAddLeave    bool   `form:"AllowManagerAddLeave" json:"allow_manager_add_leave"`
+	CompanyName             string `form:"CompanyName" json:"company_name"`
+	PrimaryColor            string `form:"PrimaryColor" json:"primary_color"`
+	SecondaryColor          string `form:"SecondaryColor" json:"secondary_color"`
+	LogoPath                string `json:"logo_path"`
+	BirthdayMessageTemplate string `form:"BirthdayMessageTemplate" json:"birthday_message_template"`
 }
 
 type Leave struct {

@@ -101,8 +101,10 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 	settings := r.Group("/api/settings")
 	settings.Use(middleware.AuthMiddleware(h)) // Only admin/superadmin
 	{
-		settings.GET("", h.GetCompanySettings)    // Get current settings
-		settings.PUT("", h.UpdateCompanySettings) // Update settings
+		settings.GET("", h.GetCompanySettings)                      // Get current settings
+		settings.PUT("", h.UpdateCompanySettings)                   // Update settings
+		settings.GET("/birthday-preview", h.PreviewBirthdayMessage) // Preview rendered birthday message
+		settings.GET("/birthdays/today", h.GetTodayBirthdays)       // Get today's employee birthdays
 	}
 	holidays := r.Group("/api/settings/holidays")
 	holidays.Use(middleware.AuthMiddleware(h))

@@ -49,6 +49,7 @@ type EmployeeResponse struct {
 	DesignationName *string    `json:"designation_name,omitempty"`
 	Salary          *float64   `json:"salary,omitempty"` // omitted for HR in list; present for admin/detail
 	JoiningDate     *time.Time `json:"joining_date,omitempty"`
+	BirthDate       *time.Time `json:"birth_date,omitempty"`
 	EndingDate      *time.Time `json:"ending_date,omitempty"`
 	CreatedAt       *time.Time `json:"created_at,omitempty"`
 	UpdatedAt       *time.Time `json:"updated_at,omitempty"`

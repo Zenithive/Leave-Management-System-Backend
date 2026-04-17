@@ -141,7 +141,7 @@ func (r *Repository) GetAllEmployees(params models.EmployeeFilterParams, role st
 		SELECT 
 			e.id, e.full_name, e.email, e.status,
 			r.type AS role, e.manager_id, e.designation_id,
-			%s, e.joining_date, e.ending_date,
+			%s, e.joining_date, e.birth_date, e.ending_date,
 			e.created_at, e.updated_at,
 			m.full_name AS manager_name,
 			d.designation_name
@@ -175,6 +175,7 @@ func (r *Repository) GetAllEmployees(params models.EmployeeFilterParams, role st
 			&emp.DesignationID,
 			&emp.Salary,
 			&emp.JoiningDate,
+			&emp.BirthDate,
 			&emp.EndingDate,
 			&emp.CreatedAt,
 			&emp.UpdatedAt,

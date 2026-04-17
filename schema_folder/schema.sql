@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS Tbl_Employee (
     manager_id UUID REFERENCES Tbl_Employee(id),  -- Self-referencing for hierarchy
     designation_id UUID REFERENCES Tbl_Designation(id) ON DELETE SET NULL,
     salary NUMERIC,
+    birth_date DATE DEFAULT NULL,
     joining_date DATE,
     ending_date DATE DEFAULT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'active',  -- active/deactive
@@ -254,6 +255,8 @@ CREATE TABLE IF NOT EXISTS Tbl_Company_Settings (
     logo_path TEXT DEFAULT '',
     primary_color VARCHAR(7) DEFAULT '#2980b9',
     secondary_color VARCHAR(7) DEFAULT '#2ecc71',
+    -- Supports placeholders: {name}, {date}, {age}
+    birthday_message_template TEXT NOT NULL DEFAULT 'Happy Birthday {name}! 🎉 Wishing you a wonderful day and a fantastic year ahead!',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

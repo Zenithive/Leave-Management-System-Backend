@@ -452,6 +452,7 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 		Email       *string    `json:"email"`
 		Salary      *float64   `json:"salary"`
 		JoiningDate *time.Time `json:"joining_date"`
+		BirthDate   *time.Time `json:"birth_date"`
 		EndingDate  *time.Time `json:"ending_date"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -463,8 +464,8 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 	isAdmin := role == "SUPERADMIN" || role == "ADMIN"
 	isSelf := currentUserID == empID
 
-	// Check if trying to update email, salary, joining_date, or ending_date
-	if (input.Email != nil || input.Salary != nil || input.JoiningDate != nil || input.EndingDate != nil) && !isAdmin {
+	// Check if trying to update email, salary, joining_date, birth_date, or ending_date
+	if (input.Email != nil || input.Salary != nil || input.JoiningDate != nil || input.BirthDate != nil || input.EndingDate != nil) && !isAdmin {
 		utils.RespondWithError(c, 403, "only SUPERADMIN and ADMIN can update email, salary, joining date, and ending date")
 		return
 	}
@@ -500,7 +501,7 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 		finalEmail = existingEmp.Email
 	}
 
-	// 7️⃣ Prepare final values
+	// 7️ Prepare final values
 	finalName := existingEmp.FullName
 	if input.FullName != nil {
 		finalName = *input.FullName
@@ -516,13 +517,18 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 		finalJoiningDate = input.JoiningDate
 	}
 
+	finalBirthDate := existingEmp.BirthDate
+	if input.BirthDate != nil {
+		finalBirthDate = input.BirthDate
+	}
+
 	finalEndingDate := existingEmp.EndingDate
 	if input.EndingDate != nil {
 		finalEndingDate = input.EndingDate
 	}
 
 	// 8️ Update employee info
-	err = h.Query.UpdateEmployeeInfo(empID, finalName, finalEmail, finalSalary, finalJoiningDate, finalEndingDate)
+	err = h.Query.UpdateEmployeeInfo(empID, finalName, finalEmail, finalSalary, finalJoiningDate, finalBirthDate, finalEndingDate)
 	if err != nil {
 		utils.RespondWithError(c, 500, "failed to update employee: "+err.Error())
 		return
@@ -674,14 +680,14 @@ func (h *HandlerFunc) GetMyTeam(c *gin.Context) {
 // UpdateEmployeeDesignation - PATCH /api/employee/:id/designation
 // Only ADMIN, SUPERADMIN, and HR can assign/update employee designation
 func (h *HandlerFunc) UpdateEmployeeDesignation(c *gin.Context) {
-	// 1️⃣ Permission check
+	// 1️ Permission check
 	role := c.GetString("role")
 	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
 		utils.RespondWithError(c, http.StatusForbidden, "only ADMIN, SUPERADMIN, and HR can assign designations")
 		return
 	}
 
-	// 2️⃣ Parse Employee ID
+	// 2️Parse Employee ID
 	empIDStr := c.Param("id")
 	empID, err := uuid.Parse(empIDStr)
 	if err != nil {
@@ -689,20 +695,20 @@ func (h *HandlerFunc) UpdateEmployeeDesignation(c *gin.Context) {
 		return
 	}
 
-	// 3️⃣ Check if employee exists
+	// 3️ Check if employee exists
 	targetEmp, err := h.Query.GetEmployeeByID(empID)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusNotFound, "employee not found")
 		return
 	}
 
-	// 4️⃣ HR and ADMIN cannot modify SUPERADMIN
+	// 4️ HR and ADMIN cannot modify SUPERADMIN
 	if (role == "ADMIN" || role == "HR") && targetEmp.Role == "SUPERADMIN" {
 		utils.RespondWithError(c, http.StatusForbidden, "HR and ADMIN cannot modify SUPERADMIN users")
 		return
 	}
 
-	// 5️⃣ Bind input JSON
+	// 5️ Bind input JSON
 	var input struct {
 		DesignationID *string `json:"designation_id"` // Can be null to remove designation
 	}
@@ -711,7 +717,7 @@ func (h *HandlerFunc) UpdateEmployeeDesignation(c *gin.Context) {
 		return
 	}
 
-	// 6️⃣ Parse and validate designation ID if provided
+	// 6️ Parse and validate designation ID if provided
 	var designationID *uuid.UUID
 	if input.DesignationID != nil && *input.DesignationID != "" {
 		parsedID, err := uuid.Parse(*input.DesignationID)
@@ -729,14 +735,14 @@ func (h *HandlerFunc) UpdateEmployeeDesignation(c *gin.Context) {
 		designationID = &parsedID
 	}
 
-	// 7️⃣ Update employee designation
+	// 7️ Update employee designation
 	err = h.Query.UpdateEmployeeDesignation(empID, designationID)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, "failed to update designation: "+err.Error())
 		return
 	}
 
-	// 8️⃣ Response
+	// 8️ Response
 	message := "employee designation updated successfully"
 	if designationID == nil {
 		message = "employee designation removed successfully"

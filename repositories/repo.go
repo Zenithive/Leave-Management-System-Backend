@@ -265,7 +265,7 @@ func (r *Repository) GetEmployeeByID(empID uuid.UUID) (*models.EmployeeResponse,
         SELECT 
             e.id, e.full_name, e.email, e.status,
             r.type AS role, e.manager_id, e.designation_id,
-            e.salary, e.joining_date, e.ending_date,
+            e.salary, e.joining_date, e.birth_date, e.ending_date,
             e.created_at, e.updated_at,
             m.full_name AS manager_name,
             d.designation_name
@@ -285,6 +285,7 @@ func (r *Repository) GetEmployeeByID(empID uuid.UUID) (*models.EmployeeResponse,
 		&emp.DesignationID,
 		&emp.Salary,
 		&emp.JoiningDate,
+		&emp.BirthDate,
 		&emp.EndingDate,
 		&emp.CreatedAt,
 		&emp.UpdatedAt,
@@ -298,12 +299,12 @@ func (r *Repository) GetEmployeeByID(empID uuid.UUID) (*models.EmployeeResponse,
 }
 
 // ------------------ UPDATE EMPLOYEE INFO ------------------
-func (r *Repository) UpdateEmployeeInfo(empID uuid.UUID, fullName, email string, salary *float64, joiningDate, endingDate *time.Time) error {
+func (r *Repository) UpdateEmployeeInfo(empID uuid.UUID, fullName, email string, salary *float64, joiningDate, birthDate, endingDate *time.Time) error {
 	_, err := r.DB.Exec(`
         UPDATE Tbl_Employee
-        SET full_name = $1, email = $2, salary = $3, joining_date = $4, ending_date = $5, updated_at = NOW()
-        WHERE id = $6
-    `, fullName, email, salary, joiningDate, endingDate, empID)
+        SET full_name = $1, email = $2, salary = $3, joining_date = $4, birth_date = $5, ending_date = $6, updated_at = NOW()
+        WHERE id = $7
+    `, fullName, email, salary, joiningDate, birthDate, endingDate, empID)
 	return err
 }
 
@@ -335,7 +336,7 @@ func (r *Repository) GetEmployeesByManagerID(managerID uuid.UUID) ([]models.Empl
         SELECT 
             e.id, e.full_name, e.email, e.status,
             r.type AS role, e.manager_id, e.designation_id,
-            e.salary, e.joining_date, e.ending_date,
+            e.salary, e.joining_date, e.birth_date, e.ending_date,
             e.created_at, e.updated_at,
             m.full_name AS manager_name,
             d.designation_name
@@ -365,6 +366,7 @@ func (r *Repository) GetEmployeesByManagerID(managerID uuid.UUID) ([]models.Empl
 			&emp.DesignationID,
 			&emp.Salary,
 			&emp.JoiningDate,
+			&emp.BirthDate,
 			&emp.EndingDate,
 			&emp.CreatedAt,
 			&emp.UpdatedAt,

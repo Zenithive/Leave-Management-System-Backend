@@ -242,16 +242,29 @@ func (r *Repository) GetEquipmentByCategory(categoryID uuid.UUID, limit, offset 
 
 func (r *Repository) UpdateEquipment(tx *sqlx.Tx, id uuid.UUID, data models.EquipmentRequest) error {
 	var currentRemaining, currentTotal int
+	var currentIsShared bool
 	err := tx.QueryRow(`
-		SELECT remaining_quantity, total_quantity FROM tbl_equipment WHERE id = $1
-	`, id).Scan(&currentRemaining, &currentTotal)
+		SELECT remaining_quantity, total_quantity, is_shared FROM tbl_equipment WHERE id = $1
+	`, id).Scan(&currentRemaining, &currentTotal, &currentIsShared)
 	if err != nil {
 		return fmt.Errorf("equipment not found")
 	}
 
-	newRemaining := currentRemaining + (data.TotalQuantity - currentTotal)
-	if newRemaining < 0 {
-		newRemaining = 0
+	newIsShared := currentIsShared
+	if data.IsShared != nil {
+		newIsShared = *data.IsShared
+	}
+
+	// Recalculate remaining_quantity only for non-shared equipment.
+	// Shared equipment always keeps remaining = total (no deduction tracking).
+	var newRemaining int
+	if newIsShared {
+		newRemaining = data.TotalQuantity
+	} else {
+		newRemaining = currentRemaining + (data.TotalQuantity - currentTotal)
+		if newRemaining < 0 {
+			newRemaining = 0
+		}
 	}
 
 	result, err := tx.Exec(`
@@ -259,7 +272,7 @@ func (r *Repository) UpdateEquipment(tx *sqlx.Tx, id uuid.UUID, data models.Equi
 		SET name=$1, category_id=$2, is_shared=$3, price=$4,
 		    total_quantity=$5, remaining_quantity=$6, purchase_date=$7, updated_at=now()
 		WHERE id=$8
-	`, data.Name, data.CategoryID, data.IsShared, data.Price,
+	`, data.Name, data.CategoryID, newIsShared, data.Price,
 		data.TotalQuantity, newRemaining, data.PurchaseDate, id)
 	if err != nil {
 		return err
@@ -296,8 +309,10 @@ func (r *Repository) AssignEquipment(tx *sqlx.Tx, req models.AssignEquipmentRequ
 		return fmt.Errorf("equipment not found")
 	}
 
-	if (!isShared && remaining < 1) || (isShared && remaining < req.Quantity) {
-		return fmt.Errorf("not enough equipment available")
+	// Shared equipment: no quantity limit — multiple employees can use simultaneously.
+	// Non-shared equipment: must have enough remaining units.
+	if !isShared && remaining < req.Quantity {
+		return fmt.Errorf("not enough equipment available: need %d, have %d", req.Quantity, remaining)
 	}
 
 	_, err = tx.Exec(`
@@ -308,10 +323,15 @@ func (r *Repository) AssignEquipment(tx *sqlx.Tx, req models.AssignEquipmentRequ
 		return err
 	}
 
-	_, err = tx.Exec(`
-		UPDATE tbl_equipment SET remaining_quantity = remaining_quantity - $1 WHERE id=$2
-	`, req.Quantity, req.EquipmentID)
-	return err
+	// Only reduce remaining_quantity for non-shared equipment.
+	if !isShared {
+		_, err = tx.Exec(`
+			UPDATE tbl_equipment SET remaining_quantity = remaining_quantity - $1 WHERE id=$2
+		`, req.Quantity, req.EquipmentID)
+		return err
+	}
+
+	return nil
 }
 
 // assignmentSelectQuery is the shared SELECT for assignment responses
@@ -419,7 +439,9 @@ func (r *Repository) GetAssignedEquipmentByEmployee(employeeID uuid.UUID, limit,
 	return res, total, nil
 }
 
-// RemoveEquipment hard-deletes the most recent assignment and restores remaining quantity.
+// RemoveEquipment hard-deletes the most recent assignment.
+// For non-shared equipment, restores remaining_quantity.
+// For shared equipment, quantity tracking is skipped.
 func (r *Repository) RemoveEquipment(tx *sqlx.Tx, req models.RemoveEquipmentRequest) error {
 	var assignmentID uuid.UUID
 	var qty int
@@ -442,19 +464,29 @@ func (r *Repository) RemoveEquipment(tx *sqlx.Tx, req models.RemoveEquipmentRequ
 		return fmt.Errorf("assignment id=%s not found", assignmentID)
 	}
 
-	result2, err := tx.Exec(`
-		UPDATE tbl_equipment SET remaining_quantity = remaining_quantity + $1 WHERE id = $2
-	`, qty, req.EquipmentID)
-	if err != nil {
-		return fmt.Errorf("failed to update equipment quantity: %w", err)
-	}
-	if rows, _ := result2.RowsAffected(); rows == 0 {
+	// Only restore remaining_quantity for non-shared equipment.
+	var isShared bool
+	if err := tx.QueryRow(`SELECT is_shared FROM tbl_equipment WHERE id = $1`, req.EquipmentID).Scan(&isShared); err != nil {
 		return fmt.Errorf("equipment id=%s not found", req.EquipmentID)
 	}
+
+	if !isShared {
+		result2, err := tx.Exec(`
+			UPDATE tbl_equipment SET remaining_quantity = remaining_quantity + $1 WHERE id = $2
+		`, qty, req.EquipmentID)
+		if err != nil {
+			return fmt.Errorf("failed to update equipment quantity: %w", err)
+		}
+		if rows, _ := result2.RowsAffected(); rows == 0 {
+			return fmt.Errorf("equipment id=%s not found", req.EquipmentID)
+		}
+	}
+
 	return nil
 }
 
 // UpdateAssignment handles quantity updates and reassignments.
+// For shared equipment, assignment records are updated but remaining_quantity is never touched.
 func (r *Repository) UpdateAssignment(tx *sqlx.Tx, req models.UpdateAssignmentRequest) error {
 	var assignmentID uuid.UUID
 	var currentQty int
@@ -469,7 +501,13 @@ func (r *Repository) UpdateAssignment(tx *sqlx.Tx, req models.UpdateAssignmentRe
 			req.EquipmentID, req.FromEmployeeID, err)
 	}
 
-	// Reassignment to another employee
+	// Fetch is_shared once — drives all quantity tracking decisions below.
+	var isShared bool
+	if err := tx.QueryRow(`SELECT is_shared FROM tbl_equipment WHERE id = $1 FOR UPDATE`, req.EquipmentID).Scan(&isShared); err != nil {
+		return fmt.Errorf("equipment not found: %w", err)
+	}
+
+	// ── Reassignment to another employee ──────────────────────────────────────
 	if req.ToEmployeeID != nil {
 		if req.Quantity > currentQty {
 			return fmt.Errorf("quantity %d exceeds assigned amount %d", req.Quantity, currentQty)
@@ -488,14 +526,18 @@ func (r *Repository) UpdateAssignment(tx *sqlx.Tx, req models.UpdateAssignmentRe
 			}
 		}
 
-		// Step 2: Add back to equipment pool (will be re-consumed in step 3)
-		if _, err := tx.Exec(`
-			UPDATE tbl_equipment SET remaining_quantity = remaining_quantity + $1 WHERE id = $2
-		`, req.Quantity, req.EquipmentID); err != nil {
-			return fmt.Errorf("failed to restore equipment quantity: %w", err)
+		// Step 2 & 3 only apply to non-shared equipment.
+		// Shared equipment: just move the assignment record, no pool changes.
+		if !isShared {
+			// Add back to pool (will be re-consumed when assigning to new employee)
+			if _, err := tx.Exec(`
+				UPDATE tbl_equipment SET remaining_quantity = remaining_quantity + $1 WHERE id = $2
+			`, req.Quantity, req.EquipmentID); err != nil {
+				return fmt.Errorf("failed to restore equipment quantity: %w", err)
+			}
 		}
 
-		// Step 3: Assign to new employee (upsert on existing assignment)
+		// Step 3: Upsert assignment for new employee
 		var newAssignID uuid.UUID
 		var existingQty int
 		err = tx.QueryRow(`
@@ -505,57 +547,64 @@ func (r *Repository) UpdateAssignment(tx *sqlx.Tx, req models.UpdateAssignmentRe
 		`, req.EquipmentID, *req.ToEmployeeID).Scan(&newAssignID, &existingQty)
 
 		if err == nil {
-			// Existing assignment — update quantity, no remaining_quantity change needed (transfer)
+			// New employee already has an assignment — merge into it
 			if _, err := tx.Exec(`
 				UPDATE tbl_equipment_assignment SET quantity = quantity + $1, assigned_by = $2 WHERE id = $3
 			`, req.Quantity, req.AssignedBy, newAssignID); err != nil {
 				return fmt.Errorf("failed to update new employee assignment: %w", err)
 			}
-			// Consume from pool (we added it back in step 2)
-			if _, err := tx.Exec(`
-				UPDATE tbl_equipment SET remaining_quantity = remaining_quantity - $1 WHERE id = $2
-			`, req.Quantity, req.EquipmentID); err != nil {
-				return fmt.Errorf("failed to consume equipment quantity: %w", err)
+			// Non-shared: consume from pool (we added it back above)
+			if !isShared {
+				if _, err := tx.Exec(`
+					UPDATE tbl_equipment SET remaining_quantity = remaining_quantity - $1 WHERE id = $2
+				`, req.Quantity, req.EquipmentID); err != nil {
+					return fmt.Errorf("failed to consume equipment quantity: %w", err)
+				}
 			}
 		} else {
-			// No existing assignment — insert new row and consume from pool
+			// New employee has no assignment — create one
 			if _, err := tx.Exec(`
 				INSERT INTO tbl_equipment_assignment (equipment_id, employee_id, assigned_by, quantity)
 				VALUES ($1, $2, $3, $4)
 			`, req.EquipmentID, *req.ToEmployeeID, req.AssignedBy, req.Quantity); err != nil {
 				return fmt.Errorf("failed to create new employee assignment: %w", err)
 			}
-			if _, err := tx.Exec(`
-				UPDATE tbl_equipment SET remaining_quantity = remaining_quantity - $1 WHERE id = $2
-			`, req.Quantity, req.EquipmentID); err != nil {
-				return fmt.Errorf("failed to consume equipment quantity: %w", err)
+			// Non-shared: consume from pool
+			if !isShared {
+				if _, err := tx.Exec(`
+					UPDATE tbl_equipment SET remaining_quantity = remaining_quantity - $1 WHERE id = $2
+				`, req.Quantity, req.EquipmentID); err != nil {
+					return fmt.Errorf("failed to consume equipment quantity: %w", err)
+				}
 			}
 		}
 		return nil
 	}
 
-	// Quantity update for same employee
+	// ── Quantity update for same employee ─────────────────────────────────────
 	diff := req.Quantity - currentQty
-	if diff > 0 {
-		var remaining int
-		if err := tx.Get(&remaining, `
-			SELECT remaining_quantity FROM tbl_equipment WHERE id = $1 FOR UPDATE
-		`, req.EquipmentID); err != nil {
-			return fmt.Errorf("equipment not found: %w", err)
-		}
-		if remaining < diff {
-			return fmt.Errorf("not enough quantity available: need %d, have %d", diff, remaining)
-		}
-		if _, err := tx.Exec(`
-			UPDATE tbl_equipment SET remaining_quantity = remaining_quantity - $1 WHERE id = $2
-		`, diff, req.EquipmentID); err != nil {
-			return fmt.Errorf("failed to reduce equipment quantity: %w", err)
-		}
-	} else if diff < 0 {
-		if _, err := tx.Exec(`
-			UPDATE tbl_equipment SET remaining_quantity = remaining_quantity + $1 WHERE id = $2
-		`, -diff, req.EquipmentID); err != nil {
-			return fmt.Errorf("failed to increase equipment quantity: %w", err)
+
+	if !isShared {
+		// Only touch remaining_quantity for non-shared equipment
+		if diff > 0 {
+			var remaining int
+			if err := tx.QueryRow(`SELECT remaining_quantity FROM tbl_equipment WHERE id = $1`, req.EquipmentID).Scan(&remaining); err != nil {
+				return fmt.Errorf("equipment not found: %w", err)
+			}
+			if remaining < diff {
+				return fmt.Errorf("not enough quantity available: need %d, have %d", diff, remaining)
+			}
+			if _, err := tx.Exec(`
+				UPDATE tbl_equipment SET remaining_quantity = remaining_quantity - $1 WHERE id = $2
+			`, diff, req.EquipmentID); err != nil {
+				return fmt.Errorf("failed to reduce equipment quantity: %w", err)
+			}
+		} else if diff < 0 {
+			if _, err := tx.Exec(`
+				UPDATE tbl_equipment SET remaining_quantity = remaining_quantity + $1 WHERE id = $2
+			`, -diff, req.EquipmentID); err != nil {
+				return fmt.Errorf("failed to increase equipment quantity: %w", err)
+			}
 		}
 	}
 
