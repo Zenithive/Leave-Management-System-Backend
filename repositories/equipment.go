@@ -82,7 +82,11 @@ func (r *Repository) GetAllCategory(limit, offset int, search, sortBy, sortDir s
 	}
 
 	sortCol := resolveSortField(categorySortMap, sortBy, "name")
-	orderClause := fmt.Sprintf(" ORDER BY %s %s, id ASC", sortCol, sortDir)
+	safeSortDir := "ASC"
+	if sortDir == "desc" {
+		safeSortDir = "DESC"
+	}
+	orderClause := fmt.Sprintf(" ORDER BY %s %s, id ASC", sortCol, safeSortDir)
 
 	query := "SELECT id, name, description, created_at, updated_at FROM tbl_equipment_category" + whereClause + orderClause
 
