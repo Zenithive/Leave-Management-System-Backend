@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/access_role"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
@@ -56,14 +57,13 @@ func (h *HandlerFunc) GetEmployee(c *gin.Context) {
 		"page_size":   result.PageSize,
 		"total_pages": result.TotalPages,
 		"filters": gin.H{
-			"name":         params.Name,
-			"email":        params.Email,
-			"role":         params.Role,
-			"designation":  params.Designation,
-			"status":       params.Status,
-			"manager_name": params.ManagerName,
-			"sort_by":      params.SortBy,
-			"sort_order":   params.SortOrder,
+			"search":      params.Search,
+			"role":        params.Role,
+			"designation": params.Designation,
+			"status":      params.Status,
+			"manager":     params.Manager,
+			"sort_by":     params.SortBy,
+			"sort_order":  params.SortOrder,
 		},
 	})
 }
@@ -454,6 +454,7 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 		Email       *string    `json:"email"`
 		Salary      *float64   `json:"salary"`
 		JoiningDate *time.Time `json:"joining_date"`
+		BirthDate   *time.Time `json:"birth_date"`
 		EndingDate  *time.Time `json:"ending_date"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -461,12 +462,22 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 		return
 	}
 
-	// 5️ Permission checks
+	// 5️ Validate birth_date — must be in the past (future dates not allowed)
+	if input.BirthDate != nil {
+		today := time.Now().Truncate(24 * time.Hour)
+		bd := input.BirthDate.Truncate(24 * time.Hour)
+		if !bd.Before(today) {
+			utils.RespondWithError(c, 400, "birth_date must be a past date")
+			return
+		}
+	}
+
+	// 6️ Permission checks
 	isAdmin := role == "SUPERADMIN" || role == "ADMIN"
 	isSelf := currentUserID == empID
 
-	// Check if trying to update email, salary, joining_date, or ending_date
-	if (input.Email != nil || input.Salary != nil || input.JoiningDate != nil || input.EndingDate != nil) && !isAdmin {
+	// Check if trying to update email, salary, joining_date, birth_date, or ending_date
+	if (input.Email != nil || input.Salary != nil || input.JoiningDate != nil || input.BirthDate != nil || input.EndingDate != nil) && !isAdmin {
 		utils.RespondWithError(c, 403, "only SUPERADMIN and ADMIN can update email, salary, joining date, and ending date")
 		return
 	}
@@ -502,7 +513,7 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 		finalEmail = existingEmp.Email
 	}
 
-	// 7️⃣ Prepare final values
+	// 7️ Prepare final values
 	finalName := existingEmp.FullName
 	if input.FullName != nil {
 		finalName = *input.FullName
@@ -518,13 +529,18 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 		finalJoiningDate = input.JoiningDate
 	}
 
+	finalBirthDate := existingEmp.BirthDate
+	if input.BirthDate != nil {
+		finalBirthDate = input.BirthDate
+	}
+
 	finalEndingDate := existingEmp.EndingDate
 	if input.EndingDate != nil {
 		finalEndingDate = input.EndingDate
 	}
 
 	// 8️ Update employee info
-	err = h.Query.UpdateEmployeeInfo(empID, finalName, finalEmail, finalSalary, finalJoiningDate, finalEndingDate)
+	err = h.Query.UpdateEmployeeInfo(empID, finalName, finalEmail, finalSalary, finalJoiningDate, finalBirthDate, finalEndingDate)
 	if err != nil {
 		utils.RespondWithError(c, 500, "failed to update employee: "+err.Error())
 		return
@@ -646,6 +662,7 @@ func (h *HandlerFunc) UpdateEmployeePassword(c *gin.Context) {
 
 // GetMyTeam - GET /api/employee/my-team
 // Manager gets list of employees who report to them
+// Query params: ?sort_by=birth_date&sort_order=asc (or desc)
 func (h *HandlerFunc) GetMyTeam(c *gin.Context) {
 	// 1️ Get current user info
 	currentUserID, _ := uuid.Parse(c.GetString("user_id"))
@@ -657,33 +674,42 @@ func (h *HandlerFunc) GetMyTeam(c *gin.Context) {
 		return
 	}
 
-	// 3️ Fetch team members
-	employees, err := h.Query.GetEmployeesByManagerID(currentUserID)
+	// 3️ Bind sort params
+	var params models.TeamFilterParams
+	if err := c.ShouldBindQuery(&params); err != nil {
+		utils.RespondWithError(c, http.StatusBadRequest, "invalid query parameters: "+err.Error())
+		return
+	}
+
+	// 4️ Fetch team members
+	employees, err := h.Query.GetEmployeesByManagerID(currentUserID, params)
 	if err != nil {
 		utils.RespondWithError(c, 500, "failed to fetch team members: "+err.Error())
 		return
 	}
 
-	// 4️ Response
+	// 5️ Response
 	c.JSON(200, gin.H{
 		"message":      "team members fetched successfully",
 		"manager_id":   currentUserID,
 		"team_count":   len(employees),
 		"team_members": employees,
+		"sort_by":      params.SortBy,
+		"sort_order":   params.SortOrder,
 	})
 }
 
 // UpdateEmployeeDesignation - PATCH /api/employee/:id/designation
 // Only ADMIN, SUPERADMIN, and HR can assign/update employee designation
 func (h *HandlerFunc) UpdateEmployeeDesignation(c *gin.Context) {
-	// 1️⃣ Permission check
+	// 1️ Permission check
 	role := c.GetString("role")
 	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
 		utils.RespondWithError(c, http.StatusForbidden, "only ADMIN, SUPERADMIN, and HR can assign designations")
 		return
 	}
 
-	// 2️⃣ Parse Employee ID
+	// 2️Parse Employee ID
 	empIDStr := c.Param("id")
 	empID, err := uuid.Parse(empIDStr)
 	if err != nil {
@@ -691,20 +717,20 @@ func (h *HandlerFunc) UpdateEmployeeDesignation(c *gin.Context) {
 		return
 	}
 
-	// 3️⃣ Check if employee exists
+	// 3️ Check if employee exists
 	targetEmp, err := h.Query.GetEmployeeByID(empID)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusNotFound, "employee not found")
 		return
 	}
 
-	// 4️⃣ HR and ADMIN cannot modify SUPERADMIN
+	// 4️ HR and ADMIN cannot modify SUPERADMIN
 	if (role == "ADMIN" || role == "HR") && targetEmp.Role == "SUPERADMIN" {
 		utils.RespondWithError(c, http.StatusForbidden, "HR and ADMIN cannot modify SUPERADMIN users")
 		return
 	}
 
-	// 5️⃣ Bind input JSON
+	// 5️ Bind input JSON
 	var input struct {
 		DesignationID *string `json:"designation_id"` // Can be null to remove designation
 	}
@@ -713,7 +739,7 @@ func (h *HandlerFunc) UpdateEmployeeDesignation(c *gin.Context) {
 		return
 	}
 
-	// 6️⃣ Parse and validate designation ID if provided
+	// 6️ Parse and validate designation ID if provided
 	var designationID *uuid.UUID
 	if input.DesignationID != nil && *input.DesignationID != "" {
 		parsedID, err := uuid.Parse(*input.DesignationID)
@@ -731,14 +757,14 @@ func (h *HandlerFunc) UpdateEmployeeDesignation(c *gin.Context) {
 		designationID = &parsedID
 	}
 
-	// 7️⃣ Update employee designation
+	// 7️ Update employee designation
 	err = h.Query.UpdateEmployeeDesignation(empID, designationID)
 	if err != nil {
 		utils.RespondWithError(c, http.StatusInternalServerError, "failed to update designation: "+err.Error())
 		return
 	}
 
-	// 8️⃣ Response
+	// 8️ Response
 	message := "employee designation updated successfully"
 	if designationID == nil {
 		message = "employee designation removed successfully"
@@ -748,5 +774,67 @@ func (h *HandlerFunc) UpdateEmployeeDesignation(c *gin.Context) {
 		"message":        message,
 		"employee_id":    empID,
 		"designation_id": designationID,
+	})
+}
+
+func (h *HandlerFunc) GetTodayBirthdays(c *gin.Context) {
+
+	tmpl, err := h.Query.GetBirthdayMessageTemplate()
+	if err != nil {
+		utils.RespondWithError(c, http.StatusInternalServerError, "failed to fetch template: "+err.Error())
+		return
+	}
+
+	employees, err := h.Query.GetTodayBirthdays()
+	if err != nil {
+		utils.RespondWithError(c, http.StatusInternalServerError, "failed to fetch birthdays: "+err.Error())
+		return
+	}
+
+	result := make([]models.BirthdayEntry, 0, len(employees))
+	for _, emp := range employees {
+		result = append(result, models.BirthdayEntry{
+			ID:      emp.ID,
+			Name:    emp.Name,
+			Email:   emp.Email,
+			Message: service.RenderBirthdayMessage(tmpl, emp.Name, emp.BirthDate),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "success",
+		"date":    time.Now().Format("2006-01-02"),
+		"total":   len(result),
+		"data":    result,
+	})
+}
+
+// GetBirthdays - GET /api/employee/birthdays/upcomming
+// Query params: ?month=4&year=2026  or  ?year=2027  or  (none = upcoming 30 days)
+func (h *HandlerFunc) GetBirthdays(c *gin.Context) {
+	month := 0
+	year := 0
+
+	if m := c.Query("month"); m != "" {
+		fmt.Sscanf(m, "%d", &month)
+	}
+	if y := c.Query("year"); y != "" {
+		fmt.Sscanf(y, "%d", &year)
+	}
+
+	// 1. Get data from repository
+	rows, err := h.Query.GetBirthdays(month, year)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 2. Business logic in service
+	result := service.Calculation(rows, month, year)
+
+	// 3. Response
+	c.JSON(200, gin.H{
+		"success": true,
+		"data":    result,
 	})
 }

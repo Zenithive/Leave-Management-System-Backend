@@ -6,6 +6,12 @@ const (
 	LEAVE_APPLOVED  = "APPROVED"
 	LEAVE_REJECTED  = "REJECTED"
 	LEAVE_CANCELLED = "CANCELLED"
+
+	LEAVE_MANAGER_REJECTED = "MANAGER_REJECTED"
+	LEAVE_MANAGER_APPROVED = "MANAGER_APPROVED"
+
+	LEAVE_WITHDRAWAL_PENDING = "WITHDRAWAL_PENDING"
+	LEAVE_WITHDRAWN          = "WITHDRAWN"
 )
 
 const (
@@ -14,4 +20,12 @@ const (
 	ROLE_EMPLOYEE    = "EMPLOYEE"
 	ROLE_MANAGER     = "MANAGER"
 	ROLE_HR          = "HR"
+)
+
+type BirthdayStatus string
+
+const (
+	StatusToday    BirthdayStatus = "TODAY"
+	StatusUpcoming BirthdayStatus = "UPCOMING"
+	StatusPast     BirthdayStatus = "PAST"
 )
