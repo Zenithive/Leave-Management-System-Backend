@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
 )
@@ -57,8 +58,8 @@ func (s *HandlerFunc) GetLeaveBalances(c *gin.Context) {
 	serviceLeaveTypes := make([]service.LeaveTypeData, len(leaveTypes))
 	for i, lt := range leaveTypes {
 		serviceLeaveTypes[i] = service.LeaveTypeData{
-			LeaveTypeID:       lt.LeaveTypeID,
-			LeaveTypeName:     lt.LeaveTypeName,
+			LeaveTypeID:        lt.LeaveTypeID,
+			LeaveTypeName:      lt.LeaveTypeName,
 			DefaultEntitlement: lt.DefaultEntitlement,
 		}
 	}
@@ -79,20 +80,10 @@ func (s *HandlerFunc) GetLeaveBalances(c *gin.Context) {
 	calculatedBalances := service.CalculateLeaveBalances(serviceLeaveTypes, serviceBalanceRecords)
 
 	// 8. Convert back to response format
-	type Balance struct {
-		LeaveTypeID int     `json:"leave_type_id"`
-		LeaveType   string  `json:"leave_type"`
-		Opening     float64 `json:"opening"`
-		Accrued     float64 `json:"accrued"`
-		Used        float64 `json:"used"`
-		Adjusted    float64 `json:"adjusted"`
-		Total       float64 `json:"total"`
-		Available   float64 `json:"available"`
-	}
 
-	balances := make([]Balance, len(calculatedBalances))
+	balances := make([]models.Balance, len(calculatedBalances))
 	for i, cb := range calculatedBalances {
-		balances[i] = Balance{
+		balances[i] = models.Balance{
 			LeaveTypeID: cb.LeaveTypeID,
 			LeaveType:   cb.LeaveType,
 			Opening:     cb.Opening,

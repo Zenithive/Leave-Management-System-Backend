@@ -1,10 +1,7 @@
 -- +goose Up
--- +goose StatementBegin
-ALTER TABLE Tbl_Leave 
-ALTER COLUMN reason SET DEFAULT '';
--- +goose StatementEnd
+ALTER TABLE "tbl_leave"
+ADD COLUMN IF NOT EXISTS reason TEXT DEFAULT '';
 
 -- +goose Down
--- +goose StatementBegin
-SELECT 'down SQL query';
--- +goose StatementEnd
+ALTER TABLE "tbl_leave"
+DROP COLUMN IF EXISTS reason;

@@ -256,13 +256,7 @@ Zenithive Leave Management System
 	return SendEmailToMultiple(recipients, subject, body)
 }
 
-func SendLeaveManagerRejectionEmail(
-	AdminEmail []string,
-	empEmail string,
-	employeeName, leaveType, startDate, endDate string,
-	days float64, rejectedBy string,
-) error {
-
+func SendLeaveManagerRejectionEmail(AdminEmail []string, empEmail string, employeeName, leaveType, startDate, endDate string, days float64, rejectedBy string) error {
 	subject := "Leave Request - Manager Rejection (Pending Final Decision)"
 
 	// ------------------------
@@ -765,7 +759,7 @@ Zenithive Leave Management System
 // SendLeaveWithdrawalEmailToHR sends HR-specific notification when leave is withdrawn
 func SendLeaveWithdrawalEmailToHR(hrEmails []string, employeeName, employeeEmail, leaveType, startDate, endDate string, days float64, withdrawnBy, withdrawnByRole, reason string) error {
 	subject := fmt.Sprintf("[HR] Leave Withdrawn - %s", employeeName)
-	
+
 	reasonText := ""
 	if reason != "" {
 		reasonText = fmt.Sprintf("\nReason: %s", reason)

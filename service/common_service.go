@@ -89,6 +89,7 @@ func CalculateWorkingDaysWithTiming(Query *repositories.Repository, tx *sqlx.Tx,
 type LeaveSummary struct {
 	PaidDays   float64
 	UnpaidDays float64
+	EarlyLeaves float64
 }
 
 func CalculateAbsentDaysForMonth(db *sqlx.DB, employeeID uuid.UUID, month, year int) LeaveSummary {
@@ -124,8 +125,8 @@ func CalculateAbsentDaysForMonth(db *sqlx.DB, employeeID uuid.UUID, month, year 
         AND l.status='APPROVED'
         AND l.start_date <= $2
         AND l.end_date >= $3
+        AND (lt.is_early IS NULL OR lt.is_early IS NOT TRUE)
     `, employeeID, lastDay, firstDay)
-
 	if err != nil {
 		fmt.Printf("Error fetching leaves: %v\n", err)
 		return LeaveSummary{}
@@ -133,7 +134,21 @@ func CalculateAbsentDaysForMonth(db *sqlx.DB, employeeID uuid.UUID, month, year 
 
 	summary := LeaveSummary{}
 
-	// 4. Calculate days
+	// 4a. Count early leaves separately (for display only — no deduction)
+	var earlyLeaveCount float64
+	_ = db.Get(&earlyLeaveCount, `
+		SELECT COALESCE(SUM(l.days), 0)
+		FROM Tbl_Leave l
+		JOIN Tbl_Leave_type lt ON l.leave_type_id = lt.id
+		WHERE l.employee_id = $1
+		AND l.status = 'APPROVED'
+		AND lt.is_early = TRUE
+		AND l.start_date <= $2
+		AND l.end_date >= $3
+	`, employeeID, lastDay, firstDay)
+	summary.EarlyLeaves = earlyLeaveCount
+
+	// 4b. Calculate absent days (paid/unpaid) — early leaves already excluded from `leaves` slice
 	for _, leave := range leaves {
 		overlapStart := leave.StartDate
 		if overlapStart.Before(firstDay) {

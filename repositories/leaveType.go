@@ -80,3 +80,10 @@ func (r *Repository) GetAllLeaveType() ([]models.LeaveType, error) {
 	err := r.DB.Select(&leaveType, query)
 	return leaveType, err
 }
+
+func (r *Repository) GetLeaveTypeNameByID(id int) (string, error) {
+	var name string
+	query := `SELECT name FROM Tbl_Leave_type WHERE id = $1`
+	err := r.DB.Get(&name, query, id)
+	return name, err
+}

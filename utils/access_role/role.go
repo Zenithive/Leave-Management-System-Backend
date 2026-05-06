@@ -13,6 +13,13 @@ func Admin_SuperAdmin_Hr(role string, message string) error {
 	return nil
 }
 
+func Admin_SuperAdmin(role string, message string) error {
+	if role != constant.ROLE_SUPER_ADMIN && role != constant.ROLE_ADMIN {
+		return errors.New(message)
+	}
+	return nil
+}
+
 func SuperAdmin(role string, message string) error {
 	if role != constant.ROLE_SUPER_ADMIN {
 		return errors.New(message)

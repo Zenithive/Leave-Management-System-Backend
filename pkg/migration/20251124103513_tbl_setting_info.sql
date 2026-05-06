@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS Tbl_Company_Settings (
     working_days_per_month INT NOT NULL DEFAULT 22,
     allow_manager_add_leave BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     company_name VARCHAR(255) DEFAULT 'ZENITHIVE',
     logo_path TEXT DEFAULT '',
@@ -17,5 +17,4 @@ CREATE TABLE IF NOT EXISTS Tbl_Company_Settings (
 
 -- +goose Down
 -- +goose StatementBegin
-SELECT 'down SQL query';
 -- +goose StatementEnd

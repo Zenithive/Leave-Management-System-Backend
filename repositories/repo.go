@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -216,6 +217,7 @@ func (r *Repository) GetAllFinalizedPayslips() (*sql.Rows, error) {
 	    p.working_days,
 		p.paid_leaves,
 	    p.unpaid_leaves,
+	    COALESCE(p.early_leaves, 0) AS early_leaves,
 	    p.deduction_amount,
 	    p.net_salary,
 	    COALESCE(p.pdf_path, '') AS pdf_path,
@@ -243,6 +245,7 @@ func (r *Repository) GetFinalizedPayslipsByEmployee(id uuid.UUID) (*sql.Rows, er
 	    p.working_days,
 		p.paid_leaves,
 	    p.unpaid_leaves,
+	    COALESCE(p.early_leaves, 0) AS early_leaves,
 	    p.deduction_amount,
 	    p.net_salary,
 	    COALESCE(p.pdf_path, '') AS pdf_path,
@@ -265,7 +268,7 @@ func (r *Repository) GetEmployeeByID(empID uuid.UUID) (*models.EmployeeResponse,
         SELECT 
             e.id, e.full_name, e.email, e.status,
             r.type AS role, e.manager_id, e.designation_id,
-            e.salary, e.joining_date, e.ending_date,
+            e.salary, e.joining_date, e.birth_date, e.ending_date,
             e.created_at, e.updated_at,
             m.full_name AS manager_name,
             d.designation_name
@@ -285,6 +288,7 @@ func (r *Repository) GetEmployeeByID(empID uuid.UUID) (*models.EmployeeResponse,
 		&emp.DesignationID,
 		&emp.Salary,
 		&emp.JoiningDate,
+		&emp.BirthDate,
 		&emp.EndingDate,
 		&emp.CreatedAt,
 		&emp.UpdatedAt,
@@ -298,12 +302,12 @@ func (r *Repository) GetEmployeeByID(empID uuid.UUID) (*models.EmployeeResponse,
 }
 
 // ------------------ UPDATE EMPLOYEE INFO ------------------
-func (r *Repository) UpdateEmployeeInfo(empID uuid.UUID, fullName, email string, salary *float64, joiningDate, endingDate *time.Time) error {
+func (r *Repository) UpdateEmployeeInfo(empID uuid.UUID, fullName, email string, salary *float64, joiningDate, birthDate, endingDate *time.Time) error {
 	_, err := r.DB.Exec(`
         UPDATE Tbl_Employee
-        SET full_name = $1, email = $2, salary = $3, joining_date = $4, ending_date = $5, updated_at = NOW()
-        WHERE id = $6
-    `, fullName, email, salary, joiningDate, endingDate, empID)
+        SET full_name = $1, email = $2, salary = $3, joining_date = $4, birth_date = $5, ending_date = $6, updated_at = NOW()
+        WHERE id = $7
+    `, fullName, email, salary, joiningDate, birthDate, endingDate, empID)
 	return err
 }
 
@@ -330,12 +334,14 @@ func (r *Repository) ChackManagerPermission() (bool, error) {
 }
 
 // ------------------ GET EMPLOYEES BY MANAGER ID ------------------
-func (r *Repository) GetEmployeesByManagerID(managerID uuid.UUID) ([]models.EmployeeResponse, error) {
-	query := `
-        SELECT 
+func (r *Repository) GetEmployeesByManagerID(managerID uuid.UUID, params models.TeamFilterParams) ([]models.EmployeeResponse, error) {
+	orderBy := resolveEmployeeSort(params.SortBy, params.SortOrder)
+
+	query := fmt.Sprintf(`
+        SELECT
             e.id, e.full_name, e.email, e.status,
             r.type AS role, e.manager_id, e.designation_id,
-            e.salary, e.joining_date, e.ending_date,
+            e.salary, e.joining_date, e.birth_date, e.ending_date,
             e.created_at, e.updated_at,
             m.full_name AS manager_name,
             d.designation_name
@@ -344,34 +350,25 @@ func (r *Repository) GetEmployeesByManagerID(managerID uuid.UUID) ([]models.Empl
         LEFT JOIN Tbl_Employee m ON e.manager_id = m.id
         LEFT JOIN Tbl_Designation d ON e.designation_id = d.id
         WHERE e.manager_id = $1
-        ORDER BY e.full_name
-    `
+        ORDER BY %s
+    `, orderBy)
+
 	rows, err := r.DB.Query(query, managerID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var employees []models.EmployeeResponse
+	employees := []models.EmployeeResponse{}
 	for rows.Next() {
 		var emp models.EmployeeResponse
-		err := rows.Scan(
-			&emp.ID,
-			&emp.FullName,
-			&emp.Email,
-			&emp.Status,
-			&emp.Role,
-			&emp.ManagerID,
-			&emp.DesignationID,
-			&emp.Salary,
-			&emp.JoiningDate,
-			&emp.EndingDate,
-			&emp.CreatedAt,
-			&emp.UpdatedAt,
-			&emp.ManagerName,
-			&emp.DesignationName,
-		)
-		if err != nil {
+		if err := rows.Scan(
+			&emp.ID, &emp.FullName, &emp.Email, &emp.Status,
+			&emp.Role, &emp.ManagerID, &emp.DesignationID,
+			&emp.Salary, &emp.JoiningDate, &emp.BirthDate, &emp.EndingDate,
+			&emp.CreatedAt, &emp.UpdatedAt,
+			&emp.ManagerName, &emp.DesignationName,
+		); err != nil {
 			return nil, err
 		}
 		employees = append(employees, emp)
