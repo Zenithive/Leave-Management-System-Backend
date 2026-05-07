@@ -541,3 +541,30 @@ func (r *Repository) UpdateLeaveStatusWithResion(tx *sqlx.Tx, withdrawalReason s
 		`, status, withdrawalReason, currentUserID, leaveID)
 	return err
 }
+
+// GetEarlyLeaveThisMonth checks if the employee already has an early leave
+// for the given leave type in the same month/year as refDate.
+// Returns the existing leave if found, nil if not.
+func (r *Repository) GetEarlyLeaveThisMonth(tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int, refDate time.Time) (*models.Leave, error) {
+	var leave models.Leave
+	err := tx.Get(&leave, `
+		SELECT l.*
+		FROM Tbl_Leave l
+		JOIN Tbl_Leave_type lt ON lt.id = l.leave_type_id
+		WHERE l.employee_id = $1
+		  AND l.leave_type_id = $2
+		  AND lt.is_early = TRUE
+		  AND l.status  IN ('Pending', 'APPROVED', 'MANAGER_APPROVED')
+		  AND EXTRACT(MONTH FROM l.start_date) = $3
+		  AND EXTRACT(YEAR  FROM l.start_date) = $4
+		LIMIT 1
+	`, employeeID, leaveTypeID, int(refDate.Month()), refDate.Year())
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &leave, nil
+}

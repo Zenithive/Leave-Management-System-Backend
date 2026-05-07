@@ -168,6 +168,20 @@ func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
 					effectiveBalance, balance, pendingDays, leaveDays,
 				))
 			}
+		} else {
+			// IsEarly leave: only one early leave per month allowed per leave type
+			existing, err := h.Query.GetEarlyLeaveThisMonth(tx, employeeID, input.LeaveTypeID, input.StartDate)
+			if err != nil {
+				return utils.CustomErr(c, 500, "Failed to check early leave: "+err.Error())
+			}
+			if existing != nil {
+				return utils.CustomErr(c, 400, fmt.Sprintf(
+					"Early leave already taken this month: %s to %s (Status: %s). Only one early leave per month is allowed",
+					existing.StartDate.Format("2006-01-02"),
+					existing.EndDate.Format("2006-01-02"),
+					existing.Status,
+				))
+			}
 		}
 
 		// Overlapping Leave
