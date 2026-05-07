@@ -87,8 +87,8 @@ func CalculateWorkingDaysWithTiming(Query *repositories.Repository, tx *sqlx.Tx,
 }
 
 type LeaveSummary struct {
-	PaidDays   float64
-	UnpaidDays float64
+	PaidDays    float64
+	UnpaidDays  float64
 	EarlyLeaves float64
 }
 
