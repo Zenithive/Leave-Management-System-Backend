@@ -6,7 +6,8 @@ import (
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 )
 
-// GetAllLeaveTypesWithEntitlements fetches all leave types with their default entitlements
+// GetAllLeaveTypesWithEntitlements fetches all non-early leave types with their default entitlements.
+// Early leave types (is_early = true) are excluded because they don't have a balance bucket.
 func (r *Repository) GetAllLeaveTypesWithEntitlements() ([]models.LeaveTypeData, error) {
 	var leaveTypes []models.LeaveTypeData
 	query := `
@@ -16,6 +17,7 @@ func (r *Repository) GetAllLeaveTypesWithEntitlements() ([]models.LeaveTypeData,
 			COALESCE(lt.default_entitlement, 0) AS default_entitlement,
 			lt.intern_entitlement
 		FROM Tbl_Leave_Type lt
+		WHERE lt.is_early IS NULL OR lt.is_early = FALSE
 		ORDER BY lt.id
 	`
 	err := r.DB.Select(&leaveTypes, query)
