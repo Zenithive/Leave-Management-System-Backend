@@ -87,7 +87,6 @@ func (r *Repository) GetAllEmployees(params models.EmployeeFilterParams, role st
 	if role == constant.ROLE_ADMIN || role == constant.ROLE_SUPER_ADMIN {
 		salaryCol = "e.salary"
 	}
-
 	// Build WHERE conditions dynamically
 	conditions := []string{}
 	args := []interface{}{}

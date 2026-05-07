@@ -278,8 +278,8 @@ func (r *Repository) GetAllleavebaseonassignManagerByMonthYear(userID uuid.UUID,
 
 	WHERE
 		(e.manager_id = $1 OR l.employee_id = $1)
-		AND EXTRACT(MONTH FROM l.start_date) = $2
-		AND EXTRACT(YEAR FROM l.start_date) = $3
+		AND EXTRACT(MONTH FROM l.start_date) <= $2
+		AND EXTRACT(YEAR FROM l.start_date) <= $3
 
 	ORDER BY
 		l.start_date ASC,
@@ -341,8 +341,8 @@ func (r *Repository) GetAllLeaveByMonthYear(month, year int) ([]models.LeaveResp
 		ON l.approved_by = approver.id
 
 	WHERE
-		EXTRACT(MONTH FROM l.start_date) = $1
-		AND EXTRACT(YEAR FROM l.start_date) = $2
+		EXTRACT(MONTH FROM l.start_date) <= $1
+		AND EXTRACT(YEAR FROM l.start_date) <= $2
 
 	ORDER BY
 		l.start_date ASC,
@@ -405,8 +405,8 @@ func (r *Repository) GetMyLeavesByMonthYear(userID uuid.UUID, month, year int) (
 
 	WHERE 
 		l.employee_id = $1
-		AND EXTRACT(MONTH FROM l.start_date) = $2
-		AND EXTRACT(YEAR FROM l.start_date) = $3
+		AND EXTRACT(MONTH FROM l.start_date) <= $2
+		AND EXTRACT(YEAR FROM l.start_date) <= $3
 
 	ORDER BY 
 		l.start_date ASC,

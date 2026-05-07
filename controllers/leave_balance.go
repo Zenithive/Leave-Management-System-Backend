@@ -30,7 +30,7 @@ func (s *HandlerFunc) GetLeaveBalances(c *gin.Context) {
 	userIDRaw, _ := c.Get("user_id")
 	userID, _ := uuid.Parse(userIDRaw.(string))
 
-	if role == "EMPLOYEE" && userID != employeeID {
+	if (role == "EMPLOYEE" || role == "INTERN") && userID != employeeID {
 		utils.RespondWithError(c, http.StatusForbidden, "Employees can only view their own balances")
 		return
 	}

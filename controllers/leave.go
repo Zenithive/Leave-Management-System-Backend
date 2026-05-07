@@ -280,7 +280,7 @@ func (s *HandlerFunc) ActionLeave(c *gin.Context) {
 	roleRaw, _ := c.Get("role")
 	role := roleRaw.(string)
 
-	if role == constant.ROLE_EMPLOYEE {
+	if role == constant.ROLE_EMPLOYEE || role == constant.ROLE_INTERN {
 		utils.RespondWithError(c, 403, "Employees cannot approve leaves")
 		return
 	}
@@ -654,8 +654,8 @@ func (h *HandlerFunc) GetAllLeaves(c *gin.Context) {
 	var result []models.LeaveResponse
 
 	switch role {
-	case constant.ROLE_EMPLOYEE:
-		// Employees can only see their own leaves
+	case constant.ROLE_EMPLOYEE, constant.ROLE_INTERN:
+		// Employees/Interns can only see their own leaves
 		result, err = h.Query.GetAllEmployeeLeaveByMonthYear(userID, month, year)
 	case constant.ROLE_MANAGER:
 		// Manager can see: their own leaves + their team members' leaves
@@ -776,7 +776,7 @@ func (h *HandlerFunc) CancelLeave(c *gin.Context) {
 			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to fetch leave: "+err.Error())
 		}
 		// Role validation
-		if role == constant.ROLE_EMPLOYEE && leave.EmployeeID != userID {
+		if (role == constant.ROLE_EMPLOYEE || role == constant.ROLE_INTERN) && leave.EmployeeID != userID {
 			return utils.CustomErr(c, http.StatusForbidden, "You can only cancel your own leave applications")
 		}
 		// Status validation using switch
@@ -1193,7 +1193,7 @@ func (h *HandlerFunc) GetLeaveByID(c *gin.Context) {
 
 	// Role-based access control
 	switch role {
-	case "EMPLOYEE":
+	case "EMPLOYEE", "INTERN":
 		if leaveEmployeeID != userID {
 			utils.RespondWithError(c, 403, "You can only view your own leave applications")
 			return
