@@ -58,7 +58,7 @@ func (h *HandlerFunc) GetEmployee(c *gin.Context) {
 		"total_pages": result.TotalPages,
 		"filters": gin.H{
 			"search":      params.Search,
-			"role":        params.Role,
+			"roles":       params.Roles,
 			"designation": params.Designation,
 			"status":      params.Status,
 			"manager":     params.Manager,

@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -105,10 +106,14 @@ func (r *Repository) GetAllEmployees(params models.EmployeeFilterParams, role st
 		args = append(args, params.Status)
 		n++
 	}
-	if params.Role != "" {
-		conditions = append(conditions, fmt.Sprintf("r.type = $%d", n))
-		args = append(args, params.Role)
-		n++
+	if len(params.Roles) > 0 {
+		placeholders := make([]string, len(params.Roles))
+		for i, r := range params.Roles {
+			placeholders[i] = fmt.Sprintf("$%d", n)
+			args = append(args, r)
+			n++
+		}
+		conditions = append(conditions, fmt.Sprintf("r.type IN (%s)", strings.Join(placeholders, ",")))
 	}
 	if params.Designation != "" {
 		conditions = append(conditions, fmt.Sprintf("d.designation_name = $%d", n))

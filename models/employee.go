@@ -16,11 +16,11 @@ type EmployeeFilterParams struct {
 	PageSize int `form:"page_size"`
 
 	// Filters
-	Search      string `form:"search"`      // searches name, email, manager name
-	Role        string `form:"role"`        // exact: EMPLOYEE, MANAGER, HR, ADMIN, SUPERADMIN
-	Designation string `form:"designation"` // exact match on designation_name
-	Status      string `form:"status"`      // active / deactive
-	Manager     string `form:"manager"`     // exact match on manager full_name
+	Search      string   `form:"search"`      // searches name, email, manager name
+	Roles       []string `form:"role"`        // one or more: EMPLOYEE, MANAGER, HR, ADMIN, SUPERADMIN
+	Designation string   `form:"designation"` // exact match on designation_name
+	Status      string   `form:"status"`      // active / deactive
+	Manager     string   `form:"manager"`     // exact match on manager full_name
 
 	// Sorting
 	SortBy    string `form:"sort_by"`    // name|email|joining_date|ending_date|salary|birth_date|manager_name|role|status
