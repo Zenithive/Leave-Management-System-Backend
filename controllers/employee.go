@@ -276,10 +276,25 @@ func (h *HandlerFunc) UpdateEmployeeRole(c *gin.Context) {
 	// ---------------------------
 	// 7️ Update Role
 	// ---------------------------
-	updatedID, err := h.Query.UpdateEmployeeRole(empID, input.Role)
-	if err != nil {
-		utils.RespondWithError(c, 500, "failed to update role: "+err.Error())
+	var updatedID string
+	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+		role, err := h.Query.GetEmployeeRole(empID)
+		if err != nil {
+			return utils.CustomErr(c, 500, "failed to fetch employee role: "+err.Error())
+		}
+		updatedID, err = h.Query.UpdateEmployeeRole(tx, empID, input.Role)
+		if err != nil {
+			return utils.CustomErr(c, 500, "failed to update role: "+err.Error())
+		}
+		a := time.Now().Year()
+		if err = h.Query.AdjustLeaveBalancesForRoleChange(tx, empID, role, input.Role, a); err != nil {
+			return utils.CustomErr(c, 500, "failed to adjust leave balances for role change: "+err.Error())
+		}
+		return nil
+	}); err != nil {
+		utils.RespondWithError(c, 500, err.Error())
 		return
+
 	}
 
 	// ---------------------------

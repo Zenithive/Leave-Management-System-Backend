@@ -164,7 +164,7 @@ func (r *Repository) GetEmployeeCurrentRole(empID string) (string, error) {
 }
 
 // ------------------ UPDATE ROLE ------------------
-func (r *Repository) UpdateEmployeeRole(empID uuid.UUID, newRole string) (string, error) {
+func (r *Repository) UpdateEmployeeRole(tx *sqlx.Tx, empID uuid.UUID, newRole string) (string, error) {
 	var id string
 	query := `
         UPDATE TBL_EMPLOYEE
@@ -173,7 +173,21 @@ func (r *Repository) UpdateEmployeeRole(empID uuid.UUID, newRole string) (string
         WHERE ID = $2
         RETURNING ID;
     `
-	err := r.DB.QueryRow(query, newRole, empID).Scan(&id)
+	err := tx.QueryRow(query, newRole, empID).Scan(&id)
+	return id, err
+}
+
+// UpdateEmployeeRoleTx updates an employee's role within a transaction.
+func (r *Repository) UpdateEmployeeRoleTx(tx *sqlx.Tx, empID uuid.UUID, newRole string) (string, error) {
+	var id string
+	query := `
+        UPDATE TBL_EMPLOYEE
+        SET ROLE_ID = (SELECT ID FROM TBL_ROLE WHERE TYPE=$1),
+            UPDATED_AT = NOW()
+        WHERE ID = $2
+        RETURNING ID;
+    `
+	err := tx.QueryRow(query, newRole, empID).Scan(&id)
 	return id, err
 }
 

@@ -148,3 +148,62 @@ func (r *Repository) UpdateInternLeaveBalancesForEntitlementChange(tx *sqlx.Tx, 
 	_, err := tx.Exec(query, difference, leaveTypeID, currentYear)
 	return err
 }
+
+// AdjustLeaveBalancesForRoleChange updates all leave balances for an employee
+// when their role changes between INTERN and a non-INTERN role.
+// It adjusts opening and closing by the difference between intern_entitlement and default_entitlement
+// for each leave type that has an intern_entitlement set.
+func (r *Repository) AdjustLeaveBalancesForRoleChange(tx *sqlx.Tx, employeeID uuid.UUID, oldRole, newRole string, currentYear int) error {
+	// Only act when crossing the INTERN boundary
+	if oldRole != "INTERN" && newRole != "INTERN" {
+		return nil
+	}
+
+	// Fetch all leave types that have a distinct intern_entitlement
+	type leaveTypeRow struct {
+		ID                 int `db:"id"`
+		DefaultEntitlement int `db:"default_entitlement"`
+		InternEntitlement  int `db:"intern_entitlement"`
+	}
+	var leaveTypes []leaveTypeRow
+	err := tx.Select(&leaveTypes, `
+		SELECT id, default_entitlement, intern_entitlement
+		FROM Tbl_Leave_type
+		WHERE intern_entitlement IS NOT NULL
+		  AND intern_entitlement != default_entitlement
+	`)
+	if err != nil {
+		return err
+	}
+
+	for _, lt := range leaveTypes {
+		var diff float64
+		if oldRole == "INTERN" && newRole != "INTERN" {
+			// Upgrading from INTERN: switch from intern_entitlement → default_entitlement
+			diff = float64(lt.DefaultEntitlement - lt.InternEntitlement)
+		} else {
+			// Downgrading to INTERN: switch from default_entitlement → intern_entitlement
+			diff = float64(lt.InternEntitlement - lt.DefaultEntitlement)
+		}
+
+		if diff == 0 {
+			continue
+		}
+
+		// Only update if a balance row already exists for this employee + leave type + year
+		_, err := tx.Exec(`
+			UPDATE Tbl_Leave_balance
+			SET opening  = opening  + $1,
+			    closing  = closing  + $1,
+			    updated_at = NOW()
+			WHERE employee_id  = $2
+			  AND leave_type_id = $3
+			  AND year          = $4
+		`, diff, employeeID, lt.ID, currentYear)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
