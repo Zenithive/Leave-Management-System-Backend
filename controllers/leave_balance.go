@@ -35,6 +35,14 @@ func (s *HandlerFunc) GetLeaveBalances(c *gin.Context) {
 		return
 	}
 
+	// 2A. Fetch target employee's role for entitlement calculation
+	employeeRole, err := s.Query.GetEmployeeRole(employeeID)
+	if err != nil {
+		utils.RespondWithError(c, http.StatusInternalServerError,
+			"Failed to fetch employee role: "+err.Error())
+		return
+	}
+
 	// 3. Get current year for filtering
 	currentYear := time.Now().Year()
 
@@ -61,6 +69,7 @@ func (s *HandlerFunc) GetLeaveBalances(c *gin.Context) {
 			LeaveTypeID:        lt.LeaveTypeID,
 			LeaveTypeName:      lt.LeaveTypeName,
 			DefaultEntitlement: lt.DefaultEntitlement,
+			InternEntitlement:  lt.InternEntitlement,
 		}
 	}
 
@@ -77,7 +86,7 @@ func (s *HandlerFunc) GetLeaveBalances(c *gin.Context) {
 	}
 
 	// 7. Calculate balances using service layer business logic (map-based)
-	calculatedBalances := service.CalculateLeaveBalances(serviceLeaveTypes, serviceBalanceRecords)
+	calculatedBalances := service.CalculateLeaveBalances(serviceLeaveTypes, serviceBalanceRecords, employeeRole)
 
 	// 8. Convert back to response format
 
@@ -149,8 +158,15 @@ func (s *HandlerFunc) AdjustLeaveBalance(c *gin.Context) {
 	balance, err := s.Query.GetLeaveBalanceForAdjustment(tx, employeeID, input.LeaveTypeID, currentYear)
 
 	if err == sql.ErrNoRows {
-		// 5A: Fetch default entitlement (repository layer)
-		defaultEntitlement, err := s.Query.GetDefaultEntitlementByLeaveTypeID(tx, input.LeaveTypeID)
+		// 5A: Fetch target employee's role to pick correct entitlement
+		employeeRole, err := s.Query.GetEmployeeRole(employeeID)
+		if err != nil {
+			utils.RespondWithError(c, 500, "Failed to fetch employee role: "+err.Error())
+			return
+		}
+
+		// 5B: Fetch default entitlement (repository layer)
+		defaultEntitlement, err := s.Query.GetDefaultEntitlementByLeaveTypeID(tx, input.LeaveTypeID, employeeRole)
 		if err != nil {
 			utils.RespondWithError(c, 500, "Failed to fetch leave type: "+err.Error())
 			return

@@ -13,7 +13,8 @@ func (r *Repository) GetAllLeaveTypesWithEntitlements() ([]models.LeaveTypeData,
 		SELECT 
 			lt.id AS leave_type_id,
 			lt.name AS leave_type_name,
-			COALESCE(lt.default_entitlement, 0) AS default_entitlement
+			COALESCE(lt.default_entitlement, 0) AS default_entitlement,
+			lt.intern_entitlement
 		FROM Tbl_Leave_Type lt
 		ORDER BY lt.id
 	`
@@ -61,11 +62,21 @@ func (r *Repository) GetLeaveBalanceForAdjustment(tx *sqlx.Tx, employeeID uuid.U
 	return balance, err
 }
 
-// GetDefaultEntitlementByLeaveTypeID fetches default entitlement for a leave type
-func (r *Repository) GetDefaultEntitlementByLeaveTypeID(tx *sqlx.Tx, leaveTypeID int) (float64, error) {
-	var defaultEntitlement float64
-	err := tx.Get(&defaultEntitlement, `SELECT default_entitlement FROM Tbl_Leave_Type WHERE id=$1`, leaveTypeID)
-	return defaultEntitlement, err
+// GetDefaultEntitlementByLeaveTypeID fetches default entitlement for a leave type.
+// If role is INTERN and intern_entitlement is set, it returns that instead.
+func (r *Repository) GetDefaultEntitlementByLeaveTypeID(tx *sqlx.Tx, leaveTypeID int, role string) (float64, error) {
+	var row struct {
+		DefaultEntitlement float64  `db:"default_entitlement"`
+		InternEntitlement  *float64 `db:"intern_entitlement"`
+	}
+	err := tx.Get(&row, `SELECT default_entitlement, intern_entitlement FROM Tbl_Leave_Type WHERE id=$1`, leaveTypeID)
+	if err != nil {
+		return 0, err
+	}
+	if role == "INTERN" && row.InternEntitlement != nil {
+		return *row.InternEntitlement, nil
+	}
+	return row.DefaultEntitlement, nil
 }
 
 // CreateLeaveBalanceForAdjustment creates a new leave balance record
@@ -111,5 +122,29 @@ func (r *Repository) UpdateLeaveBalanceByEmployeeId(tx *sqlx.Tx, employeeID uuid
 func (r *Repository) UpdateWidthrowLeaveBalanceByEmployeeId(tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeId int, Days float64) error {
 	query := `UPDATE Tbl_Leave_balance SET used = used - $3, closing = closing + $3, updated_at = NOW() WHERE employee_id=$1 AND leave_type_id=$2 AND year = EXTRACT(YEAR FROM CURRENT_DATE)`
 	_, err := tx.Exec(query, employeeID, leaveTypeId, Days)
+	return err
+}
+
+// UpdateInternLeaveBalancesForEntitlementChange updates leave balances for INTERN employees
+// when intern_entitlement changes for a leave type.
+func (r *Repository) UpdateInternLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveTypeID int, oldInternEntitlement, newInternEntitlement int, currentYear int) error {
+	difference := float64(newInternEntitlement - oldInternEntitlement)
+	if difference == 0 {
+		return nil
+	}
+
+	query := `
+		UPDATE Tbl_Leave_balance lb
+		SET opening = lb.opening + $1,
+		    closing = lb.closing + $1,
+		    updated_at = NOW()
+		FROM Tbl_Employee e
+		JOIN Tbl_Role r ON e.role_id = r.id
+		WHERE lb.employee_id = e.id
+		  AND lb.leave_type_id = $2
+		  AND lb.year = $3
+		  AND r.type = 'INTERN'
+	`
+	_, err := tx.Exec(query, difference, leaveTypeID, currentYear)
 	return err
 }

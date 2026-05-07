@@ -71,6 +71,17 @@ func (r *Repository) GetEmployeeStatus(employeeID uuid.UUID) (string, error) {
 	return status, err
 }
 
+// GetEmployeeRole returns the role type for a given employee ID
+func (r *Repository) GetEmployeeRole(employeeID uuid.UUID) (string, error) {
+	var role string
+	err := r.DB.Get(&role, `
+		SELECT r.type FROM Tbl_Employee e
+		JOIN Tbl_Role r ON e.role_id = r.id
+		WHERE e.id = $1
+	`, employeeID)
+	return role, err
+}
+
 // ------------------ UPDATE EMPLOYEE DESIGNATION ------------------
 func (r *Repository) UpdateEmployeeDesignation(empID uuid.UUID, designationID *uuid.UUID) error {
 	_, err := r.DB.Exec(`

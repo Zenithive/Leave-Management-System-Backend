@@ -133,12 +133,22 @@ func (r *Repository) GetRoleID(role string) (string, error) {
 }
 
 // ------------------ CREATE EMPLOYEE ------------------
-func (r *Repository) InsertEmployee(fullName, email, roleID, password string, salary *float64, joining *time.Time) error {
-	_, err := r.DB.Exec(`
-		INSERT INTO Tbl_Employee (full_name, email, role_id, password, salary, joining_date)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, fullName, email, roleID, password, salary, joining)
-	return err
+func (r *Repository) InsertEmployee(tx *sqlx.Tx, fullName, email, roleID, password string, salary *float64, joining *time.Time) (uuid.UUID, error) {
+	var employeeID uuid.UUID
+
+	err := tx.QueryRow(`
+    INSERT INTO Tbl_Employee 
+    (full_name, email, role_id, password, salary, joining_date)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING id
+`, fullName, email, roleID, password, salary, joining).
+		Scan(&employeeID)
+
+	if err != nil {
+		fmt.Println("========", err.Error())
+		return employeeID, err
+	}
+	return employeeID, nil
 }
 
 // ------------------ GET CURRENT ROLE NAME ------------------

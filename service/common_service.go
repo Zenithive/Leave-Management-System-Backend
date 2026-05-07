@@ -200,6 +200,7 @@ type LeaveTypeData struct {
 	LeaveTypeID        int
 	LeaveTypeName      string
 	DefaultEntitlement float64
+	InternEntitlement  *float64
 }
 
 // CalculatedBalance represents the calculated leave balance result
@@ -214,9 +215,9 @@ type CalculatedBalance struct {
 	Available   float64 `json:"available"`
 }
 
-// CalculateLeaveBalances calculates leave balances using map-based approach
-// This function takes leave types and balance records, then calculates the final balances
-func CalculateLeaveBalances(leaveTypes []LeaveTypeData, balanceRecords []LeaveBalanceData) []CalculatedBalance {
+// CalculateLeaveBalances calculates leave balances using map-based approach.
+// role is used to pick InternEntitlement for INTERN employees when no balance record exists.
+func CalculateLeaveBalances(leaveTypes []LeaveTypeData, balanceRecords []LeaveBalanceData, role string) []CalculatedBalance {
 	// Create a map of leave_type_id -> balance for O(1) lookup
 	balanceMap := make(map[int]LeaveBalanceData)
 	for _, balance := range balanceRecords {
@@ -237,20 +238,20 @@ func CalculateLeaveBalances(leaveTypes []LeaveTypeData, balanceRecords []LeaveBa
 			accrued = balance.Accrued
 			used = balance.Used
 			adjusted = balance.Adjusted
-			// Total = Opening + Accrued
 			total = opening + accrued
-			// Available = Closing (which is calculated as: opening + accrued - used + adjusted)
 			available = balance.Closing
 		} else {
-			// No balance record exists - use default entitlement
-			opening = lt.DefaultEntitlement
+			// No balance record - pick entitlement based on role
+			entitlement := lt.DefaultEntitlement
+			if role == "INTERN" && lt.InternEntitlement != nil {
+				entitlement = *lt.InternEntitlement
+			}
+			opening = entitlement
 			accrued = 0
 			used = 0
 			adjusted = 0
-			// Total = Default Entitlement (treated as opening)
-			total = lt.DefaultEntitlement
-			// Available = Default Entitlement (since nothing used yet)
-			available = lt.DefaultEntitlement
+			total = entitlement
+			available = entitlement
 		}
 
 		calculatedBalances = append(calculatedBalances, CalculatedBalance{

@@ -8,10 +8,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/access_role"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/common"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
 )
 
@@ -155,14 +157,22 @@ func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 		input.Salary = &zeroSalary
 	}
 
-	// INSERT
-	err = h.Query.InsertEmployee(
-		input.FullName, input.Email,
-		roleID, hash,
-		input.Salary, input.JoiningDate,
-	)
-	if err != nil {
-		utils.RespondWithError(c, 500, "failed to create employee")
+	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+		// 1. Insert employee
+		id, err := h.Query.InsertEmployee(tx, input.FullName, input.Email, roleID, hash, input.Salary, input.JoiningDate)
+		if err != nil || id == uuid.Nil {
+			return utils.CustomErr(c, 500, "failed to create employee")
+		}
+		// data, err := h.Query.GetAllLeaveType()
+		// if err != nil {
+		// 	return utils.CustomErr(c, 500, "failed to allocate leave balance: ")
+		// }
+		// for _, leaveType := range data {
+		// 	data, err :=
+		// }
+		return nil
+	}); err != nil {
+		utils.RespondWithError(c, 500, err.Error())
 		return
 	}
 
