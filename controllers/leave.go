@@ -154,9 +154,19 @@ func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
 				return utils.CustomErr(c, 500, "Failed to fetch leave balance: "+err.Error())
 			}
 
+			// Subtract already-pending (not yet deducted) leaves from available balance
+			pendingDays, err := h.Query.GetPendingLeaveDays(tx, employeeID, input.LeaveTypeID, nil)
+			if err != nil {
+				return utils.CustomErr(c, 500, "Failed to fetch pending leave days: "+err.Error())
+			}
+			effectiveBalance := balance - pendingDays
+
 			// Check balance
-			if balance < leaveDays {
-				return utils.CustomErr(c, 400, "Insufficient leave balance")
+			if effectiveBalance < leaveDays {
+				return utils.CustomErr(c, 400, fmt.Sprintf(
+					"Insufficient leave balance. Available: %.1f days (%.1f closing - %.1f pending/manager-approved), Required: %.1f days",
+					effectiveBalance, balance, pendingDays, leaveDays,
+				))
 			}
 		}
 
@@ -498,9 +508,11 @@ func (s *HandlerFunc) ActionLeave(c *gin.Context) {
 				if err != nil {
 					utils.RespondWithError(c, 500, "Failed to fetch leave balance: "+err.Error())
 				}
+
 				if currentBalance < leave.Days {
 					utils.RespondWithError(c, 400, fmt.Sprintf("Cannot approve: Insufficient leave balance. Available: %.1f days, Required: %.1f days", currentBalance, leave.Days))
 				}
+
 				return nil
 			})
 			if err != nil {
@@ -1333,11 +1345,19 @@ func (h *HandlerFunc) EditMyLeave(c *gin.Context) {
 
 			// IMPORTANT: For PENDING leaves, balance is NOT yet deducted
 			// Balance is only deducted when leave status becomes APPROVED
-			// So we need to check if the NEW total days fit within available balance
+			// Subtract other pending/manager-approved leaves (excluding this leave being edited)
+			pendingDays, err := h.Query.GetPendingLeaveDays(tx, empID, input.LeaveTypeID, &leaveID)
+			if err != nil {
+				return utils.CustomErr(c, 500, "Failed to fetch pending leave days: "+err.Error())
+			}
+			effectiveBalance := balance - pendingDays
 
 			// Check if sufficient balance exists for the edited leave
-			if balance < newDays {
-				return utils.CustomErr(c, 400, fmt.Sprintf("Insufficient leave balance. You have %.2f days available but the edited leave requires %.2f days", balance, newDays))
+			if effectiveBalance < newDays {
+				return utils.CustomErr(c, 400, fmt.Sprintf(
+					"Insufficient leave balance. Available: %.2f days (%.2f closing - %.2f other pending), Required: %.2f days",
+					effectiveBalance, balance, pendingDays, newDays,
+				))
 			}
 		}
 

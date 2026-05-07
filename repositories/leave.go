@@ -59,6 +59,34 @@ func (r *Repository) GetLeaveBalance(tx *sqlx.Tx, employeeID uuid.UUID, leaveTyp
 	return balance, err
 }
 
+// GetPendingLeaveDays returns the total days of Pending and MANAGER_APPROVED leaves
+// for the current year for a given employee and leave type.
+// These leaves are not yet deducted from the closing balance, so they must be
+// accounted for when checking if a new leave application has sufficient balance.
+func (r *Repository) GetPendingLeaveDays(tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int, excludeLeaveID *uuid.UUID) (float64, error) {
+	var pendingDays float64
+
+	query := `
+		SELECT COALESCE(SUM(days), 0)
+		FROM Tbl_Leave
+		WHERE employee_id = $1
+		  AND leave_type_id = $2
+		  AND status IN ('Pending', 'MANAGER_APPROVED')
+		  AND EXTRACT(YEAR FROM start_date) = EXTRACT(YEAR FROM CURRENT_DATE)
+	`
+
+	var err error
+	if excludeLeaveID != nil {
+		// When editing an existing leave, exclude it from the pending sum
+		query += ` AND id != $3`
+		err = tx.Get(&pendingDays, query, employeeID, leaveTypeID, *excludeLeaveID)
+	} else {
+		err = tx.Get(&pendingDays, query, employeeID, leaveTypeID)
+	}
+
+	return pendingDays, err
+}
+
 // create leave balance
 func (r *Repository) CreateLeaveBalance(tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int, entitlement int) error {
 	_, err := tx.Exec(`
