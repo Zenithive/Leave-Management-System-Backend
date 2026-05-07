@@ -327,7 +327,7 @@ func (h *HandlerFunc) DeleteEmployeeStatus(c *gin.Context) {
 		return
 	}
 
-	// Check if target employee is SUPERADMIN
+	// Check if target employee exists (works for both active and deactive)
 	targetEmp, err := h.Query.GetEmployeeByID(empID)
 	if err != nil {
 		utils.RespondWithError(c, 404, "employee not found")
@@ -340,9 +340,12 @@ func (h *HandlerFunc) DeleteEmployeeStatus(c *gin.Context) {
 		return
 	}
 
-	// Toggle using same method name
-	newStatus, err := h.Query.DeleteEmployeeStatus(empID)
-	if err != nil {
+	var newStatus string
+	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+		var txErr error
+		newStatus, txErr = h.Query.DeleteEmployeeStatus(tx, empID)
+		return txErr
+	}); err != nil {
 		utils.RespondWithError(c, 500, err.Error())
 		return
 	}

@@ -82,15 +82,12 @@ func (r *Repository) GetEmployeeDetailsForNotification(id uuid.UUID) (empDetails
 
 }
 
-func (r *Repository) DeleteEmployeeStatus(id uuid.UUID) (string, error) {
-
+func (r *Repository) DeleteEmployeeStatus(tx *sqlx.Tx, id uuid.UUID) (string, error) {
 	// Get current status
 	var currentStatus string
-	err := r.DB.QueryRow(`
-        SELECT status FROM Tbl_Employee WHERE id = $1
-    `, id).Scan(&currentStatus)
+	err := tx.QueryRow(`SELECT status FROM Tbl_Employee WHERE id = $1`, id).Scan(&currentStatus)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("employee not found: %w", err)
 	}
 
 	// Toggle logic
@@ -99,17 +96,56 @@ func (r *Repository) DeleteEmployeeStatus(id uuid.UUID) (string, error) {
 		newStatus = "deactive"
 	}
 
-	// Update
-	_, err = r.DB.Exec(`
-        UPDATE Tbl_Employee 
-        SET status = $1, updated_at = NOW()
-        WHERE id = $2
+	// Update employee status
+	_, err = tx.Exec(`
+        UPDATE Tbl_Employee SET status = $1, updated_at = NOW() WHERE id = $2
     `, newStatus, id)
 	if err != nil {
 		return "", err
 	}
 
+	// When deactivating: restore all assigned equipment back to the pool
+	if newStatus == "deactive" {
+		if err := r.restoreEmployeeEquipment(tx, id); err != nil {
+			return "", err
+		}
+	}
+
 	return newStatus, nil
+}
+
+// restoreEmployeeEquipment removes all equipment assignments for an employee
+// by reusing RemoveEquipment for each distinct equipment assigned to them.
+func (r *Repository) restoreEmployeeEquipment(tx *sqlx.Tx, employeeID uuid.UUID) error {
+	// Fetch distinct equipment IDs assigned to this employee
+	rows, err := tx.Query(`
+		SELECT DISTINCT equipment_id FROM tbl_equipment_assignment WHERE employee_id = $1
+	`, employeeID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch assignments: %w", err)
+	}
+	defer rows.Close()
+
+	var equipmentIDs []uuid.UUID
+	for rows.Next() {
+		var eqID uuid.UUID
+		if err := rows.Scan(&eqID); err != nil {
+			return fmt.Errorf("failed to scan equipment id: %w", err)
+		}
+		equipmentIDs = append(equipmentIDs, eqID)
+	}
+
+	for _, eqID := range equipmentIDs {
+		req := models.RemoveEquipmentRequest{
+			EmployeeID:  employeeID,
+			EquipmentID: eqID,
+		}
+		if err := r.RemoveEquipment(tx, req); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // ------------------ CHECK EMAIL EXISTS ------------------
@@ -300,7 +336,7 @@ func (r *Repository) GetEmployeeByID(empID uuid.UUID) (*models.EmployeeResponse,
         JOIN Tbl_Role r ON e.role_id = r.id
         LEFT JOIN Tbl_Employee m ON e.manager_id = m.id
         LEFT JOIN Tbl_Designation d ON e.designation_id = d.id
-        WHERE e.id = $1 AND e.status = 'active'
+        WHERE e.id = $1
     `
 	err := r.DB.QueryRow(query, empID).Scan(
 		&emp.ID,
