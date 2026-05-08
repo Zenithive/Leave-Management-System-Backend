@@ -35,14 +35,6 @@ func (s *HandlerFunc) GetLeaveBalances(c *gin.Context) {
 		return
 	}
 
-	// 2A. Fetch target employee's role for entitlement calculation
-	employeeRole, err := s.Query.GetEmployeeRole(employeeID)
-	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError,
-			"Failed to fetch employee role: "+err.Error())
-		return
-	}
-
 	// 3. Get current year for filtering
 	currentYear := time.Now().Year()
 
@@ -85,8 +77,8 @@ func (s *HandlerFunc) GetLeaveBalances(c *gin.Context) {
 		}
 	}
 
-	// 7. Calculate balances using service layer business logic (map-based)
-	calculatedBalances := service.CalculateLeaveBalances(serviceLeaveTypes, serviceBalanceRecords, employeeRole)
+	// 7. Calculate balances using service layer business logic
+	calculatedBalances := service.CalculateLeaveBalances(serviceLeaveTypes, serviceBalanceRecords)
 
 	// 8. Convert back to response format
 

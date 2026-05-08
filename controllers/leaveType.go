@@ -87,6 +87,25 @@ func (s *HandlerFunc) AdminAddLeavePolicy(c *gin.Context) {
 		if input.IsEarly != nil {
 			Leave.IsEarly = input.IsEarly
 		}
+
+		// Allocate leave balance for all active employees (skip early leave types)
+		isEarly := input.IsEarly != nil && *input.IsEarly
+		if !isEarly {
+			activeEmployees, err := s.Query.GetAllActiveEmployeesWithRoles(tx)
+			if err != nil {
+				return utils.CustomErr(c, http.StatusInternalServerError, "Failed to fetch active employees: "+err.Error())
+			}
+			if err := s.Query.BulkAllocateLeaveBalanceForNewLeaveType(
+				tx,
+				Leave.ID,
+				*input.DefaultEntitlement,
+				input.InternEntitlement,
+				activeEmployees,
+			); err != nil {
+				return utils.CustomErr(c, http.StatusInternalServerError, "Failed to allocate leave balances: "+err.Error())
+			}
+		}
+
 		// Log Entry
 		data := &models.Common{
 			Component:  constant.ComponentLeaveType,

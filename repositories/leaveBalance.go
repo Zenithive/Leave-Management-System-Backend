@@ -209,3 +209,26 @@ func (r *Repository) AdjustLeaveBalancesForRoleChange(tx *sqlx.Tx, employeeID uu
 
 	return nil
 }
+
+// BulkAllocateLeaveBalanceForNewLeaveType allocates a leave balance row for every active employee
+// when a new leave type is created. Skips employees who already have a row (ON CONFLICT DO NOTHING).
+// For INTERN employees, intern_entitlement is used if set; otherwise default_entitlement is used.
+func (r *Repository) BulkAllocateLeaveBalanceForNewLeaveType(
+	tx *sqlx.Tx,
+	leaveTypeID int,
+	defaultEntitlement int,
+	internEntitlement *int,
+	employees []ActiveEmployeeRole,
+) error {
+	for _, emp := range employees {
+		entitlement := defaultEntitlement
+		if emp.Role == "INTERN" && internEntitlement != nil {
+			entitlement = *internEntitlement
+		}
+		if err := r.CreateLeaveBalance(tx, emp.ID, leaveTypeID, entitlement); err != nil {
+			return err
+		}
+
+	}
+	return nil
+}

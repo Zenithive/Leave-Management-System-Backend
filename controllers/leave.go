@@ -21,6 +21,8 @@ import (
 // AdminAddLeave - POST /api/leaves/admin-add
 
 func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
+	roleRaw, _ := c.Get("role")
+	role := roleRaw.(string)
 
 	// Extract Employee Info
 	empIDRaw, ok := c.Get("user_id")
@@ -145,8 +147,11 @@ func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
 			fmt.Println("leave", leaveType.IsEarly)
 			balance, err := h.Query.GetLeaveBalance(tx, employeeID, input.LeaveTypeID)
 			if err == sql.ErrNoRows {
-				// Create balance if it doesn't exist
 				balance = float64(leaveType.DefaultEntitlement)
+				if role == constant.ROLE_INTERN {
+					balance = float64(*leaveType.InternEntitlement)
+				}
+				// Create balance if it doesn't exist
 				if err := h.Query.CreateLeaveBalance(tx, employeeID, input.LeaveTypeID, leaveType.DefaultEntitlement); err != nil {
 					return utils.CustomErr(c, 500, "Failed to create leave balance: "+err.Error())
 				}
@@ -232,55 +237,55 @@ func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
 		return
 	}
 
-	// go func() {
-	// 	leaveType, _ := h.Query.GetLeaveTypeById(input.LeaveTypeID)
+	go func() {
+		leaveType, _ := h.Query.GetLeaveTypeById(input.LeaveTypeID)
 
-	// 	recipients, err := h.Query.GetAdminAndEmployeeEmail(employeeID)
+		recipients, err := h.Query.GetAdminAndEmployeeEmail(employeeID)
 
-	// 	if err != nil {
-	// 		fmt.Printf("Failed to get notification recipients: %v\n", err)
-	// 		return
-	// 	}
+		if err != nil {
+			fmt.Printf("Failed to get notification recipients: %v\n", err)
+			return
+		}
 
-	// 	empDetails, err := h.Query.GetEmployeeDetailsForNotification(employeeID)
-	// 	if err != nil {
-	// 		fmt.Printf("Failed to get employee details for notification: %v\n", err)
-	// 		return
-	// 	}
+		empDetails, err := h.Query.GetEmployeeDetailsForNotification(employeeID)
+		if err != nil {
+			fmt.Printf("Failed to get employee details for notification: %v\n", err)
+			return
+		}
 
-	// 	if len(recipients) > 0 {
-	// 		utils.SendLeaveApplicationEmail(
-	// 			recipients,
-	// 			empDetails.FullName,
-	// 			leaveType.Name,
-	// 			input.StartDate.Format("2006-01-02"),
-	// 			input.EndDate.Format("2006-01-02"),
-	// 			Days,
-	// 			input.Reason,
-	// 		)
+		if len(recipients) > 0 {
+			utils.SendLeaveApplicationEmail(
+				recipients,
+				empDetails.FullName,
+				leaveType.Name,
+				input.StartDate.Format("2006-01-02"),
+				input.EndDate.Format("2006-01-02"),
+				Days,
+				input.Reason,
+			)
 
-	// 		// Send HR-specific email
-	// 		var hrEmails []string
-	// 		h.Query.DB.Select(&hrEmails, `
-	// 			SELECT e.email
-	// 			FROM Tbl_Employee e
-	// 			JOIN Tbl_Role r ON e.role_id = r.id
-	// 			WHERE r.type = 'HR' AND e.status = 'active'
-	// 		`)
-	// 		if len(hrEmails) > 0 {
-	// 			utils.SendLeaveApplicationEmailToHR(
-	// 				hrEmails,
-	// 				empDetails.FullName,
-	// 				empDetails.Email,
-	// 				leaveType.Name,
-	// 				input.StartDate.Format("2006-01-02"),
-	// 				input.EndDate.Format("2006-01-02"),
-	// 				Days,
-	// 				input.Reason,
-	// 			)
-	// 		}
-	// 	}
-	// }()
+			// Send HR-specific email
+			var hrEmails []string
+			h.Query.DB.Select(&hrEmails, `
+				SELECT e.email
+				FROM Tbl_Employee e
+				JOIN Tbl_Role r ON e.role_id = r.id
+				WHERE r.type = 'HR' AND e.status = 'active'
+			`)
+			if len(hrEmails) > 0 {
+				utils.SendLeaveApplicationEmailToHR(
+					hrEmails,
+					empDetails.FullName,
+					empDetails.Email,
+					leaveType.Name,
+					input.StartDate.Format("2006-01-02"),
+					input.EndDate.Format("2006-01-02"),
+					Days,
+					input.Reason,
+				)
+			}
+		}
+	}()
 
 	// Send response
 	c.JSON(200, gin.H{

@@ -216,53 +216,30 @@ type CalculatedBalance struct {
 }
 
 // CalculateLeaveBalances calculates leave balances using map-based approach.
-// role is used to pick InternEntitlement for INTERN employees when no balance record exists.
-func CalculateLeaveBalances(leaveTypes []LeaveTypeData, balanceRecords []LeaveBalanceData, role string) []CalculatedBalance {
-	// Create a map of leave_type_id -> balance for O(1) lookup
-	balanceMap := make(map[int]LeaveBalanceData)
-	for _, balance := range balanceRecords {
-		balanceMap[balance.LeaveTypeID] = balance
+// Only leave types that have an actual balance row in the DB are returned.
+func CalculateLeaveBalances(leaveTypes []LeaveTypeData, balanceRecords []LeaveBalanceData) []CalculatedBalance {
+	// Build a name lookup: leave_type_id -> leave_type_name
+	nameMap := make(map[int]string, len(leaveTypes))
+	for _, lt := range leaveTypes {
+		nameMap[lt.LeaveTypeID] = lt.LeaveTypeName
 	}
 
 	var calculatedBalances []CalculatedBalance
 
-	// Calculate balances for each leave type
-	for _, lt := range leaveTypes {
-		balance, exists := balanceMap[lt.LeaveTypeID]
-
-		var opening, accrued, used, adjusted, total, available float64
-
-		if exists {
-			// Balance record exists - use actual values from database
-			opening = balance.Opening
-			accrued = balance.Accrued
-			used = balance.Used
-			adjusted = balance.Adjusted
-			total = opening + accrued
-			available = balance.Closing
-		} else {
-			// No balance record - pick entitlement based on role
-			entitlement := lt.DefaultEntitlement
-			if role == "INTERN" && lt.InternEntitlement != nil {
-				entitlement = *lt.InternEntitlement
-			}
-			opening = entitlement
-			accrued = 0
-			used = 0
-			adjusted = 0
-			total = entitlement
-			available = entitlement
-		}
+	// Only iterate over actual DB balance records — no synthetic entries
+	for _, balance := range balanceRecords {
+		name := nameMap[balance.LeaveTypeID]
+		total := balance.Opening + balance.Accrued
 
 		calculatedBalances = append(calculatedBalances, CalculatedBalance{
-			LeaveTypeID: lt.LeaveTypeID,
-			LeaveType:   lt.LeaveTypeName,
-			Opening:     opening,
-			Accrued:     accrued,
-			Used:        used,
-			Adjusted:    adjusted,
+			LeaveTypeID: balance.LeaveTypeID,
+			LeaveType:   name,
+			Opening:     balance.Opening,
+			Accrued:     balance.Accrued,
+			Used:        balance.Used,
+			Adjusted:    balance.Adjusted,
 			Total:       total,
-			Available:   available,
+			Available:   balance.Closing,
 		})
 	}
 

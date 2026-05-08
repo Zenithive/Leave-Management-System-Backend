@@ -171,13 +171,13 @@ func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 		for _, leaveType := range data {
 			isEarlyLeave := leaveType.IsEarly != nil && *leaveType.IsEarly
 			if !isEarlyLeave {
-				DefaultEntitlement := leaveType.DefaultEntitlement
-			if input.Role == constant.ROLE_INTERN {
-				DefaultEntitlement = *leaveType.InternEntitlement
-			}
-			if err := h.Query.CreateLeaveBalance(tx, id, leaveType.ID, DefaultEntitlement); err != nil {
-				return utils.CustomErr(c, 500, "failed to allocate leave balance: "+err.Error())
-			}
+				entitlement := leaveType.DefaultEntitlement
+				if input.Role == constant.ROLE_INTERN && leaveType.InternEntitlement != nil {
+					entitlement = *leaveType.InternEntitlement
+				}
+				if err := h.Query.CreateLeaveBalance(tx, id, leaveType.ID, entitlement); err != nil {
+					return utils.CustomErr(c, 500, "failed to allocate leave balance: "+err.Error())
+				}
 			}
 		}
 		return nil

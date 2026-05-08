@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
 )
@@ -334,4 +335,22 @@ func (r *Repository) GetBirthdays(month, year int) ([]models.BirthdayEmployee, e
 		result = append(result, emp)
 	}
 	return result, nil
+}
+
+// GetAllActiveEmployeesWithRoles returns id and role for all active employees.
+// Used when allocating leave balance for a newly created leave type.
+type ActiveEmployeeRole struct {
+	ID   uuid.UUID `db:"id"`
+	Role string    `db:"role"`
+}
+
+func (r *Repository) GetAllActiveEmployeesWithRoles(tx *sqlx.Tx) ([]ActiveEmployeeRole, error) {
+	var employees []ActiveEmployeeRole
+	err := tx.Select(&employees, `
+		SELECT e.id, r.type AS role
+		FROM Tbl_Employee e
+		JOIN Tbl_Role r ON e.role_id = r.id
+		WHERE e.status = 'active'
+	`)
+	return employees, err
 }
