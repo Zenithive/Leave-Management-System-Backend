@@ -219,12 +219,22 @@ func (h *HandlerFunc) UpdateLeavePolicy(c *gin.Context) {
 		}
 
 		// Update intern leave balances if intern_entitlement changed
-		if input.InternEntitlement != nil && (oldLeaveType.IsEarly == nil || !*oldLeaveType.IsEarly) {
+		// Case 1: intern_entitlement provided in request (set or update)
+		// Case 2: intern_entitlement was set before but is now NULL (revert INTERNs to default)
+		if (oldLeaveType.IsEarly == nil || !*oldLeaveType.IsEarly) {
 			oldIntern := 0
 			if oldLeaveType.InternEntitlement != nil {
 				oldIntern = *oldLeaveType.InternEntitlement
 			}
-			newIntern := *input.InternEntitlement
+
+			newIntern := 0
+			if input.InternEntitlement != nil {
+				newIntern = *input.InternEntitlement
+			} else if oldLeaveType.InternEntitlement != nil {
+				// intern_entitlement was set before, now being cleared → use default_entitlement
+				newIntern = newDefaultEntitlement
+			}
+
 			if oldIntern != newIntern {
 				currentYear := time.Now().Year()
 				err = h.Query.UpdateInternLeaveBalancesForEntitlementChange(tx, leaveTypeID, oldIntern, newIntern, currentYear)

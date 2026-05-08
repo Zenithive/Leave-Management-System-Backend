@@ -129,6 +129,7 @@ func (r *Repository) UpdateWidthrowLeaveBalanceByEmployeeId(tx *sqlx.Tx, employe
 
 // UpdateInternLeaveBalancesForEntitlementChange updates leave balances for INTERN employees
 // when intern_entitlement changes for a leave type.
+// Recalculates closing correctly as: (opening + diff) + accrued - used + adjusted
 func (r *Repository) UpdateInternLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveTypeID int, oldInternEntitlement, newInternEntitlement int, currentYear int) error {
 	difference := float64(newInternEntitlement - oldInternEntitlement)
 	if difference == 0 {
@@ -137,15 +138,15 @@ func (r *Repository) UpdateInternLeaveBalancesForEntitlementChange(tx *sqlx.Tx, 
 
 	query := `
 		UPDATE Tbl_Leave_balance lb
-		SET opening = lb.opening + $1,
-		    closing = lb.closing + $1,
+		SET opening    = lb.opening + $1,
+		    closing    = (lb.opening + $1) + lb.accrued - lb.used + lb.adjusted,
 		    updated_at = NOW()
 		FROM Tbl_Employee e
 		JOIN Tbl_Role r ON e.role_id = r.id
-		WHERE lb.employee_id = e.id
+		WHERE lb.employee_id   = e.id
 		  AND lb.leave_type_id = $2
-		  AND lb.year = $3
-		  AND r.type = 'INTERN'
+		  AND lb.year          = $3
+		  AND r.type           = 'INTERN'
 	`
 	_, err := tx.Exec(query, difference, leaveTypeID, currentYear)
 	return err
