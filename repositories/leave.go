@@ -448,14 +448,16 @@ func (r *Repository) GetMyLeavesByMonthYear(userID uuid.UUID, month, year int) (
 
 // UpdateLeaveBalancesForEntitlementChange updates leave balances when default_entitlement changes.
 // Only non-INTERN employees are affected — INTERNs have their own intern_entitlement path.
-// Recalculates closing correctly as: (opening + diff) + accrued - used + adjusted
+// Employees who joined in a prior year get the full diff.
+// Employees who joined in the current year get a prorated diff based on their joining month.
 func (r *Repository) UpdateLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveTypeID int, oldDefaultEntitlement, newDefaultEntitlement int, currentYear int) error {
 	difference := float64(newDefaultEntitlement - oldDefaultEntitlement)
 	if difference == 0 {
 		return nil
 	}
 
-	query := `
+	// 1. Apply full diff to non-INTERN employees who did NOT join this year
+	_, err := tx.Exec(`
 		UPDATE Tbl_Leave_balance lb
 		SET opening    = lb.opening + $1,
 		    closing    = (lb.opening + $1) + lb.accrued - lb.used + lb.adjusted,
@@ -466,9 +468,54 @@ func (r *Repository) UpdateLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveT
 		  AND lb.leave_type_id = $2
 		  AND lb.year          = $3
 		  AND r.type           != 'INTERN'
-	`
-	_, err := tx.Exec(query, difference, leaveTypeID, currentYear)
-	return err
+		  AND (e.joining_date IS NULL OR EXTRACT(YEAR FROM e.joining_date) != $3)
+	`, difference, leaveTypeID, currentYear)
+	if err != nil {
+		return err
+	}
+
+	// 2. For non-INTERN employees who joined this year, prorate the diff per employee
+	type empJoin struct {
+		ID          uuid.UUID `db:"id"`
+		JoiningDate time.Time `db:"joining_date"`
+	}
+	var joinedThisYear []empJoin
+	err = tx.Select(&joinedThisYear, `
+		SELECT e.id, e.joining_date
+		FROM Tbl_Employee e
+		JOIN Tbl_Role r ON e.role_id = r.id
+		JOIN Tbl_Leave_balance lb ON lb.employee_id = e.id
+		WHERE lb.leave_type_id = $1
+		  AND lb.year          = $2
+		  AND r.type           != 'INTERN'
+		  AND EXTRACT(YEAR FROM e.joining_date) = $2
+	`, leaveTypeID, currentYear)
+	if err != nil {
+		return err
+	}
+
+	for _, emp := range joinedThisYear {
+		proratedNew := proratedLeave(newDefaultEntitlement, int(emp.JoiningDate.Month()))
+		proratedOld := proratedLeave(oldDefaultEntitlement, int(emp.JoiningDate.Month()))
+		diff := float64(proratedNew - proratedOld)
+		if diff == 0 {
+			continue
+		}
+		_, err := tx.Exec(`
+			UPDATE Tbl_Leave_balance
+			SET opening    = opening + $1,
+			    closing    = (opening + $1) + accrued - used + adjusted,
+			    updated_at = NOW()
+			WHERE employee_id   = $2
+			  AND leave_type_id = $3
+			  AND year          = $4
+		`, diff, emp.ID, leaveTypeID, currentYear)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *Repository) UpdatePendingLeave(tx *sqlx.Tx, leaveID uuid.UUID, empID uuid.UUID, input models.LeaveUpdateInput, NewDays float64) error {

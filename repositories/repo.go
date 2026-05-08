@@ -371,6 +371,16 @@ func (r *Repository) UpdateEmployeeInfo(empID uuid.UUID, fullName, email string,
 	return err
 }
 
+// UpdateEmployeeInfoTx is the transaction-aware version of UpdateEmployeeInfo.
+func (r *Repository) UpdateEmployeeInfoTx(tx *sqlx.Tx, empID uuid.UUID, fullName, email string, salary *float64, joiningDate, birthDate, endingDate *time.Time) error {
+	_, err := tx.Exec(`
+        UPDATE Tbl_Employee
+        SET full_name = $1, email = $2, salary = $3, joining_date = $4, birth_date = $5, ending_date = $6, updated_at = NOW()
+        WHERE id = $7
+    `, fullName, email, salary, joiningDate, birthDate, endingDate, empID)
+	return err
+}
+
 // ------------------ UPDATE EMPLOYEE PASSWORD ------------------
 func (r *Repository) UpdateEmployeePassword(empID uuid.UUID, hashedPassword string) error {
 	_, err := r.DB.Exec(`
