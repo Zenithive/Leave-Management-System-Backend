@@ -82,10 +82,30 @@ func (s *HandlerFunc) AdminAddLeavePolicy(c *gin.Context) {
 		Leave.Name = input.Name
 		Leave.IsPaid = *input.IsPaid
 		Leave.DefaultEntitlement = *input.DefaultEntitlement
+		Leave.InternEntitlement = input.InternEntitlement
 		leave = Leave
 		if input.IsEarly != nil {
 			Leave.IsEarly = input.IsEarly
 		}
+
+		// Allocate leave balance for all active employees (skip early leave types)
+		isEarly := input.IsEarly != nil && *input.IsEarly
+		if !isEarly {
+			activeEmployees, err := s.Query.GetAllActiveEmployeesWithRoles(tx)
+			if err != nil {
+				return utils.CustomErr(c, http.StatusInternalServerError, "Failed to fetch active employees: "+err.Error())
+			}
+			if err := s.Query.BulkAllocateLeaveBalanceForNewLeaveType(
+				tx,
+				Leave.ID,
+				*input.DefaultEntitlement,
+				input.InternEntitlement,
+				activeEmployees,
+			); err != nil {
+				return utils.CustomErr(c, http.StatusInternalServerError, "Failed to allocate leave balances: "+err.Error())
+			}
+		}
+
 		// Log Entry
 		data := &models.Common{
 			Component:  constant.ComponentLeaveType,
@@ -189,12 +209,28 @@ func (h *HandlerFunc) UpdateLeavePolicy(c *gin.Context) {
 			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to update leave type: "+err.Error())
 		}
 
-		// Update leave balances if default entitlement changed
+		// Update leave balances if default entitlement changed (non-intern employees)
 		if oldDefaultEntitlement != newDefaultEntitlement && (oldLeaveType.IsEarly == nil || !*oldLeaveType.IsEarly) {
 			currentYear := time.Now().Year()
 			err = h.Query.UpdateLeaveBalancesForEntitlementChange(tx, leaveTypeID, oldDefaultEntitlement, newDefaultEntitlement, currentYear)
 			if err != nil {
 				return utils.CustomErr(c, http.StatusInternalServerError, "Failed to update leave balances: "+err.Error())
+			}
+		}
+
+		// Update intern leave balances if intern_entitlement changed
+		if input.InternEntitlement != nil && (oldLeaveType.IsEarly == nil || !*oldLeaveType.IsEarly) {
+			oldIntern := 0
+			if oldLeaveType.InternEntitlement != nil {
+				oldIntern = *oldLeaveType.InternEntitlement
+			}
+			newIntern := *input.InternEntitlement
+			if oldIntern != newIntern {
+				currentYear := time.Now().Year()
+				err = h.Query.UpdateInternLeaveBalancesForEntitlementChange(tx, leaveTypeID, oldIntern, newIntern, currentYear)
+				if err != nil {
+					return utils.CustomErr(c, http.StatusInternalServerError, "Failed to update intern leave balances: "+err.Error())
+				}
 			}
 		}
 		// Log Entry

@@ -82,15 +82,12 @@ func (r *Repository) GetEmployeeDetailsForNotification(id uuid.UUID) (empDetails
 
 }
 
-func (r *Repository) DeleteEmployeeStatus(id uuid.UUID) (string, error) {
-
+func (r *Repository) DeleteEmployeeStatus(tx *sqlx.Tx, id uuid.UUID) (string, error) {
 	// Get current status
 	var currentStatus string
-	err := r.DB.QueryRow(`
-        SELECT status FROM Tbl_Employee WHERE id = $1
-    `, id).Scan(&currentStatus)
+	err := tx.QueryRow(`SELECT status FROM Tbl_Employee WHERE id = $1`, id).Scan(&currentStatus)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("employee not found: %w", err)
 	}
 
 	// Toggle logic
@@ -99,17 +96,56 @@ func (r *Repository) DeleteEmployeeStatus(id uuid.UUID) (string, error) {
 		newStatus = "deactive"
 	}
 
-	// Update
-	_, err = r.DB.Exec(`
-        UPDATE Tbl_Employee 
-        SET status = $1, updated_at = NOW()
-        WHERE id = $2
+	// Update employee status
+	_, err = tx.Exec(`
+        UPDATE Tbl_Employee SET status = $1, updated_at = NOW() WHERE id = $2
     `, newStatus, id)
 	if err != nil {
 		return "", err
 	}
 
+	// When deactivating: restore all assigned equipment back to the pool
+	if newStatus == "deactive" {
+		if err := r.restoreEmployeeEquipment(tx, id); err != nil {
+			return "", err
+		}
+	}
+
 	return newStatus, nil
+}
+
+// restoreEmployeeEquipment removes all equipment assignments for an employee
+// by reusing RemoveEquipment for each distinct equipment assigned to them.
+func (r *Repository) restoreEmployeeEquipment(tx *sqlx.Tx, employeeID uuid.UUID) error {
+	// Fetch distinct equipment IDs assigned to this employee
+	rows, err := tx.Query(`
+		SELECT DISTINCT equipment_id FROM tbl_equipment_assignment WHERE employee_id = $1
+	`, employeeID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch assignments: %w", err)
+	}
+	defer rows.Close()
+
+	var equipmentIDs []uuid.UUID
+	for rows.Next() {
+		var eqID uuid.UUID
+		if err := rows.Scan(&eqID); err != nil {
+			return fmt.Errorf("failed to scan equipment id: %w", err)
+		}
+		equipmentIDs = append(equipmentIDs, eqID)
+	}
+
+	for _, eqID := range equipmentIDs {
+		req := models.RemoveEquipmentRequest{
+			EmployeeID:  employeeID,
+			EquipmentID: eqID,
+		}
+		if err := r.RemoveEquipment(tx, req); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // ------------------ CHECK EMAIL EXISTS ------------------
@@ -133,12 +169,22 @@ func (r *Repository) GetRoleID(role string) (string, error) {
 }
 
 // ------------------ CREATE EMPLOYEE ------------------
-func (r *Repository) InsertEmployee(fullName, email, roleID, password string, salary *float64, joining *time.Time) error {
-	_, err := r.DB.Exec(`
-		INSERT INTO Tbl_Employee (full_name, email, role_id, password, salary, joining_date)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, fullName, email, roleID, password, salary, joining)
-	return err
+func (r *Repository) InsertEmployee(tx *sqlx.Tx, fullName, email, roleID, password string, salary *float64, joining *time.Time) (uuid.UUID, error) {
+	var employeeID uuid.UUID
+
+	err := tx.QueryRow(`
+    INSERT INTO Tbl_Employee 
+    (full_name, email, role_id, password, salary, joining_date)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING id
+`, fullName, email, roleID, password, salary, joining).
+		Scan(&employeeID)
+
+	if err != nil {
+		fmt.Println("========", err.Error())
+		return employeeID, err
+	}
+	return employeeID, nil
 }
 
 // ------------------ GET CURRENT ROLE NAME ------------------
@@ -154,7 +200,7 @@ func (r *Repository) GetEmployeeCurrentRole(empID string) (string, error) {
 }
 
 // ------------------ UPDATE ROLE ------------------
-func (r *Repository) UpdateEmployeeRole(empID uuid.UUID, newRole string) (string, error) {
+func (r *Repository) UpdateEmployeeRole(tx *sqlx.Tx, empID uuid.UUID, newRole string) (string, error) {
 	var id string
 	query := `
         UPDATE TBL_EMPLOYEE
@@ -163,7 +209,21 @@ func (r *Repository) UpdateEmployeeRole(empID uuid.UUID, newRole string) (string
         WHERE ID = $2
         RETURNING ID;
     `
-	err := r.DB.QueryRow(query, newRole, empID).Scan(&id)
+	err := tx.QueryRow(query, newRole, empID).Scan(&id)
+	return id, err
+}
+
+// UpdateEmployeeRoleTx updates an employee's role within a transaction.
+func (r *Repository) UpdateEmployeeRoleTx(tx *sqlx.Tx, empID uuid.UUID, newRole string) (string, error) {
+	var id string
+	query := `
+        UPDATE TBL_EMPLOYEE
+        SET ROLE_ID = (SELECT ID FROM TBL_ROLE WHERE TYPE=$1),
+            UPDATED_AT = NOW()
+        WHERE ID = $2
+        RETURNING ID;
+    `
+	err := tx.QueryRow(query, newRole, empID).Scan(&id)
 	return id, err
 }
 
@@ -276,7 +336,7 @@ func (r *Repository) GetEmployeeByID(empID uuid.UUID) (*models.EmployeeResponse,
         JOIN Tbl_Role r ON e.role_id = r.id
         LEFT JOIN Tbl_Employee m ON e.manager_id = m.id
         LEFT JOIN Tbl_Designation d ON e.designation_id = d.id
-        WHERE e.id = $1 AND e.status = 'active'
+        WHERE e.id = $1
     `
 	err := r.DB.QueryRow(query, empID).Scan(
 		&emp.ID,

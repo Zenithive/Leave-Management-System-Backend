@@ -21,6 +21,8 @@ import (
 // AdminAddLeave - POST /api/leaves/admin-add
 
 func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
+	roleRaw, _ := c.Get("role")
+	role := roleRaw.(string)
 
 	// Extract Employee Info
 	empIDRaw, ok := c.Get("user_id")
@@ -145,8 +147,11 @@ func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
 			fmt.Println("leave", leaveType.IsEarly)
 			balance, err := h.Query.GetLeaveBalance(tx, employeeID, input.LeaveTypeID)
 			if err == sql.ErrNoRows {
-				// Create balance if it doesn't exist
 				balance = float64(leaveType.DefaultEntitlement)
+				if role == constant.ROLE_INTERN {
+					balance = float64(*leaveType.InternEntitlement)
+				}
+				// Create balance if it doesn't exist
 				if err := h.Query.CreateLeaveBalance(tx, employeeID, input.LeaveTypeID, leaveType.DefaultEntitlement); err != nil {
 					return utils.CustomErr(c, 500, "Failed to create leave balance: "+err.Error())
 				}
@@ -154,9 +159,33 @@ func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
 				return utils.CustomErr(c, 500, "Failed to fetch leave balance: "+err.Error())
 			}
 
+			// Subtract already-pending (not yet deducted) leaves from available balance
+			pendingDays, err := h.Query.GetPendingLeaveDays(tx, employeeID, input.LeaveTypeID, nil)
+			if err != nil {
+				return utils.CustomErr(c, 500, "Failed to fetch pending leave days: "+err.Error())
+			}
+			effectiveBalance := balance - pendingDays
+
 			// Check balance
-			if balance < leaveDays {
-				return utils.CustomErr(c, 400, "Insufficient leave balance")
+			if effectiveBalance < leaveDays {
+				return utils.CustomErr(c, 400, fmt.Sprintf(
+					"Insufficient leave balance. Available: %.1f days (%.1f closing - %.1f pending/manager-approved), Required: %.1f days",
+					effectiveBalance, balance, pendingDays, leaveDays,
+				))
+			}
+		} else {
+			// IsEarly leave: only one early leave per month allowed per leave type
+			existing, err := h.Query.GetEarlyLeaveThisMonth(tx, employeeID, input.LeaveTypeID, input.StartDate)
+			if err != nil {
+				return utils.CustomErr(c, 500, "Failed to check early leave: "+err.Error())
+			}
+			if existing != nil {
+				return utils.CustomErr(c, 400, fmt.Sprintf(
+					"Early leave already taken this month: %s to %s (Status: %s). Only one early leave per month is allowed",
+					existing.StartDate.Format("2006-01-02"),
+					existing.EndDate.Format("2006-01-02"),
+					existing.Status,
+				))
 			}
 		}
 
@@ -208,55 +237,55 @@ func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
 		return
 	}
 
-	// go func() {
-	// 	leaveType, _ := h.Query.GetLeaveTypeById(input.LeaveTypeID)
+	go func() {
+		leaveType, _ := h.Query.GetLeaveTypeById(input.LeaveTypeID)
 
-	// 	recipients, err := h.Query.GetAdminAndEmployeeEmail(employeeID)
+		recipients, err := h.Query.GetAdminAndEmployeeEmail(employeeID)
 
-	// 	if err != nil {
-	// 		fmt.Printf("Failed to get notification recipients: %v\n", err)
-	// 		return
-	// 	}
+		if err != nil {
+			fmt.Printf("Failed to get notification recipients: %v\n", err)
+			return
+		}
 
-	// 	empDetails, err := h.Query.GetEmployeeDetailsForNotification(employeeID)
-	// 	if err != nil {
-	// 		fmt.Printf("Failed to get employee details for notification: %v\n", err)
-	// 		return
-	// 	}
+		empDetails, err := h.Query.GetEmployeeDetailsForNotification(employeeID)
+		if err != nil {
+			fmt.Printf("Failed to get employee details for notification: %v\n", err)
+			return
+		}
 
-	// 	if len(recipients) > 0 {
-	// 		utils.SendLeaveApplicationEmail(
-	// 			recipients,
-	// 			empDetails.FullName,
-	// 			leaveType.Name,
-	// 			input.StartDate.Format("2006-01-02"),
-	// 			input.EndDate.Format("2006-01-02"),
-	// 			Days,
-	// 			input.Reason,
-	// 		)
+		if len(recipients) > 0 {
+			utils.SendLeaveApplicationEmail(
+				recipients,
+				empDetails.FullName,
+				leaveType.Name,
+				input.StartDate.Format("2006-01-02"),
+				input.EndDate.Format("2006-01-02"),
+				Days,
+				input.Reason,
+			)
 
-	// 		// Send HR-specific email
-	// 		var hrEmails []string
-	// 		h.Query.DB.Select(&hrEmails, `
-	// 			SELECT e.email
-	// 			FROM Tbl_Employee e
-	// 			JOIN Tbl_Role r ON e.role_id = r.id
-	// 			WHERE r.type = 'HR' AND e.status = 'active'
-	// 		`)
-	// 		if len(hrEmails) > 0 {
-	// 			utils.SendLeaveApplicationEmailToHR(
-	// 				hrEmails,
-	// 				empDetails.FullName,
-	// 				empDetails.Email,
-	// 				leaveType.Name,
-	// 				input.StartDate.Format("2006-01-02"),
-	// 				input.EndDate.Format("2006-01-02"),
-	// 				Days,
-	// 				input.Reason,
-	// 			)
-	// 		}
-	// 	}
-	// }()
+			// Send HR-specific email
+			var hrEmails []string
+			h.Query.DB.Select(&hrEmails, `
+				SELECT e.email
+				FROM Tbl_Employee e
+				JOIN Tbl_Role r ON e.role_id = r.id
+				WHERE r.type = 'HR' AND e.status = 'active'
+			`)
+			if len(hrEmails) > 0 {
+				utils.SendLeaveApplicationEmailToHR(
+					hrEmails,
+					empDetails.FullName,
+					empDetails.Email,
+					leaveType.Name,
+					input.StartDate.Format("2006-01-02"),
+					input.EndDate.Format("2006-01-02"),
+					Days,
+					input.Reason,
+				)
+			}
+		}
+	}()
 
 	// Send response
 	c.JSON(200, gin.H{
@@ -280,7 +309,7 @@ func (s *HandlerFunc) ActionLeave(c *gin.Context) {
 	roleRaw, _ := c.Get("role")
 	role := roleRaw.(string)
 
-	if role == constant.ROLE_EMPLOYEE {
+	if role == constant.ROLE_EMPLOYEE || role == constant.ROLE_INTERN {
 		utils.RespondWithError(c, 403, "Employees cannot approve leaves")
 		return
 	}
@@ -498,9 +527,11 @@ func (s *HandlerFunc) ActionLeave(c *gin.Context) {
 				if err != nil {
 					utils.RespondWithError(c, 500, "Failed to fetch leave balance: "+err.Error())
 				}
+
 				if currentBalance < leave.Days {
 					utils.RespondWithError(c, 400, fmt.Sprintf("Cannot approve: Insufficient leave balance. Available: %.1f days, Required: %.1f days", currentBalance, leave.Days))
 				}
+
 				return nil
 			})
 			if err != nil {
@@ -654,8 +685,8 @@ func (h *HandlerFunc) GetAllLeaves(c *gin.Context) {
 	var result []models.LeaveResponse
 
 	switch role {
-	case constant.ROLE_EMPLOYEE:
-		// Employees can only see their own leaves
+	case constant.ROLE_EMPLOYEE, constant.ROLE_INTERN:
+		// Employees/Interns can only see their own leaves
 		result, err = h.Query.GetAllEmployeeLeaveByMonthYear(userID, month, year)
 	case constant.ROLE_MANAGER:
 		// Manager can see: their own leaves + their team members' leaves
@@ -776,7 +807,7 @@ func (h *HandlerFunc) CancelLeave(c *gin.Context) {
 			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to fetch leave: "+err.Error())
 		}
 		// Role validation
-		if role == constant.ROLE_EMPLOYEE && leave.EmployeeID != userID {
+		if (role == constant.ROLE_EMPLOYEE || role == constant.ROLE_INTERN) && leave.EmployeeID != userID {
 			return utils.CustomErr(c, http.StatusForbidden, "You can only cancel your own leave applications")
 		}
 		// Status validation using switch
@@ -1193,7 +1224,7 @@ func (h *HandlerFunc) GetLeaveByID(c *gin.Context) {
 
 	// Role-based access control
 	switch role {
-	case "EMPLOYEE":
+	case "EMPLOYEE", "INTERN":
 		if leaveEmployeeID != userID {
 			utils.RespondWithError(c, 403, "You can only view your own leave applications")
 			return
@@ -1333,11 +1364,19 @@ func (h *HandlerFunc) EditMyLeave(c *gin.Context) {
 
 			// IMPORTANT: For PENDING leaves, balance is NOT yet deducted
 			// Balance is only deducted when leave status becomes APPROVED
-			// So we need to check if the NEW total days fit within available balance
+			// Subtract other pending/manager-approved leaves (excluding this leave being edited)
+			pendingDays, err := h.Query.GetPendingLeaveDays(tx, empID, input.LeaveTypeID, &leaveID)
+			if err != nil {
+				return utils.CustomErr(c, 500, "Failed to fetch pending leave days: "+err.Error())
+			}
+			effectiveBalance := balance - pendingDays
 
 			// Check if sufficient balance exists for the edited leave
-			if balance < newDays {
-				return utils.CustomErr(c, 400, fmt.Sprintf("Insufficient leave balance. You have %.2f days available but the edited leave requires %.2f days", balance, newDays))
+			if effectiveBalance < newDays {
+				return utils.CustomErr(c, 400, fmt.Sprintf(
+					"Insufficient leave balance. Available: %.2f days (%.2f closing - %.2f other pending), Required: %.2f days",
+					effectiveBalance, balance, pendingDays, newDays,
+				))
 			}
 		}
 

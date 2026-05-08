@@ -13,7 +13,7 @@ import (
 // 1. Get leave type entitlement
 func (r *Repository) GetLeaveTypeByIdTx(tx *sqlx.Tx, leaveTypeID int) (models.LeaveType, error) {
 	var leaves models.LeaveType
-	query := `SELECT id, name, is_paid, default_entitlement, is_early, created_at, updated_at FROM Tbl_Leave_type WHERE id=$1`
+	query := `SELECT id, name, is_paid, default_entitlement, intern_entitlement, is_early, created_at, updated_at FROM Tbl_Leave_type WHERE id=$1`
 	err := tx.Get(&leaves,
 		query,
 		leaveTypeID,
@@ -24,7 +24,7 @@ func (r *Repository) GetLeaveTypeByIdTx(tx *sqlx.Tx, leaveTypeID int) (models.Le
 // 1. Get leave type entitlement
 func (r *Repository) GetLeaveTypeById(leaveTypeID int) (models.LeaveType, error) {
 	var leaves models.LeaveType
-	query := `SELECT id, name, is_paid, default_entitlement, is_early, created_at, updated_at FROM Tbl_Leave_type WHERE id=$1`
+	query := `SELECT id, name, is_paid, default_entitlement, intern_entitlement, is_early, created_at, updated_at FROM Tbl_Leave_type WHERE id=$1`
 	err := r.DB.Get(&leaves,
 		query,
 		leaveTypeID,
@@ -57,6 +57,34 @@ func (r *Repository) GetLeaveBalance(tx *sqlx.Tx, employeeID uuid.UUID, leaveTyp
 		AND year = EXTRACT(YEAR FROM CURRENT_DATE)
 	`, employeeID, leaveTypeID)
 	return balance, err
+}
+
+// GetPendingLeaveDays returns the total days of Pending and MANAGER_APPROVED leaves
+// for the current year for a given employee and leave type.
+// These leaves are not yet deducted from the closing balance, so they must be
+// accounted for when checking if a new leave application has sufficient balance.
+func (r *Repository) GetPendingLeaveDays(tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int, excludeLeaveID *uuid.UUID) (float64, error) {
+	var pendingDays float64
+
+	query := `
+		SELECT COALESCE(SUM(days), 0)
+		FROM Tbl_Leave
+		WHERE employee_id = $1
+		  AND leave_type_id = $2
+		  AND status IN ('Pending', 'MANAGER_APPROVED')
+		  AND EXTRACT(YEAR FROM start_date) = EXTRACT(YEAR FROM CURRENT_DATE)
+	`
+
+	var err error
+	if excludeLeaveID != nil {
+		// When editing an existing leave, exclude it from the pending sum
+		query += ` AND id != $3`
+		err = tx.Get(&pendingDays, query, employeeID, leaveTypeID, *excludeLeaveID)
+	} else {
+		err = tx.Get(&pendingDays, query, employeeID, leaveTypeID)
+	}
+
+	return pendingDays, err
 }
 
 // create leave balance
@@ -278,8 +306,8 @@ func (r *Repository) GetAllleavebaseonassignManagerByMonthYear(userID uuid.UUID,
 
 	WHERE
 		(e.manager_id = $1 OR l.employee_id = $1)
-		AND EXTRACT(MONTH FROM l.start_date) = $2
-		AND EXTRACT(YEAR FROM l.start_date) = $3
+		AND EXTRACT(MONTH FROM l.start_date) <= $2
+		AND EXTRACT(YEAR FROM l.start_date) <= $3
 
 	ORDER BY
 		l.start_date ASC,
@@ -341,8 +369,8 @@ func (r *Repository) GetAllLeaveByMonthYear(month, year int) ([]models.LeaveResp
 		ON l.approved_by = approver.id
 
 	WHERE
-		EXTRACT(MONTH FROM l.start_date) = $1
-		AND EXTRACT(YEAR FROM l.start_date) = $2
+		EXTRACT(MONTH FROM l.start_date) <= $1
+		AND EXTRACT(YEAR FROM l.start_date) <= $2
 
 	ORDER BY
 		l.start_date ASC,
@@ -405,8 +433,8 @@ func (r *Repository) GetMyLeavesByMonthYear(userID uuid.UUID, month, year int) (
 
 	WHERE 
 		l.employee_id = $1
-		AND EXTRACT(MONTH FROM l.start_date) = $2
-		AND EXTRACT(YEAR FROM l.start_date) = $3
+		AND EXTRACT(MONTH FROM l.start_date) <= $2
+		AND EXTRACT(YEAR FROM l.start_date) <= $3
 
 	ORDER BY 
 		l.start_date ASC,
@@ -512,4 +540,31 @@ func (r *Repository) UpdateLeaveStatusWithResion(tx *sqlx.Tx, withdrawalReason s
 			WHERE id=$4
 		`, status, withdrawalReason, currentUserID, leaveID)
 	return err
+}
+
+// GetEarlyLeaveThisMonth checks if the employee already has an early leave
+// for the given leave type in the same month/year as refDate.
+// Returns the existing leave if found, nil if not.
+func (r *Repository) GetEarlyLeaveThisMonth(tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int, refDate time.Time) (*models.Leave, error) {
+	var leave models.Leave
+	err := tx.Get(&leave, `
+		SELECT l.*
+		FROM Tbl_Leave l
+		JOIN Tbl_Leave_type lt ON lt.id = l.leave_type_id
+		WHERE l.employee_id = $1
+		  AND l.leave_type_id = $2
+		  AND lt.is_early = TRUE
+		  AND l.status  IN ('Pending', 'APPROVED', 'MANAGER_APPROVED')
+		  AND EXTRACT(MONTH FROM l.start_date) = $3
+		  AND EXTRACT(YEAR  FROM l.start_date) = $4
+		LIMIT 1
+	`, employeeID, leaveTypeID, int(refDate.Month()), refDate.Year())
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &leave, nil
 }

@@ -20,6 +20,7 @@ const (
 	ROLE_EMPLOYEE    = "EMPLOYEE"
 	ROLE_MANAGER     = "MANAGER"
 	ROLE_HR          = "HR"
+	ROLE_INTERN      = "INTERN"
 )
 
 type BirthdayStatus string

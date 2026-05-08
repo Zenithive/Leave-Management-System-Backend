@@ -87,8 +87,8 @@ func CalculateWorkingDaysWithTiming(Query *repositories.Repository, tx *sqlx.Tx,
 }
 
 type LeaveSummary struct {
-	PaidDays   float64
-	UnpaidDays float64
+	PaidDays    float64
+	UnpaidDays  float64
 	EarlyLeaves float64
 }
 
@@ -200,6 +200,7 @@ type LeaveTypeData struct {
 	LeaveTypeID        int
 	LeaveTypeName      string
 	DefaultEntitlement float64
+	InternEntitlement  *float64
 }
 
 // CalculatedBalance represents the calculated leave balance result
@@ -214,54 +215,31 @@ type CalculatedBalance struct {
 	Available   float64 `json:"available"`
 }
 
-// CalculateLeaveBalances calculates leave balances using map-based approach
-// This function takes leave types and balance records, then calculates the final balances
+// CalculateLeaveBalances calculates leave balances using map-based approach.
+// Only leave types that have an actual balance row in the DB are returned.
 func CalculateLeaveBalances(leaveTypes []LeaveTypeData, balanceRecords []LeaveBalanceData) []CalculatedBalance {
-	// Create a map of leave_type_id -> balance for O(1) lookup
-	balanceMap := make(map[int]LeaveBalanceData)
-	for _, balance := range balanceRecords {
-		balanceMap[balance.LeaveTypeID] = balance
+	// Build a name lookup: leave_type_id -> leave_type_name
+	nameMap := make(map[int]string, len(leaveTypes))
+	for _, lt := range leaveTypes {
+		nameMap[lt.LeaveTypeID] = lt.LeaveTypeName
 	}
 
 	var calculatedBalances []CalculatedBalance
 
-	// Calculate balances for each leave type
-	for _, lt := range leaveTypes {
-		balance, exists := balanceMap[lt.LeaveTypeID]
-
-		var opening, accrued, used, adjusted, total, available float64
-
-		if exists {
-			// Balance record exists - use actual values from database
-			opening = balance.Opening
-			accrued = balance.Accrued
-			used = balance.Used
-			adjusted = balance.Adjusted
-			// Total = Opening + Accrued
-			total = opening + accrued
-			// Available = Closing (which is calculated as: opening + accrued - used + adjusted)
-			available = balance.Closing
-		} else {
-			// No balance record exists - use default entitlement
-			opening = lt.DefaultEntitlement
-			accrued = 0
-			used = 0
-			adjusted = 0
-			// Total = Default Entitlement (treated as opening)
-			total = lt.DefaultEntitlement
-			// Available = Default Entitlement (since nothing used yet)
-			available = lt.DefaultEntitlement
-		}
+	// Only iterate over actual DB balance records — no synthetic entries
+	for _, balance := range balanceRecords {
+		name := nameMap[balance.LeaveTypeID]
+		total := balance.Opening + balance.Accrued
 
 		calculatedBalances = append(calculatedBalances, CalculatedBalance{
-			LeaveTypeID: lt.LeaveTypeID,
-			LeaveType:   lt.LeaveTypeName,
-			Opening:     opening,
-			Accrued:     accrued,
-			Used:        used,
-			Adjusted:    adjusted,
+			LeaveTypeID: balance.LeaveTypeID,
+			LeaveType:   name,
+			Opening:     balance.Opening,
+			Accrued:     balance.Accrued,
+			Used:        balance.Used,
+			Adjusted:    balance.Adjusted,
 			Total:       total,
-			Available:   available,
+			Available:   balance.Closing,
 		})
 	}
 

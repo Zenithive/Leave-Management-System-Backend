@@ -8,10 +8,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/access_role"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/common"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
 )
 
@@ -58,7 +60,7 @@ func (h *HandlerFunc) GetEmployee(c *gin.Context) {
 		"total_pages": result.TotalPages,
 		"filters": gin.H{
 			"search":      params.Search,
-			"role":        params.Role,
+			"roles":       params.Roles,
 			"designation": params.Designation,
 			"status":      params.Status,
 			"manager":     params.Manager,
@@ -155,14 +157,32 @@ func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 		input.Salary = &zeroSalary
 	}
 
-	// INSERT
-	err = h.Query.InsertEmployee(
-		input.FullName, input.Email,
-		roleID, hash,
-		input.Salary, input.JoiningDate,
-	)
-	if err != nil {
-		utils.RespondWithError(c, 500, "failed to create employee")
+	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+		// 1. Insert employee
+		id, err := h.Query.InsertEmployee(tx, input.FullName, input.Email, roleID, hash, input.Salary, input.JoiningDate)
+		if err != nil || id == uuid.Nil {
+			return utils.CustomErr(c, 500, "failed to create employee")
+		}
+		data, err := h.Query.GetAllLeaveType()
+		if err != nil {
+			return utils.CustomErr(c, 500, "failed to allocate leave balance: ")
+		}
+		
+		for _, leaveType := range data {
+			isEarlyLeave := leaveType.IsEarly != nil && *leaveType.IsEarly
+			if !isEarlyLeave {
+				entitlement := leaveType.DefaultEntitlement
+				if input.Role == constant.ROLE_INTERN && leaveType.InternEntitlement != nil {
+					entitlement = *leaveType.InternEntitlement
+				}
+				if err := h.Query.CreateLeaveBalance(tx, id, leaveType.ID, entitlement); err != nil {
+					return utils.CustomErr(c, 500, "failed to allocate leave balance: "+err.Error())
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		utils.RespondWithError(c, 500, err.Error())
 		return
 	}
 
@@ -260,10 +280,25 @@ func (h *HandlerFunc) UpdateEmployeeRole(c *gin.Context) {
 	// ---------------------------
 	// 7️ Update Role
 	// ---------------------------
-	updatedID, err := h.Query.UpdateEmployeeRole(empID, input.Role)
-	if err != nil {
-		utils.RespondWithError(c, 500, "failed to update role: "+err.Error())
+	var updatedID string
+	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+		role, err := h.Query.GetEmployeeRole(empID)
+		if err != nil {
+			return utils.CustomErr(c, 500, "failed to fetch employee role: "+err.Error())
+		}
+		updatedID, err = h.Query.UpdateEmployeeRole(tx, empID, input.Role)
+		if err != nil {
+			return utils.CustomErr(c, 500, "failed to update role: "+err.Error())
+		}
+		a := time.Now().Year()
+		if err = h.Query.AdjustLeaveBalancesForRoleChange(tx, empID, role, input.Role, a); err != nil {
+			return utils.CustomErr(c, 500, "failed to adjust leave balances for role change: "+err.Error())
+		}
+		return nil
+	}); err != nil {
+		utils.RespondWithError(c, 500, err.Error())
 		return
+
 	}
 
 	// ---------------------------
@@ -296,7 +331,7 @@ func (h *HandlerFunc) DeleteEmployeeStatus(c *gin.Context) {
 		return
 	}
 
-	// Check if target employee is SUPERADMIN
+	// Check if target employee exists (works for both active and deactive)
 	targetEmp, err := h.Query.GetEmployeeByID(empID)
 	if err != nil {
 		utils.RespondWithError(c, 404, "employee not found")
@@ -309,9 +344,12 @@ func (h *HandlerFunc) DeleteEmployeeStatus(c *gin.Context) {
 		return
 	}
 
-	// Toggle using same method name
-	newStatus, err := h.Query.DeleteEmployeeStatus(empID)
-	if err != nil {
+	var newStatus string
+	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+		var txErr error
+		newStatus, txErr = h.Query.DeleteEmployeeStatus(tx, empID)
+		return txErr
+	}); err != nil {
 		utils.RespondWithError(c, 500, err.Error())
 		return
 	}
