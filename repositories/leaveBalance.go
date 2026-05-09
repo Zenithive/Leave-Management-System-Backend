@@ -130,41 +130,23 @@ func (r *Repository) UpdateWidthrowLeaveBalanceByEmployeeId(tx *sqlx.Tx, employe
 	return err
 }
 
-// UpdateInternLeaveBalancesForEntitlementChange updates leave balances for INTERN employees
+// UpdateInternLeaveBalancesForEntitlementChange recalculates leave balances for INTERN employees
 // when intern_entitlement changes for a leave type.
-// Employees who joined in a prior year get the full diff.
-// Employees who joined in the current year get a prorated diff based on their joining month.
-func (r *Repository) UpdateInternLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveTypeID int, oldInternEntitlement, newInternEntitlement int, currentYear int) error {
-	difference := float64(newInternEntitlement - oldInternEntitlement)
-	if difference == 0 {
-		return nil
+//
+// newInternEntitlement is the entitlement INTERNs should now have (already resolved by the caller:
+// if intern_entitlement is being cleared, the caller passes newDefaultEntitlement as the new value).
+//
+// For each INTERN employee with a balance row:
+//   - If joined in the current year: new opening = prorated(newInternEntitlement, joinMonth)
+//   - Otherwise: new opening = newInternEntitlement
+//   - closing = new_opening + accrued - used + adjusted
+func (r *Repository) UpdateInternLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveTypeID int, newInternEntitlement int, currentYear int) error {
+	type empRow struct {
+		ID          uuid.UUID  `db:"id"`
+		JoiningDate *time.Time `db:"joining_date"`
 	}
-
-	// 1. Apply full diff to INTERN employees who did NOT join this year
-	_, err := tx.Exec(`
-		UPDATE Tbl_Leave_balance lb
-		SET opening    = lb.opening + $1,
-		    closing    = (lb.opening + $1) + lb.accrued - lb.used + lb.adjusted,
-		    updated_at = NOW()
-		FROM Tbl_Employee e
-		JOIN Tbl_Role r ON e.role_id = r.id
-		WHERE lb.employee_id   = e.id
-		  AND lb.leave_type_id = $2
-		  AND lb.year          = $3
-		  AND r.type           = 'INTERN'
-		  AND (e.joining_date IS NULL OR EXTRACT(YEAR FROM e.joining_date) != $3)
-	`, difference, leaveTypeID, currentYear)
-	if err != nil {
-		return err
-	}
-
-	// 2. For INTERN employees who joined this year, prorate the diff per employee
-	type empJoin struct {
-		ID          uuid.UUID `db:"id"`
-		JoiningDate time.Time `db:"joining_date"`
-	}
-	var joinedThisYear []empJoin
-	err = tx.Select(&joinedThisYear, `
+	var employees []empRow
+	err := tx.Select(&employees, `
 		SELECT e.id, e.joining_date
 		FROM Tbl_Employee e
 		JOIN Tbl_Role r ON e.role_id = r.id
@@ -172,110 +154,96 @@ func (r *Repository) UpdateInternLeaveBalancesForEntitlementChange(tx *sqlx.Tx, 
 		WHERE lb.leave_type_id = $1
 		  AND lb.year          = $2
 		  AND r.type           = 'INTERN'
-		  AND EXTRACT(YEAR FROM e.joining_date) = $2
 	`, leaveTypeID, currentYear)
 	if err != nil {
 		return err
 	}
 
-	for _, emp := range joinedThisYear {
-		proratedNew := proratedLeave(newInternEntitlement, int(emp.JoiningDate.Month()))
-		proratedOld := proratedLeave(oldInternEntitlement, int(emp.JoiningDate.Month()))
-		diff := float64(proratedNew - proratedOld)
-		if diff == 0 {
-			continue
+	for _, emp := range employees {
+		var newOpening int
+		if emp.JoiningDate != nil && emp.JoiningDate.Year() == currentYear {
+			newOpening = proratedLeave(newInternEntitlement, int(emp.JoiningDate.Month()))
+		} else {
+			newOpening = newInternEntitlement
 		}
 		_, err := tx.Exec(`
 			UPDATE Tbl_Leave_balance
-			SET opening    = opening + $1,
-			    closing    = (opening + $1) + accrued - used + adjusted,
+			SET opening    = $1,
+			    closing    = $1 + accrued - used + adjusted,
 			    updated_at = NOW()
 			WHERE employee_id   = $2
 			  AND leave_type_id = $3
 			  AND year          = $4
-		`, diff, emp.ID, leaveTypeID, currentYear)
+		`, newOpening, emp.ID, leaveTypeID, currentYear)
 		if err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
-// AdjustLeaveBalancesForRoleChange updates all leave balances for an employee
-// when their role changes between INTERN and a non-INTERN role.
-// It adjusts opening and closing by the difference between intern_entitlement and default_entitlement
-// for each leave type that has an intern_entitlement set.
-// If the employee joined in the current year, the diff is prorated by their joining month.
+// AdjustLeaveBalancesForRoleChange recalculates all leave balances for an employee
+// when their role changes (any role change, not just INTERN boundary).
+//
+// For every non-early leave type the employee has a balance row for:
+//   - Resolve the correct full entitlement for the NEW role
+//     (intern_entitlement if newRole==INTERN and it is set, otherwise default_entitlement)
+//   - If employee joined in the current year: new opening = prorated(entitlement, joinMonth)
+//   - Otherwise: new opening = entitlement
+//   - closing = new_opening + accrued - used + adjusted
 func (r *Repository) AdjustLeaveBalancesForRoleChange(tx *sqlx.Tx, employeeID uuid.UUID, oldRole, newRole string, currentYear int) error {
-	// Only act when crossing the INTERN boundary
+	// No leave balance change when neither side is INTERN
 	if oldRole != "INTERN" && newRole != "INTERN" {
 		return nil
 	}
-	// Fetch the employee's joining_date to determine if prorating is needed
-	var joiningDate *time.Time
-	tx.Get(&joiningDate, `SELECT joining_date FROM Tbl_Employee WHERE id = $1`, employeeID)
 
+	var joiningDate *time.Time
+	_ = tx.Get(&joiningDate, `SELECT joining_date FROM Tbl_Employee WHERE id = $1`, employeeID)
 	isJoiningThisYear := joiningDate != nil && joiningDate.Year() == currentYear
 
-	// Fetch all leave types that have a distinct intern_entitlement
 	type leaveTypeRow struct {
-		ID                 int `db:"id"`
-		DefaultEntitlement int `db:"default_entitlement"`
-		InternEntitlement  int `db:"intern_entitlement"`
+		ID                 int  `db:"id"`
+		DefaultEntitlement int  `db:"default_entitlement"`
+		InternEntitlement  *int `db:"intern_entitlement"`
 	}
 	var leaveTypes []leaveTypeRow
 	err := tx.Select(&leaveTypes, `
 		SELECT id, default_entitlement, intern_entitlement
 		FROM Tbl_Leave_type
-		WHERE intern_entitlement IS NOT NULL
-		  AND intern_entitlement != default_entitlement
+		WHERE is_early IS NULL OR is_early = FALSE
 	`)
 	if err != nil {
 		return err
 	}
 
 	for _, lt := range leaveTypes {
-		var newEntitlement, oldEntitlement int
-		if oldRole == "INTERN" && newRole != "INTERN" {
-			// Upgrading from INTERN → use default_entitlement as new target
-			oldEntitlement = lt.InternEntitlement
-			newEntitlement = lt.DefaultEntitlement
-		} else {
-			// Downgrading to INTERN → use intern_entitlement as new target
-			oldEntitlement = lt.DefaultEntitlement
-			newEntitlement = lt.InternEntitlement
+		// Resolve entitlement for the new role
+		newEntitlement := lt.DefaultEntitlement
+		if newRole == "INTERN" && lt.InternEntitlement != nil {
+			newEntitlement = *lt.InternEntitlement
 		}
 
-		// Prorate both sides if employee joined this year, then compute diff
-		var diff float64
+		var newOpening int
 		if isJoiningThisYear {
-			proratedNew := proratedLeave(newEntitlement, int(joiningDate.Month()))
-			proratedOld := proratedLeave(oldEntitlement, int(joiningDate.Month()))
-			diff = float64(proratedNew - proratedOld)
+			newOpening = proratedLeave(newEntitlement, int(joiningDate.Month()))
 		} else {
-			diff = float64(newEntitlement - oldEntitlement)
+			newOpening = newEntitlement
 		}
 
-		if diff == 0 {
-			continue
-		}
-
-		// Only update if a balance row already exists for this employee + leave type + year
+		// Only update rows that already exist for this employee + leave type + year
 		_, err := tx.Exec(`
 			UPDATE Tbl_Leave_balance
-			SET opening  = opening  + $1,
-			    closing  = closing  + $1,
+			SET opening    = $1,
+			    closing    = $1 + accrued - used + adjusted,
 			    updated_at = NOW()
-			WHERE employee_id  = $2
+			WHERE employee_id   = $2
 			  AND leave_type_id = $3
 			  AND year          = $4
-		`, diff, employeeID, lt.ID, currentYear)
+		`, newOpening, employeeID, lt.ID, currentYear)
 		if err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 

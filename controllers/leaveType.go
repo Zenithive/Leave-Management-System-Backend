@@ -209,36 +209,38 @@ func (h *HandlerFunc) UpdateLeavePolicy(c *gin.Context) {
 			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to update leave type: "+err.Error())
 		}
 
-		// Update leave balances if default entitlement changed (non-intern employees)
+		// Recalculate leave balances if default_entitlement changed (non-INTERN employees)
 		if oldDefaultEntitlement != newDefaultEntitlement && (oldLeaveType.IsEarly == nil || !*oldLeaveType.IsEarly) {
 			currentYear := time.Now().Year()
-			err = h.Query.UpdateLeaveBalancesForEntitlementChange(tx, leaveTypeID, oldDefaultEntitlement, newDefaultEntitlement, currentYear)
-			if err != nil {
+			if err = h.Query.UpdateLeaveBalancesForEntitlementChange(tx, leaveTypeID, oldDefaultEntitlement, newDefaultEntitlement, currentYear); err != nil {
 				return utils.CustomErr(c, http.StatusInternalServerError, "Failed to update leave balances: "+err.Error())
 			}
 		}
 
-		// Update intern leave balances if intern_entitlement changed
-		// Case 1: intern_entitlement provided in request (set or update)
-		// Case 2: intern_entitlement was set before but is now NULL (revert INTERNs to default)
-		if (oldLeaveType.IsEarly == nil || !*oldLeaveType.IsEarly) {
-			oldIntern := 0
+		// Recalculate INTERN leave balances when intern_entitlement changes.
+		//
+		// Resolve what INTERNs are currently allocated (their effective old entitlement):
+		//   - If intern_entitlement was set → that value
+		//   - If intern_entitlement was nil → they were allocated default_entitlement
+		//
+		// Resolve what INTERNs should now be allocated (new effective entitlement):
+		//   - If intern_entitlement provided in request → that value
+		//   - If intern_entitlement cleared (was set, now nil) → fall back to newDefaultEntitlement
+		//   - If intern_entitlement was never set and still not sent → newDefaultEntitlement
+		if oldLeaveType.IsEarly == nil || !*oldLeaveType.IsEarly {
+			oldEffectiveIntern := oldDefaultEntitlement
 			if oldLeaveType.InternEntitlement != nil {
-				oldIntern = *oldLeaveType.InternEntitlement
+				oldEffectiveIntern = *oldLeaveType.InternEntitlement
 			}
 
-			newIntern := 0
+			newEffectiveIntern := newDefaultEntitlement
 			if input.InternEntitlement != nil {
-				newIntern = *input.InternEntitlement
-			} else if oldLeaveType.InternEntitlement != nil {
-				// intern_entitlement was set before, now being cleared → use default_entitlement
-				newIntern = newDefaultEntitlement
+				newEffectiveIntern = *input.InternEntitlement
 			}
 
-			if oldIntern != newIntern {
+			if oldEffectiveIntern != newEffectiveIntern {
 				currentYear := time.Now().Year()
-				err = h.Query.UpdateInternLeaveBalancesForEntitlementChange(tx, leaveTypeID, oldIntern, newIntern, currentYear)
-				if err != nil {
+				if err = h.Query.UpdateInternLeaveBalancesForEntitlementChange(tx, leaveTypeID, newEffectiveIntern, currentYear); err != nil {
 					return utils.CustomErr(c, http.StatusInternalServerError, "Failed to update intern leave balances: "+err.Error())
 				}
 			}

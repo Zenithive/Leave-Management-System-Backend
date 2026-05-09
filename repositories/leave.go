@@ -446,41 +446,27 @@ func (r *Repository) GetMyLeavesByMonthYear(userID uuid.UUID, month, year int) (
 	return result, err
 }
 
-// UpdateLeaveBalancesForEntitlementChange updates leave balances when default_entitlement changes.
-// Only non-INTERN employees are affected — INTERNs have their own intern_entitlement path.
-// Employees who joined in a prior year get the full diff.
-// Employees who joined in the current year get a prorated diff based on their joining month.
+// UpdateLeaveBalancesForEntitlementChange recalculates leave balances for all non-INTERN employees
+// when default_entitlement changes for a leave type.
+//
+// For each affected employee:
+//   - If joined in a prior year (or no joining_date): new opening = newDefaultEntitlement
+//   - If joined in the current year: new opening = prorated(newDefaultEntitlement, joinMonth)
+//   - closing = new_opening + accrued - used + adjusted
+//
+// This is a full recalculation from the new entitlement, not a diff-based patch,
+// so it is safe to call multiple times and always produces a consistent result.
 func (r *Repository) UpdateLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveTypeID int, oldDefaultEntitlement, newDefaultEntitlement int, currentYear int) error {
-	difference := float64(newDefaultEntitlement - oldDefaultEntitlement)
-	if difference == 0 {
+	if oldDefaultEntitlement == newDefaultEntitlement {
 		return nil
 	}
 
-	// 1. Apply full diff to non-INTERN employees who did NOT join this year
-	_, err := tx.Exec(`
-		UPDATE Tbl_Leave_balance lb
-		SET opening    = lb.opening + $1,
-		    closing    = (lb.opening + $1) + lb.accrued - lb.used + lb.adjusted,
-		    updated_at = NOW()
-		FROM Tbl_Employee e
-		JOIN Tbl_Role r ON e.role_id = r.id
-		WHERE lb.employee_id   = e.id
-		  AND lb.leave_type_id = $2
-		  AND lb.year          = $3
-		  AND r.type           != 'INTERN'
-		  AND (e.joining_date IS NULL OR EXTRACT(YEAR FROM e.joining_date) != $3)
-	`, difference, leaveTypeID, currentYear)
-	if err != nil {
-		return err
+	type empRow struct {
+		ID          uuid.UUID  `db:"id"`
+		JoiningDate *time.Time `db:"joining_date"`
 	}
-
-	// 2. For non-INTERN employees who joined this year, prorate the diff per employee
-	type empJoin struct {
-		ID          uuid.UUID `db:"id"`
-		JoiningDate time.Time `db:"joining_date"`
-	}
-	var joinedThisYear []empJoin
-	err = tx.Select(&joinedThisYear, `
+	var employees []empRow
+	err := tx.Select(&employees, `
 		SELECT e.id, e.joining_date
 		FROM Tbl_Employee e
 		JOIN Tbl_Role r ON e.role_id = r.id
@@ -488,33 +474,31 @@ func (r *Repository) UpdateLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveT
 		WHERE lb.leave_type_id = $1
 		  AND lb.year          = $2
 		  AND r.type           != 'INTERN'
-		  AND EXTRACT(YEAR FROM e.joining_date) = $2
 	`, leaveTypeID, currentYear)
 	if err != nil {
 		return err
 	}
 
-	for _, emp := range joinedThisYear {
-		proratedNew := proratedLeave(newDefaultEntitlement, int(emp.JoiningDate.Month()))
-		proratedOld := proratedLeave(oldDefaultEntitlement, int(emp.JoiningDate.Month()))
-		diff := float64(proratedNew - proratedOld)
-		if diff == 0 {
-			continue
+	for _, emp := range employees {
+		var newOpening int
+		if emp.JoiningDate != nil && emp.JoiningDate.Year() == currentYear {
+			newOpening = proratedLeave(newDefaultEntitlement, int(emp.JoiningDate.Month()))
+		} else {
+			newOpening = newDefaultEntitlement
 		}
 		_, err := tx.Exec(`
 			UPDATE Tbl_Leave_balance
-			SET opening    = opening + $1,
-			    closing    = (opening + $1) + accrued - used + adjusted,
+			SET opening    = $1,
+			    closing    = $1 + accrued - used + adjusted,
 			    updated_at = NOW()
 			WHERE employee_id   = $2
 			  AND leave_type_id = $3
 			  AND year          = $4
-		`, diff, emp.ID, leaveTypeID, currentYear)
+		`, newOpening, emp.ID, leaveTypeID, currentYear)
 		if err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
