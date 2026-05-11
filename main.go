@@ -28,6 +28,14 @@ func main() {
 	birthdayCron.Start()
 	defer birthdayCron.Stop()
 
+	// Start monthly leave accrual cron job (runs on the 1st of every month at 00:05)
+	leaveAccrual := service.NewLeaveAccrualService(repo)
+	leaveAccrual.Start()
+	defer leaveAccrual.Stop()
+
+	// Attach accrual service to handler so the manual trigger endpoint can use it
+	handlerFunc.SetLeaveAccrualService(leaveAccrual)
+
 	// Create a new Gin router
 	r := gin.Default()
 	models.InitValidator()

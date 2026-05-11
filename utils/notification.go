@@ -7,8 +7,32 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
+
+// demoEmailPrefix is the shared prefix used by all seeded demo accounts.
+const demoEmailPrefix = "demo."
+
+// IsDemoEmail returns true if the given email belongs to a demo account
+// (i.e. it starts with "demo." and ends with "@zenithive.com").
+func IsDemoEmail(email string) bool {
+	lower := strings.ToLower(strings.TrimSpace(email))
+	return strings.HasPrefix(lower, demoEmailPrefix) && strings.HasSuffix(lower, "@zenithive.com")
+}
+
+// FilterDemoRecipients removes any demo account emails from the slice and
+// returns the cleaned list. If all recipients are demo accounts the returned
+// slice will be empty, which callers already guard against with len() checks.
+func FilterDemoRecipients(recipients []string) []string {
+	filtered := make([]string, 0, len(recipients))
+	for _, r := range recipients {
+		if !IsDemoEmail(r) {
+			filtered = append(filtered, r)
+		}
+	}
+	return filtered
+}
 
 type ResendConfig struct {
 	APIKey string
@@ -51,8 +75,14 @@ type ResendEmailResponse struct {
 	} `json:"error,omitempty"`
 }
 
-// SendEmail sends an email using Resend API
+// SendEmail sends an email using Resend API.
+// Calls targeting a demo account are silently skipped.
 func SendEmail(to, subject, body string) error {
+	if IsDemoEmail(to) {
+		fmt.Printf("Skipping email to demo account: %s\n", to)
+		return nil
+	}
+
 	config, err := GetResendConfig()
 	if err != nil {
 		return fmt.Errorf("Resend configuration error: %v", err)
@@ -126,15 +156,19 @@ func SendEmail(to, subject, body string) error {
 	return nil
 }
 
-// SendEmailToMultiple sends email to multiple recipients using Resend API
+// SendEmailToMultiple sends email to multiple recipients using Resend API.
+// Demo account addresses are silently removed from the recipient list before sending.
 func SendEmailToMultiple(recipients []string, subject, body string) error {
+	recipients = FilterDemoRecipients(recipients)
+
+	if len(recipients) == 0 {
+		fmt.Printf("Skipping email (no non-demo recipients) with subject: %s\n", subject)
+		return nil
+	}
+
 	config, err := GetResendConfig()
 	if err != nil {
 		return fmt.Errorf("Resend configuration error: %v", err)
-	}
-
-	if len(recipients) == 0 {
-		return fmt.Errorf("no recipients provided")
 	}
 
 	fmt.Printf("Attempting to send email to %d recipients with subject: %s\n", len(recipients), subject)
