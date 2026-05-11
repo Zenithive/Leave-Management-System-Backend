@@ -709,12 +709,12 @@ func (h *HandlerFunc) GetAllLeaves(c *gin.Context) {
 
 	// 6️ Return success with metadata + status counts
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "Leaves fetched successfully",
-		"role":     role,
-		"month":    month,
-		"year":     year,
-		"summary":  models.BuildLeaveCountSummary(result),
-		"data":     result,
+		"message": "Leaves fetched successfully",
+		"role":    role,
+		"month":   month,
+		"year":    year,
+		"summary": models.BuildLeaveCountSummary(result),
+		"data":    result,
 	})
 }
 
@@ -1426,97 +1426,167 @@ func (h *HandlerFunc) EditMyLeave(c *gin.Context) {
 	})
 }
 
-// GetMonthlyLeaveReport - GET /api/leaves/monthly-report
-// Returns a per-employee summary of leaves taken in a given month:
-//   - Employee name, email
-//   - Total leaves, paid leaves, unpaid leaves, early leaves
+// GetLeaveReport - GET /api/leaves/monthly-report
+// Returns a per-employee leave summary (paid, unpaid, early, total) for a specified period.
 //
-// Query params:
-//   - month (1-12, defaults to current month)
-//   - year (defaults to current year)
+// Supported report types (query param: report_type):
+//   - "monthly"  → single month  (requires: month, year)
+//   - "yearly"   → full year     (requires: year)
+//   - "range"    → custom range  (requires: from_month, from_year, to_month, to_year)
 //
 // Role-based access:
-//   - EMPLOYEE/INTERN: see only their own data
-//   - MANAGER: see their team + themselves
-//   - ADMIN/HR/SUPERADMIN: see all employees
-func (h *HandlerFunc) GetMonthlyLeaveReport(c *gin.Context) {
-	// 1️ Get role & user ID
+//   - HR, ADMIN, SUPERADMIN only
+//
+// Query params:
+//   - report_type (required): "monthly" | "yearly" | "range"
+//   - month (required for monthly): 1-12
+//   - year (required for monthly and yearly): 2000-2100
+//   - from_month / from_year / to_month / to_year (required for range)
+//   - search: partial match on employee name or email
+//   - role: filter by role (EMPLOYEE|INTERN|HR|ADMIN|SUPERADMIN|MANAGER)
+//   - sort_by: name|email|role|total_leaves|paid_leaves|unpaid_leaves|early_leaves
+//   - sort_order: asc|desc
+func (h *HandlerFunc) GetLeaveReport(c *gin.Context) {
+	// 1️ Role guard — HR, ADMIN, SUPERADMIN only
 	role := c.GetString("role")
-	if role == "" {
-		utils.RespondWithError(c, http.StatusUnauthorized, "Role not found in context")
-		return
-	}
-	userIDStr := c.GetString("user_id")
-	if userIDStr == "" {
-		utils.RespondWithError(c, http.StatusUnauthorized, "User ID not found in context")
-		return
-	}
-	userID, err := uuid.Parse(userIDStr)
-	if err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "Invalid user ID format: "+err.Error())
+	if role != constant.ROLE_HR && role != constant.ROLE_ADMIN && role != constant.ROLE_SUPER_ADMIN {
+		utils.RespondWithError(c, http.StatusForbidden, "Only HR, ADMIN, and SUPERADMIN can access leave reports")
 		return
 	}
 
-	// 2️ Parse query params (month, year)
-	now := time.Now()
-	monthStr := c.DefaultQuery("month", fmt.Sprintf("%d", int(now.Month())))
-	yearStr := c.DefaultQuery("year", fmt.Sprintf("%d", now.Year()))
-
-	month, err := strconv.Atoi(monthStr)
-	if err != nil || month < 1 || month > 12 {
-		utils.RespondWithError(c, http.StatusBadRequest, "Invalid month. Must be between 1-12")
+	// 2️ Parse and validate report_type
+	reportType := c.Query("report_type")
+	if reportType == "" {
+		utils.RespondWithError(c, http.StatusBadRequest, "Missing required query param: report_type (monthly|yearly|range)")
 		return
 	}
 
-	year, err := strconv.Atoi(yearStr)
-	if err != nil || year < 2000 || year > 2100 {
-		utils.RespondWithError(c, http.StatusBadRequest, "Invalid year. Must be between 2000-2100")
-		return
-	}
+	req := models.LeaveReportRequest{ReportType: reportType}
 
-	// 3️ Determine scope based on role
-	var employeeIDs []string
+	// 3️ Parse date params based on report type
+	switch reportType {
+	case "monthly":
+		monthStr := c.Query("month")
+		yearStr := c.Query("year")
+		if monthStr == "" || yearStr == "" {
+			utils.RespondWithError(c, http.StatusBadRequest, "Monthly report requires: month, year")
+			return
+		}
+		month, err := strconv.Atoi(monthStr)
+		if err != nil || month < 1 || month > 12 {
+			utils.RespondWithError(c, http.StatusBadRequest, "Invalid month. Must be between 1-12")
+			return
+		}
+		year, err := strconv.Atoi(yearStr)
+		if err != nil || year < 2000 || year > 2100 {
+			utils.RespondWithError(c, http.StatusBadRequest, "Invalid year. Must be between 2000-2100")
+			return
+		}
+		req.Month = month
+		req.Year = year
 
-	switch role {
-	case constant.ROLE_EMPLOYEE, constant.ROLE_INTERN:
-		// Only their own data
-		employeeIDs = []string{userID.String()}
+	case "yearly":
+		yearStr := c.Query("year")
+		if yearStr == "" {
+			utils.RespondWithError(c, http.StatusBadRequest, "Yearly report requires: year")
+			return
+		}
+		year, err := strconv.Atoi(yearStr)
+		if err != nil || year < 2000 || year > 2100 {
+			utils.RespondWithError(c, http.StatusBadRequest, "Invalid year. Must be between 2000-2100")
+			return
+		}
+		req.Year = year
 
-	case constant.ROLE_MANAGER:
-		// Their team + themselves
-		employeeIDs, err = h.Query.GetDirectReportIDs(userID)
-		if err != nil {
-			utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch team members: "+err.Error())
+	case "range":
+		fromMonthStr := c.Query("from_month")
+		fromYearStr := c.Query("from_year")
+		toMonthStr := c.Query("to_month")
+		toYearStr := c.Query("to_year")
+
+		if fromMonthStr == "" || fromYearStr == "" || toMonthStr == "" || toYearStr == "" {
+			utils.RespondWithError(c, http.StatusBadRequest, "Range report requires: from_month, from_year, to_month, to_year")
 			return
 		}
 
-	case constant.ROLE_ADMIN, constant.ROLE_HR, constant.ROLE_SUPER_ADMIN:
-		// All employees (pass nil to query)
-		employeeIDs = nil
+		fromMonth, err := strconv.Atoi(fromMonthStr)
+		if err != nil || fromMonth < 1 || fromMonth > 12 {
+			utils.RespondWithError(c, http.StatusBadRequest, "Invalid from_month. Must be between 1-12")
+			return
+		}
+		fromYear, err := strconv.Atoi(fromYearStr)
+		if err != nil || fromYear < 2000 || fromYear > 2100 {
+			utils.RespondWithError(c, http.StatusBadRequest, "Invalid from_year. Must be between 2000-2100")
+			return
+		}
+		toMonth, err := strconv.Atoi(toMonthStr)
+		if err != nil || toMonth < 1 || toMonth > 12 {
+			utils.RespondWithError(c, http.StatusBadRequest, "Invalid to_month. Must be between 1-12")
+			return
+		}
+		toYear, err := strconv.Atoi(toYearStr)
+		if err != nil || toYear < 2000 || toYear > 2100 {
+			utils.RespondWithError(c, http.StatusBadRequest, "Invalid to_year. Must be between 2000-2100")
+			return
+		}
+
+		req.FromMonth = fromMonth
+		req.FromYear = fromYear
+		req.ToMonth = toMonth
+		req.ToYear = toYear
 
 	default:
-		utils.RespondWithError(c, http.StatusForbidden, "Invalid role: "+role)
+		utils.RespondWithError(c, http.StatusBadRequest, "Invalid report_type. Must be: monthly, yearly, or range")
 		return
 	}
 
-	// 4️ Execute query
-	records, err := h.Query.GetMonthlyLeaveReport(month, year, employeeIDs)
+	// 4️ Parse optional filter / sort params
+	req.Search = strings.TrimSpace(c.Query("search"))
+	req.Role = strings.TrimSpace(c.Query("role"))
+	req.SortBy = strings.TrimSpace(c.Query("sort_by"))
+	req.SortOrder = strings.TrimSpace(c.Query("sort_order"))
+
+	// Validate role filter if provided
+	if req.Role != "" {
+		validRoles := map[string]bool{
+			constant.ROLE_EMPLOYEE:   true,
+			constant.ROLE_INTERN:     true,
+			constant.ROLE_HR:         true,
+			constant.ROLE_ADMIN:      true,
+			constant.ROLE_SUPER_ADMIN: true,
+			constant.ROLE_MANAGER:    true,
+		}
+		if !validRoles[strings.ToUpper(req.Role)] {
+			utils.RespondWithError(c, http.StatusBadRequest, "Invalid role filter. Must be: EMPLOYEE, INTERN, HR, ADMIN, SUPERADMIN, MANAGER")
+			return
+		}
+		req.Role = strings.ToUpper(req.Role)
+	}
+
+	// Validate sort_by if provided
+	if req.SortBy != "" {
+		validSortFields := map[string]bool{
+			"name": true, "email": true, "role": true,
+			"total_leaves": true, "paid_leaves": true,
+			"unpaid_leaves": true, "early_leaves": true,
+		}
+		if !validSortFields[req.SortBy] {
+			utils.RespondWithError(c, http.StatusBadRequest, "Invalid sort_by. Must be: name, email, role, total_leaves, paid_leaves, unpaid_leaves, early_leaves")
+			return
+		}
+	}
+
+	// 5️ Call service layer
+	response, err := h.LeaveReportSvc.GetLeaveReport(req)
 	if err != nil {
-		fmt.Printf("GetMonthlyLeaveReport DB Error: %v\n", err)
-		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch monthly leave report: "+err.Error())
+		fmt.Printf("GetLeaveReport Service Error: %v\n", err)
+		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leave report: "+err.Error())
 		return
-	}
-
-	// 5️ Handle empty result
-	if records == nil {
-		records = []models.EmployeeLeaveMonthlyReport{}
 	}
 
 	// 6️ Return success
-	c.JSON(http.StatusOK, models.MonthlyLeaveReportResponse{
-		Month:   month,
-		Year:    year,
-		Total:   len(records),
-		Records: records,
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Leave report fetched successfully",
+		"data":    response,
 	})
 }

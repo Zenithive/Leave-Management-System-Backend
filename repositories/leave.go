@@ -3,6 +3,7 @@ package repositories
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -562,72 +563,64 @@ func (r *Repository) GetEarlyLeaveThisMonth(
 	return &leave, nil
 }
 
-// GetMonthlyLeaveReport returns a per-employee leave summary (paid, unpaid, early, total)
-// for a specific month and year. Scope is controlled by the caller:
-//   - Admin/HR/SuperAdmin: pass nil employeeIDs to get all employees
-//   - Manager: pass their direct-report IDs (+ their own)
-//   - Employee: pass only their own ID
-//
-// Only APPROVED leaves are counted (status = 'APPROVED').
-func (r *Repository) GetMonthlyLeaveReport(month, year int, employeeIDs []string) ([]models.EmployeeLeaveMonthlyReport, error) {
-	var result []models.EmployeeLeaveMonthlyReport
+// GetLeaveReportByRange returns a per-employee leave summary (paid, unpaid, early, total)
+// for a date range defined by [fromMonth/fromYear .. toMonth/toYear].
+// Only APPROVED leaves are counted.
+// Supports filtering by role, searching by name/email, and sorting.
+func (r *Repository) GetLeaveReportByRange(fromMonth, fromYear, toMonth, toYear int, search, roleFilter, sortBy, sortOrder string) ([]models.LeaveReportRecord, error) {
 
-	baseQuery := `
+	// Resolve ORDER BY — whitelist to prevent SQL injection
+	orderCol := "e.full_name"
+	switch sortBy {
+	case "email":
+		orderCol = "e.email"
+	case "role":
+		orderCol = "role"
+	case "total_leaves":
+		orderCol = "total_leaves"
+	case "paid_leaves":
+		orderCol = "paid_leaves"
+	case "unpaid_leaves":
+		orderCol = "unpaid_leaves"
+	case "early_leaves":
+		orderCol = "early_leaves"
+	}
+
+	dir := "ASC"
+	if strings.ToUpper(sortOrder) == "DESC" {
+		dir = "DESC"
+	}
+
+	query := fmt.Sprintf(`
 		SELECT
-			e.id::text                                                          AS employee_id,
-			e.full_name                                                         AS employee_name,
-			e.email                                                             AS email,
-			$1::int                                                             AS month,
-			$2::int                                                             AS year,
-			COALESCE(SUM(l.days), 0)                                           AS total_leaves,
+			e.id::text                                                                                                              AS employee_id,
+			e.full_name                                                                                                             AS employee_name,
+			e.email                                                                                                                 AS email,
+			r.type                                                                                                                  AS role,
+			COALESCE(SUM(l.days), 0)                                                                                               AS total_leaves,
 			COALESCE(SUM(CASE WHEN lt.is_paid = TRUE  AND (lt.is_early IS NULL OR lt.is_early = FALSE) THEN l.days ELSE 0 END), 0) AS paid_leaves,
 			COALESCE(SUM(CASE WHEN lt.is_paid = FALSE AND (lt.is_early IS NULL OR lt.is_early = FALSE) THEN l.days ELSE 0 END), 0) AS unpaid_leaves,
 			COALESCE(SUM(CASE WHEN lt.is_early = TRUE THEN l.days ELSE 0 END), 0)                                                  AS early_leaves
 		FROM Tbl_Employee e
+		JOIN Tbl_Role r ON e.role_id = r.id
 		LEFT JOIN Tbl_Leave l
 			ON  l.employee_id = e.id
 			AND l.status      = 'APPROVED'
-			AND EXTRACT(MONTH FROM l.start_date) = $1
-			AND EXTRACT(YEAR  FROM l.start_date) = $2
+			AND (
+				EXTRACT(YEAR FROM l.start_date)::int * 12 + EXTRACT(MONTH FROM l.start_date)::int
+				BETWEEN ($1::int * 12 + $2::int) AND ($3::int * 12 + $4::int)
+			)
 		LEFT JOIN Tbl_Leave_Type lt
 			ON lt.id = l.leave_type_id
 		WHERE e.status = 'active'
-	`
+		  AND r.type != 'SUPERADMIN'
+		  AND ($5 = '' OR LOWER(e.full_name) LIKE '%%' || LOWER($5) || '%%' OR LOWER(e.email) LIKE '%%' || LOWER($5) || '%%')
+		  AND ($6 = '' OR UPPER(r.type) = UPPER($6))
+		GROUP BY e.id, e.full_name, e.email, r.type
+		ORDER BY %s %s
+	`, orderCol, dir)
 
-	var rows []models.EmployeeLeaveMonthlyReport
-	var err error
-
-	if len(employeeIDs) > 0 {
-		// Scoped query — manager or employee view
-		query, args, qErr := sqlx.In(baseQuery+` AND e.id::text IN (?) GROUP BY e.id, e.full_name, e.email ORDER BY e.full_name ASC`, month, year, employeeIDs)
-		if qErr != nil {
-			return nil, qErr
-		}
-		query = r.DB.Rebind(query)
-		err = r.DB.Select(&rows, query, args...)
-	} else {
-		// Full org view — admin/HR/superadmin
-		err = r.DB.Select(&rows, baseQuery+` GROUP BY e.id, e.full_name, e.email ORDER BY e.full_name ASC`, month, year)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-	result = rows
-	return result, nil
-}
-
-// GetDirectReportIDs returns the UUIDs (as strings) of all employees who report to managerID,
-// plus the manager's own ID — used to scope the monthly leave report for managers.
-func (r *Repository) GetDirectReportIDs(managerID uuid.UUID) ([]string, error) {
-	var ids []string
-	err := r.DB.Select(&ids, `
-		SELECT id::text FROM Tbl_Employee WHERE manager_id = $1 AND status = 'active'
-	`, managerID)
-	if err != nil {
-		return nil, err
-	}
-	// Include the manager themselves
-	ids = append(ids, managerID.String())
-	return ids, nil
+	var rows []models.LeaveReportRecord
+	err := r.DB.Select(&rows, query, fromYear, fromMonth, toYear, toMonth, search, roleFilter)
+	return rows, err
 }
