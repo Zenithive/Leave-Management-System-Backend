@@ -112,7 +112,7 @@ func (s *HandlerFunc) AdjustLeaveBalance(c *gin.Context) {
 	// 1️ Role check - Only ADMIN/HR allowed
 	roleRaw, _ := c.Get("role")
 	role := roleRaw.(string)
-	if role != "ADMIN" && role != "SUPERADMIN" && role != "HR" {
+	if role != "ADMIN" && role != "SUPERADMIN" {
 		utils.RespondWithError(c, 403, "Not authorized to adjust leave balances")
 		return
 	}
