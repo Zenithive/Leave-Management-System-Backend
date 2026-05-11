@@ -210,7 +210,7 @@ func (h *HandlerFunc) UpdateLeavePolicy(c *gin.Context) {
 		}
 
 		// Recalculate leave balances if default_entitlement changed (non-INTERN employees)
-		if oldDefaultEntitlement != newDefaultEntitlement && (oldLeaveType.IsEarly == nil || !*oldLeaveType.IsEarly) {
+		if oldLeaveType.IsEarly == nil || !*oldLeaveType.IsEarly {
 			currentYear := time.Now().Year()
 			if err = h.Query.UpdateLeaveBalancesForEntitlementChange(tx, leaveTypeID, oldDefaultEntitlement, newDefaultEntitlement, currentYear); err != nil {
 				return utils.CustomErr(c, http.StatusInternalServerError, "Failed to update leave balances: "+err.Error())
@@ -227,23 +227,14 @@ func (h *HandlerFunc) UpdateLeavePolicy(c *gin.Context) {
 		//   - If intern_entitlement provided in request → that value
 		//   - If intern_entitlement cleared (was set, now nil) → fall back to newDefaultEntitlement
 		//   - If intern_entitlement was never set and still not sent → newDefaultEntitlement
-		if oldLeaveType.IsEarly == nil || !*oldLeaveType.IsEarly {
-			oldEffectiveIntern := oldDefaultEntitlement
-			if oldLeaveType.InternEntitlement != nil {
-				oldEffectiveIntern = *oldLeaveType.InternEntitlement
-			}
 
-			newEffectiveIntern := newDefaultEntitlement
-			if input.InternEntitlement != nil {
-				newEffectiveIntern = *input.InternEntitlement
-			}
-
-			if oldEffectiveIntern != newEffectiveIntern {
-				currentYear := time.Now().Year()
-				if err = h.Query.UpdateInternLeaveBalancesForEntitlementChange(tx, leaveTypeID, newEffectiveIntern, currentYear); err != nil {
-					return utils.CustomErr(c, http.StatusInternalServerError, "Failed to update intern leave balances: "+err.Error())
-				}
-			}
+		newEffectiveIntern := newDefaultEntitlement
+		if input.InternEntitlement != nil {
+			newEffectiveIntern = *input.InternEntitlement
+		}
+		currentYear := time.Now().Year()
+		if err = h.Query.UpdateInternLeaveBalancesForEntitlementChange(tx, leaveTypeID, newEffectiveIntern, currentYear); err != nil {
+			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to update intern leave balances: "+err.Error())
 		}
 		// Log Entry
 		data := &models.Common{

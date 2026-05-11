@@ -446,62 +446,6 @@ func (r *Repository) GetMyLeavesByMonthYear(userID uuid.UUID, month, year int) (
 	return result, err
 }
 
-// UpdateLeaveBalancesForEntitlementChange recalculates leave balances for all non-INTERN employees
-// when default_entitlement changes for a leave type.
-//
-// For each affected employee:
-//   - If joined in a prior year (or no joining_date): new opening = newDefaultEntitlement
-//   - If joined in the current year: new opening = prorated(newDefaultEntitlement, joinMonth)
-//   - closing = new_opening + accrued - used + adjusted
-//
-// This is a full recalculation from the new entitlement, not a diff-based patch,
-// so it is safe to call multiple times and always produces a consistent result.
-func (r *Repository) UpdateLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveTypeID int, oldDefaultEntitlement, newDefaultEntitlement int, currentYear int) error {
-	if oldDefaultEntitlement == newDefaultEntitlement {
-		return nil
-	}
-
-	type empRow struct {
-		ID          uuid.UUID  `db:"id"`
-		JoiningDate *time.Time `db:"joining_date"`
-	}
-	var employees []empRow
-	err := tx.Select(&employees, `
-		SELECT e.id, e.joining_date
-		FROM Tbl_Employee e
-		JOIN Tbl_Role r ON e.role_id = r.id
-		JOIN Tbl_Leave_balance lb ON lb.employee_id = e.id
-		WHERE lb.leave_type_id = $1
-		  AND lb.year          = $2
-		  AND r.type           != 'INTERN'
-	`, leaveTypeID, currentYear)
-	if err != nil {
-		return err
-	}
-
-	for _, emp := range employees {
-		var newOpening int
-		if emp.JoiningDate != nil && emp.JoiningDate.Year() == currentYear {
-			newOpening = proratedLeave(newDefaultEntitlement, int(emp.JoiningDate.Month()))
-		} else {
-			newOpening = newDefaultEntitlement
-		}
-		_, err := tx.Exec(`
-			UPDATE Tbl_Leave_balance
-			SET opening    = $1,
-			    closing    = $1 + accrued - used + adjusted,
-			    updated_at = NOW()
-			WHERE employee_id   = $2
-			  AND leave_type_id = $3
-			  AND year          = $4
-		`, newOpening, emp.ID, leaveTypeID, currentYear)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (r *Repository) UpdatePendingLeave(tx *sqlx.Tx, leaveID uuid.UUID, empID uuid.UUID, input models.LeaveUpdateInput, NewDays float64) error {
 
 	// 2. RE-CALCULATE DAYS using your existing service
