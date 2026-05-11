@@ -13,9 +13,10 @@ type Balance struct {
 	Available   float64 `json:"available"`
 }
 type LeaveTypeData struct {
-	LeaveTypeID        int     `db:"leave_type_id"`
-	LeaveTypeName      string  `db:"leave_type_name"`
-	DefaultEntitlement float64 `db:"default_entitlement"`
+	LeaveTypeID        int      `db:"leave_type_id"`
+	LeaveTypeName      string   `db:"leave_type_name"`
+	DefaultEntitlement float64  `db:"default_entitlement"`
+	InternEntitlement  *float64 `db:"intern_entitlement"`
 }
 
 // BalanceData represents raw balance data from database

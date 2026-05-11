@@ -26,3 +26,8 @@ func SuperAdmin(role string, message string) error {
 	}
 	return nil
 }
+
+// IsEmployeeLike returns true for roles that have employee-level access (EMPLOYEE and INTERN).
+func IsEmployeeLike(role string) bool {
+	return role == constant.ROLE_EMPLOYEE || role == constant.ROLE_INTERN
+}

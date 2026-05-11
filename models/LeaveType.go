@@ -7,6 +7,7 @@ type LeaveTypeInput struct {
 	IsPaid             *bool  `json:"is_paid,omitempty"`
 	IsEarly            *bool  `json:"is_early,omitempty" validate:"omitempty"`
 	DefaultEntitlement *int   `json:"default_entitlement,omitempty"`
+	InternEntitlement  *int   `json:"intern_entitlement,omitempty"`
 	LeaveCount         *int   `json:"leave_count,omitempty" validate:"omitempty,gt=0"`
 }
 
@@ -16,7 +17,14 @@ type LeaveType struct {
 	Name               string    `json:"name" db:"name"`
 	IsPaid             bool      `json:"is_paid" db:"is_paid"`
 	DefaultEntitlement int       `json:"default_entitlement" db:"default_entitlement"`
+	InternEntitlement  *int      `json:"intern_entitlement,omitempty" db:"intern_entitlement"`
 	IsEarly            *bool     `json:"is_early,omitempty" db:"is_early"`
 	CreatedAt          time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at" db:"updated_at"`
+}
+
+type LeaveTypeRow struct {
+	ID                 int  `db:"id"`
+	DefaultEntitlement int  `db:"default_entitlement"`
+	InternEntitlement  *int `db:"intern_entitlement"`
 }

@@ -3,8 +3,6 @@ package config
 import (
 	"log"
 	"os"
-	"path/filepath"
-	"runtime"
 	"sync"
 
 	"github.com/joho/godotenv"
@@ -38,15 +36,8 @@ func LoadENV() *ENV {
 	once.Do(func() {
 		// Try loading .env from the project root regardless of working directory
 		// Walk up from this file's location to find .env
-		_, filename, _, _ := runtime.Caller(0)
-		projectRoot := filepath.Join(filepath.Dir(filename), "..", "..")
-		envPath := filepath.Join(projectRoot, ".env")
-
-		if err := godotenv.Load(envPath); err != nil {
-			// Fallback: try current working directory
-			if err2 := godotenv.Load(); err2 != nil {
-				log.Println("⚠ No .env file found, using system environment variables")
-			}
+		if err := godotenv.Overload(".env"); err != nil {
+			log.Println("⚠ No .env file found, using system environment variables")
 		}
 
 		// Populate ENV struct with environment variables

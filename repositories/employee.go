@@ -2,9 +2,11 @@ package repositories
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
 )
@@ -70,6 +72,17 @@ func (r *Repository) GetEmployeeStatus(employeeID uuid.UUID) (string, error) {
 	return status, err
 }
 
+// GetEmployeeRole returns the role type for a given employee ID
+func (r *Repository) GetEmployeeRole(employeeID uuid.UUID) (string, error) {
+	var role string
+	err := r.DB.Get(&role, `
+		SELECT r.type FROM Tbl_Employee e
+		JOIN Tbl_Role r ON e.role_id = r.id
+		WHERE e.id = $1
+	`, employeeID)
+	return role, err
+}
+
 // ------------------ UPDATE EMPLOYEE DESIGNATION ------------------
 func (r *Repository) UpdateEmployeeDesignation(empID uuid.UUID, designationID *uuid.UUID) error {
 	_, err := r.DB.Exec(`
@@ -87,7 +100,6 @@ func (r *Repository) GetAllEmployees(params models.EmployeeFilterParams, role st
 	if role == constant.ROLE_ADMIN || role == constant.ROLE_SUPER_ADMIN {
 		salaryCol = "e.salary"
 	}
-
 	// Build WHERE conditions dynamically
 	conditions := []string{}
 	args := []interface{}{}
@@ -106,10 +118,14 @@ func (r *Repository) GetAllEmployees(params models.EmployeeFilterParams, role st
 		args = append(args, params.Status)
 		n++
 	}
-	if params.Role != "" {
-		conditions = append(conditions, fmt.Sprintf("r.type = $%d", n))
-		args = append(args, params.Role)
-		n++
+	if len(params.Roles) > 0 {
+		placeholders := make([]string, len(params.Roles))
+		for i, r := range params.Roles {
+			placeholders[i] = fmt.Sprintf("$%d", n)
+			args = append(args, r)
+			n++
+		}
+		conditions = append(conditions, fmt.Sprintf("r.type IN (%s)", strings.Join(placeholders, ",")))
 	}
 	if params.Designation != "" {
 		conditions = append(conditions, fmt.Sprintf("d.designation_name = $%d", n))
@@ -319,4 +335,23 @@ func (r *Repository) GetBirthdays(month, year int) ([]models.BirthdayEmployee, e
 		result = append(result, emp)
 	}
 	return result, nil
+}
+
+// GetAllActiveEmployeesWithRoles returns id, role, and joining_date for all active employees.
+// Used when allocating leave balance for a newly created leave type.
+type ActiveEmployeeRole struct {
+	ID          uuid.UUID  `db:"id"`
+	Role        string     `db:"role"`
+	JoiningDate *time.Time `db:"joining_date"`
+}
+
+func (r *Repository) GetAllActiveEmployeesWithRoles(tx *sqlx.Tx) ([]ActiveEmployeeRole, error) {
+	var employees []ActiveEmployeeRole
+	err := tx.Select(&employees, `
+		SELECT e.id, r.type AS role, e.joining_date
+		FROM Tbl_Employee e
+		JOIN Tbl_Role r ON e.role_id = r.id
+		WHERE e.status = 'active'
+	`)
+	return employees, err
 }
