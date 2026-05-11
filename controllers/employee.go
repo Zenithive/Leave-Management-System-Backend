@@ -163,32 +163,32 @@ func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 		if err != nil || id == uuid.Nil {
 			return utils.CustomErr(c, 500, "failed to create employee")
 		}
-		// data, err := h.Query.GetAllLeaveType()
-		// if err != nil {
-		// 	return utils.CustomErr(c, 500, "failed to allocate leave balance: ")
-		// }
+		data, err := h.Query.GetAllLeaveType()
+		if err != nil {
+			return utils.CustomErr(c, 500, "failed to allocate leave balance: ")
+		}
 
-		// // Determine if the employee is joining in the current year → prorate their leave.
-		// // If joining_date is nil or from a prior year, allocate the full entitlement.
-		// currentYear := time.Now().Year()
-		// isJoiningThisYear := input.JoiningDate != nil && input.JoiningDate.Year() == currentYear
+		// Determine if the employee is joining in the current year → prorate their leave.
+		// If joining_date is nil or from a prior year, allocate the full entitlement.
+		currentYear := time.Now().Year()
+		isJoiningThisYear := input.JoiningDate != nil && input.JoiningDate.Year() == currentYear
 
-		// for _, leaveType := range data {
-		// 	isEarlyLeave := leaveType.IsEarly != nil && *leaveType.IsEarly
-		// 	if !isEarlyLeave {
-		// 		entitlement := leaveType.DefaultEntitlement
-		// 		if input.Role == constant.ROLE_INTERN && leaveType.InternEntitlement != nil {
-		// 			entitlement = *leaveType.InternEntitlement
-		// 		}
-		// 		// Prorate only when the employee joins mid-year in the current year.
-		// 		if isJoiningThisYear {
-		// 			entitlement = service.CalculateProratedLeave(entitlement, int(input.JoiningDate.Month()))
-		// 		}
-		// 		if err := h.Query.CreateLeaveBalance(tx, id, leaveType.ID, entitlement); err != nil {
-		// 			return utils.CustomErr(c, 500, "failed to allocate leave balance: "+err.Error())
-		// 		}
-		// 	}
-		// }
+		for _, leaveType := range data {
+			isEarlyLeave := leaveType.IsEarly != nil && *leaveType.IsEarly
+			if !isEarlyLeave {
+				entitlement := leaveType.DefaultEntitlement
+				if input.Role == constant.ROLE_INTERN && leaveType.InternEntitlement != nil {
+					entitlement = *leaveType.InternEntitlement
+				}
+				// Prorate only when the employee joins mid-year in the current year.
+				if isJoiningThisYear {
+					entitlement = service.CalculateProratedLeave(entitlement, int(input.JoiningDate.Month()))
+				}
+				if err := h.Query.CreateLeaveBalance(tx, id, leaveType.ID, entitlement); err != nil {
+					return utils.CustomErr(c, 500, "failed to allocate leave balance: "+err.Error())
+				}
+			}
+		}
 		return nil
 	}); err != nil {
 		utils.RespondWithError(c, 500, err.Error())
