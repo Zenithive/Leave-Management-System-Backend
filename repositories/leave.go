@@ -241,8 +241,14 @@ func (r *Repository) GetAllEmployeeLeaveByMonthYear(userID uuid.UUID, month, yea
 
 	WHERE 
 		l.employee_id = $1
-		AND EXTRACT(MONTH FROM l.start_date) = $2
-		AND EXTRACT(YEAR FROM l.start_date) = $3
+
+		AND l.start_date::date <= (
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))
+			+ INTERVAL '1 month - 1 day'
+		)::date
+
+		AND l.end_date::date >=
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))::date
 
 	ORDER BY 
 		l.start_date ASC,
@@ -257,13 +263,15 @@ func (r *Repository) GetAllEmployeeLeaveByMonthYear(userID uuid.UUID, month, yea
 // MAKE_DATE($3, $2, 1)
 // GetAllleavebaseonassignManagerByMonthYear - Get manager's team leaves from given month/year onward (current + future).
 // When month/year is sent as base, returns leaves where start_date >= first day of that month.
-func (r *Repository) GetAllleavebaseonassignManagerByMonthYear(userID uuid.UUID, month, year int) ([]models.LeaveResponse, error) {
+func (r *Repository) GetAllleavebaseonassignManagerByMonthYear(
+	userID uuid.UUID,
+	month, year int,
+) ([]models.LeaveResponse, error) {
 
 	var result []models.LeaveResponse
 
 	query := `
-	SELECT 
-		l.id,
+	SELECT l.id,
 		e.full_name AS employee,
 		lt.name AS leave_type,
 		l.leave_type_id,
@@ -306,8 +314,14 @@ func (r *Repository) GetAllleavebaseonassignManagerByMonthYear(userID uuid.UUID,
 
 	WHERE
 		(e.manager_id = $1 OR l.employee_id = $1)
-		AND EXTRACT(MONTH FROM l.start_date) <= $2
-		AND EXTRACT(YEAR FROM l.start_date) <= $3
+
+		AND l.start_date::date <= (
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))
+			+ INTERVAL '1 month - 1 day'
+		)::date
+
+		AND l.end_date::date >=
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))::date
 
 	ORDER BY
 		l.start_date ASC,
@@ -321,7 +335,9 @@ func (r *Repository) GetAllleavebaseonassignManagerByMonthYear(userID uuid.UUID,
 
 // GetAllLeaveByMonthYear - Get all leaves from given month/year onward (current + future). Admin/HR/SuperAdmin.
 // When month/year is sent as base, returns leaves where start_date >= first day of that month.
-func (r *Repository) GetAllLeaveByMonthYear(month, year int) ([]models.LeaveResponse, error) {
+func (r *Repository) GetAllLeaveByMonthYear(
+	month, year int,
+) ([]models.LeaveResponse, error) {
 
 	var result []models.LeaveResponse
 
@@ -369,8 +385,13 @@ func (r *Repository) GetAllLeaveByMonthYear(month, year int) ([]models.LeaveResp
 		ON l.approved_by = approver.id
 
 	WHERE
-		EXTRACT(MONTH FROM l.start_date) <= $1
-		AND EXTRACT(YEAR FROM l.start_date) <= $2
+		l.start_date::date <= (
+			DATE_TRUNC('month', MAKE_DATE($2, $1, 1))
+			+ INTERVAL '1 month - 1 day'
+		)::date
+
+		AND l.end_date::date >=
+			DATE_TRUNC('month', MAKE_DATE($2, $1, 1))::date
 
 	ORDER BY
 		l.start_date ASC,
@@ -384,7 +405,10 @@ func (r *Repository) GetAllLeaveByMonthYear(month, year int) ([]models.LeaveResp
 
 // GetMyLeavesByMonthYear - Get current user's leaves from given month/year onward (current + future).
 // When month/year is sent as base, returns leaves where start_date >= first day of that month.
-func (r *Repository) GetMyLeavesByMonthYear(userID uuid.UUID, month, year int) ([]models.LeaveResponse, error) {
+func (r *Repository) GetMyLeavesByMonthYear(
+	userID uuid.UUID,
+	month, year int,
+) ([]models.LeaveResponse, error) {
 
 	var result []models.LeaveResponse
 
@@ -433,8 +457,14 @@ func (r *Repository) GetMyLeavesByMonthYear(userID uuid.UUID, month, year int) (
 
 	WHERE 
 		l.employee_id = $1
-		AND EXTRACT(MONTH FROM l.start_date) <= $2
-		AND EXTRACT(YEAR FROM l.start_date) <= $3
+
+		AND l.start_date::date <= (
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))
+			+ INTERVAL '1 month - 1 day'
+		)::date
+
+		AND l.end_date::date >=
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))::date
 
 	ORDER BY 
 		l.start_date ASC,
@@ -500,8 +530,15 @@ func (r *Repository) UpdateLeaveStatusWithResion(tx *sqlx.Tx, withdrawalReason s
 // GetEarlyLeaveThisMonth checks if the employee already has an early leave
 // for the given leave type in the same month/year as refDate.
 // Returns the existing leave if found, nil if not.
-func (r *Repository) GetEarlyLeaveThisMonth(tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int, refDate time.Time) (*models.Leave, error) {
+func (r *Repository) GetEarlyLeaveThisMonth(
+	tx *sqlx.Tx,
+	employeeID uuid.UUID,
+	leaveTypeID int,
+	refDate time.Time,
+) (*models.Leave, error) {
+
 	var leave models.Leave
+
 	err := tx.Get(&leave, `
 		SELECT l.*
 		FROM Tbl_Leave l
@@ -509,17 +546,88 @@ func (r *Repository) GetEarlyLeaveThisMonth(tx *sqlx.Tx, employeeID uuid.UUID, l
 		WHERE l.employee_id = $1
 		  AND l.leave_type_id = $2
 		  AND lt.is_early = TRUE
-		  AND l.status  IN ('Pending', 'APPROVED', 'MANAGER_APPROVED')
-		  AND EXTRACT(MONTH FROM l.start_date) = $3
-		  AND EXTRACT(YEAR  FROM l.start_date) = $4
+		  AND l.status IN ('Pending', 'APPROVED', 'MANAGER_APPROVED')
+		  AND $3::date BETWEEN l.start_date::date AND l.end_date::date
 		LIMIT 1
-	`, employeeID, leaveTypeID, int(refDate.Month()), refDate.Year())
+	`, employeeID, leaveTypeID, refDate)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
+
 	if err != nil {
 		return nil, err
 	}
+
 	return &leave, nil
+}
+
+// GetMonthlyLeaveReport returns a per-employee leave summary (paid, unpaid, early, total)
+// for a specific month and year. Scope is controlled by the caller:
+//   - Admin/HR/SuperAdmin: pass nil employeeIDs to get all employees
+//   - Manager: pass their direct-report IDs (+ their own)
+//   - Employee: pass only their own ID
+//
+// Only APPROVED leaves are counted (status = 'APPROVED').
+func (r *Repository) GetMonthlyLeaveReport(month, year int, employeeIDs []string) ([]models.EmployeeLeaveMonthlyReport, error) {
+	var result []models.EmployeeLeaveMonthlyReport
+
+	baseQuery := `
+		SELECT
+			e.id::text                                                          AS employee_id,
+			e.full_name                                                         AS employee_name,
+			e.email                                                             AS email,
+			$1::int                                                             AS month,
+			$2::int                                                             AS year,
+			COALESCE(SUM(l.days), 0)                                           AS total_leaves,
+			COALESCE(SUM(CASE WHEN lt.is_paid = TRUE  AND (lt.is_early IS NULL OR lt.is_early = FALSE) THEN l.days ELSE 0 END), 0) AS paid_leaves,
+			COALESCE(SUM(CASE WHEN lt.is_paid = FALSE AND (lt.is_early IS NULL OR lt.is_early = FALSE) THEN l.days ELSE 0 END), 0) AS unpaid_leaves,
+			COALESCE(SUM(CASE WHEN lt.is_early = TRUE THEN l.days ELSE 0 END), 0)                                                  AS early_leaves
+		FROM Tbl_Employee e
+		LEFT JOIN Tbl_Leave l
+			ON  l.employee_id = e.id
+			AND l.status      = 'APPROVED'
+			AND EXTRACT(MONTH FROM l.start_date) = $1
+			AND EXTRACT(YEAR  FROM l.start_date) = $2
+		LEFT JOIN Tbl_Leave_Type lt
+			ON lt.id = l.leave_type_id
+		WHERE e.status = 'active'
+	`
+
+	var rows []models.EmployeeLeaveMonthlyReport
+	var err error
+
+	if len(employeeIDs) > 0 {
+		// Scoped query — manager or employee view
+		query, args, qErr := sqlx.In(baseQuery+` AND e.id::text IN (?) GROUP BY e.id, e.full_name, e.email ORDER BY e.full_name ASC`, month, year, employeeIDs)
+		if qErr != nil {
+			return nil, qErr
+		}
+		query = r.DB.Rebind(query)
+		err = r.DB.Select(&rows, query, args...)
+	} else {
+		// Full org view — admin/HR/superadmin
+		err = r.DB.Select(&rows, baseQuery+` GROUP BY e.id, e.full_name, e.email ORDER BY e.full_name ASC`, month, year)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	result = rows
+	return result, nil
+}
+
+// GetDirectReportIDs returns the UUIDs (as strings) of all employees who report to managerID,
+// plus the manager's own ID — used to scope the monthly leave report for managers.
+func (r *Repository) GetDirectReportIDs(managerID uuid.UUID) ([]string, error) {
+	var ids []string
+	err := r.DB.Select(&ids, `
+		SELECT id::text FROM Tbl_Employee WHERE manager_id = $1 AND status = 'active'
+	`, managerID)
+	if err != nil {
+		return nil, err
+	}
+	// Include the manager themselves
+	ids = append(ids, managerID.String())
+	return ids, nil
 }

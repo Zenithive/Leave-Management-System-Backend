@@ -150,6 +150,67 @@ type LeaveResponse struct {
 	IsEarly         *bool     `db:"is_early" json:"is_early"`
 }
 
+// ----------------- EMPLOYEE MONTHLY LEAVE REPORT -----------------
+
+// EmployeeLeaveMonthlyReport represents a single employee's leave summary for a given month.
+type EmployeeLeaveMonthlyReport struct {
+	EmployeeID   string  `json:"employee_id" db:"employee_id"`
+	EmployeeName string  `json:"employee_name" db:"employee_name"`
+	Email        string  `json:"email" db:"email"`
+	Month        int     `json:"month" db:"month"`
+	Year         int     `json:"year" db:"year"`
+	TotalLeaves  float64 `json:"total_leaves" db:"total_leaves"`
+	PaidLeaves   float64 `json:"paid_leaves" db:"paid_leaves"`
+	UnpaidLeaves float64 `json:"unpaid_leaves" db:"unpaid_leaves"`
+	EarlyLeaves  float64 `json:"early_leaves" db:"early_leaves"`
+}
+
+// MonthlyLeaveReportResponse is the paginated API response for the monthly leave report.
+type MonthlyLeaveReportResponse struct {
+	Month   int                          `json:"month"`
+	Year    int                          `json:"year"`
+	Total   int                          `json:"total"`
+	Records []EmployeeLeaveMonthlyReport `json:"records"`
+}
+
+// LeaveCountSummary holds status-based leave counts for a given result set.
+// Reusable across all role-based leave list endpoints.
+type LeaveCountSummary struct {
+	Total           int `json:"total"`
+	Pending         int `json:"pending"`
+	ManagerApproved int `json:"manager_approved"`
+	Approved        int `json:"approved"`
+	Rejected        int `json:"rejected"`
+	ManagerRejected int `json:"manager_rejected"`
+	Cancelled       int `json:"cancelled"`
+	Withdrawn       int `json:"withdrawn"`
+}
+
+// BuildLeaveCountSummary computes status counts from a slice of LeaveResponse.
+// Call this once after fetching leaves — no extra DB query needed.
+func BuildLeaveCountSummary(leaves []LeaveResponse) LeaveCountSummary {
+	summary := LeaveCountSummary{Total: len(leaves)}
+	for _, l := range leaves {
+		switch l.Status {
+		case "Pending":
+			summary.Pending++
+		case "MANAGER_APPROVED":
+			summary.ManagerApproved++
+		case "APPROVED":
+			summary.Approved++
+		case "REJECTED":
+			summary.Rejected++
+		case "MANAGER_REJECTED":
+			summary.ManagerRejected++
+		case "CANCELLED":
+			summary.Cancelled++
+		case "WITHDRAWN":
+			summary.Withdrawn++
+		}
+	}
+	return summary
+}
+
 var Validate *validator.Validate
 
 func InitValidator() *validator.Validate {

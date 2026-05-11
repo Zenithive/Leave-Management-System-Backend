@@ -64,6 +64,7 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 		leaves.DELETE("/:id/cancel", h.CancelLeave)                    // Cancel pending leave (Employee/Admin)
 		leaves.POST("/:id/withdraw", h.WithdrawLeave)                  // Withdraw approved leave (Admin/Manager)
 		leaves.GET("/all", h.GetAllLeaves)                             // Get all leaves (filtered by role)
+		leaves.GET("/monthly-report", h.GetMonthlyLeaveReport)         // Monthly leave summary per employee (name, email, paid, unpaid, total)
 		leaves.GET("/my-leaves", h.GetAllMyLeave)                      // Get current user's own leaves with month/year filtering
 		leaves.GET("/:id", h.GetLeaveByID)                             // Get leave by ID (role-based access)
 		leaves.GET("/timming", h.GetLeaveTiming)                       // Get all Leave Timing

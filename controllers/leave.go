@@ -707,14 +707,14 @@ func (h *HandlerFunc) GetAllLeaves(c *gin.Context) {
 		result = []models.LeaveResponse{}
 	}
 
-	// 6️ Return success with metadata
+	// 6️ Return success with metadata + status counts
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Leaves fetched successfully",
-		"total":   len(result),
-		"role":    role,
-		"month":   month,
-		"year":    year,
-		"data":    result,
+		"message":  "Leaves fetched successfully",
+		"role":     role,
+		"month":    month,
+		"year":     year,
+		"summary":  models.BuildLeaveCountSummary(result),
+		"data":     result,
 	})
 }
 
@@ -767,13 +767,13 @@ func (h *HandlerFunc) GetAllMyLeave(c *gin.Context) {
 		result = []models.LeaveResponse{}
 	}
 
-	// 6️ Return success with metadata
+	// 6️ Return success with metadata + status counts
 	c.JSON(http.StatusOK, gin.H{
 		"message": "My leaves fetched successfully",
-		"total":   len(result),
 		"user_id": userID,
 		"month":   month,
 		"year":    year,
+		"summary": models.BuildLeaveCountSummary(result),
 		"data":    result,
 	})
 }
@@ -1423,5 +1423,100 @@ func (h *HandlerFunc) EditMyLeave(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"message":  "Leave updated successfully",
 		"leave_id": leaveID,
+	})
+}
+
+// GetMonthlyLeaveReport - GET /api/leaves/monthly-report
+// Returns a per-employee summary of leaves taken in a given month:
+//   - Employee name, email
+//   - Total leaves, paid leaves, unpaid leaves, early leaves
+//
+// Query params:
+//   - month (1-12, defaults to current month)
+//   - year (defaults to current year)
+//
+// Role-based access:
+//   - EMPLOYEE/INTERN: see only their own data
+//   - MANAGER: see their team + themselves
+//   - ADMIN/HR/SUPERADMIN: see all employees
+func (h *HandlerFunc) GetMonthlyLeaveReport(c *gin.Context) {
+	// 1️ Get role & user ID
+	role := c.GetString("role")
+	if role == "" {
+		utils.RespondWithError(c, http.StatusUnauthorized, "Role not found in context")
+		return
+	}
+	userIDStr := c.GetString("user_id")
+	if userIDStr == "" {
+		utils.RespondWithError(c, http.StatusUnauthorized, "User ID not found in context")
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		utils.RespondWithError(c, http.StatusBadRequest, "Invalid user ID format: "+err.Error())
+		return
+	}
+
+	// 2️ Parse query params (month, year)
+	now := time.Now()
+	monthStr := c.DefaultQuery("month", fmt.Sprintf("%d", int(now.Month())))
+	yearStr := c.DefaultQuery("year", fmt.Sprintf("%d", now.Year()))
+
+	month, err := strconv.Atoi(monthStr)
+	if err != nil || month < 1 || month > 12 {
+		utils.RespondWithError(c, http.StatusBadRequest, "Invalid month. Must be between 1-12")
+		return
+	}
+
+	year, err := strconv.Atoi(yearStr)
+	if err != nil || year < 2000 || year > 2100 {
+		utils.RespondWithError(c, http.StatusBadRequest, "Invalid year. Must be between 2000-2100")
+		return
+	}
+
+	// 3️ Determine scope based on role
+	var employeeIDs []string
+
+	switch role {
+	case constant.ROLE_EMPLOYEE, constant.ROLE_INTERN:
+		// Only their own data
+		employeeIDs = []string{userID.String()}
+
+	case constant.ROLE_MANAGER:
+		// Their team + themselves
+		employeeIDs, err = h.Query.GetDirectReportIDs(userID)
+		if err != nil {
+			utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch team members: "+err.Error())
+			return
+		}
+
+	case constant.ROLE_ADMIN, constant.ROLE_HR, constant.ROLE_SUPER_ADMIN:
+		// All employees (pass nil to query)
+		employeeIDs = nil
+
+	default:
+		utils.RespondWithError(c, http.StatusForbidden, "Invalid role: "+role)
+		return
+	}
+
+	// 4️ Execute query
+	records, err := h.Query.GetMonthlyLeaveReport(month, year, employeeIDs)
+	if err != nil {
+		fmt.Printf("GetMonthlyLeaveReport DB Error: %v\n", err)
+		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch monthly leave report: "+err.Error())
+		return
+	}
+
+	// 5️ Handle empty result
+	if records == nil {
+		records = []models.EmployeeLeaveMonthlyReport{}
+	}
+
+	// 6️ Return success
+	c.JSON(http.StatusOK, models.MonthlyLeaveReportResponse{
+		Month:   month,
+		Year:    year,
+		Total:   len(records),
+		Records: records,
 	})
 }
