@@ -62,6 +62,20 @@ func CalculateWorkingDays(Query *repositories.Repository, tx *sqlx.Tx, start, en
 	return float64(workingDays), nil
 }
 
+// applyTimingMultiplier applies the half/full-day multiplier to a pre-calculated
+// base working-day count. Extracted so it can be unit-tested without a DB.
+// timingID: 1 = First Half (×0.5), 2 = Second Half (×0.5), 3 = Full Day (×1.0)
+func applyTimingMultiplier(baseDays float64, timingID int) (float64, error) {
+	switch timingID {
+	case 1, 2:
+		return baseDays * 0.5, nil
+	case 3:
+		return baseDays, nil
+	default:
+		return 0, fmt.Errorf("invalid timing ID: %d. Must be 1 (First Half), 2 (Second Half), or 3 (Full Day)", timingID)
+	}
+}
+
 // CalculateWorkingDaysWithTiming calculates working days based on timing type
 // timingID: 1 = First Half (0.5 days), 2 = Second Half (0.5 days), 3 = Full Day (1.0 days)
 func CalculateWorkingDaysWithTiming(Query *repositories.Repository, tx *sqlx.Tx, start, end time.Time, timingID int, leaveTiming time.Time) (float64, error) {
@@ -72,18 +86,12 @@ func CalculateWorkingDaysWithTiming(Query *repositories.Repository, tx *sqlx.Tx,
 		return 0, err
 	}
 
+	// Early-leave timing string overrides the half-day multiplier
 	if !leaveTiming.IsZero() {
 		return baseDays, nil
 	}
 
-	switch timingID {
-	case 1, 2: // First Half or Second Half
-		return baseDays * 0.5, nil
-	case 3: // Full Day
-		return baseDays, nil
-	default:
-		return 0, fmt.Errorf("invalid timing ID: %d. Must be 1 (First Half), 2 (Second Half), or 3 (Full Day)", timingID)
-	}
+	return applyTimingMultiplier(baseDays, timingID)
 }
 
 type LeaveSummary struct {
