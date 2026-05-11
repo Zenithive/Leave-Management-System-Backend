@@ -22,3 +22,9 @@ type LeaveType struct {
 	CreatedAt          time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at" db:"updated_at"`
 }
+
+type LeaveTypeRow struct {
+	ID                 int  `db:"id"`
+	DefaultEntitlement int  `db:"default_entitlement"`
+	InternEntitlement  *int `db:"intern_entitlement"`
+}

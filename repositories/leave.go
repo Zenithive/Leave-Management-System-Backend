@@ -446,51 +446,6 @@ func (r *Repository) GetMyLeavesByMonthYear(userID uuid.UUID, month, year int) (
 	return result, err
 }
 
-// UpdateLeaveBalancesForEntitlementChange updates leave balances when default entitlement changes
-// This updates opening and closing balances for all employees with this leave type in the current year
-// Example: If default entitlement changes from 18 to 20:
-//   - Opening 18 → 20 (adds +2)
-//   - Closing 18 → 20 (adds +2, maintains available balance)
-//   - Closing 15 → 17 (if 3 days used, maintains same available balance)
-func (r *Repository) UpdateLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveTypeID int, oldDefaultEntitlement, newDefaultEntitlement int, currentYear int) error {
-	// Calculate the difference
-	difference := float64(newDefaultEntitlement - oldDefaultEntitlement)
-
-	// Only update if there's a change
-	if difference == 0 {
-		return nil
-	}
-
-	// Update all leave balances for this leave type in current year
-	// Update opening: add difference to current opening
-	// Update closing: add difference to current closing (maintains available balance)
-	// This ensures:
-	// - If opening was equal to old default, it becomes equal to new default
-	// - Available balance (closing) is adjusted proportionally
-	query := `
-		UPDATE Tbl_Leave_balance
-		SET opening = opening + $1,
-		    closing = closing + $1,
-		    updated_at = NOW()
-		WHERE leave_type_id = $2 
-		AND year = $3
-	`
-
-	result, err := tx.Exec(query, difference, leaveTypeID, currentYear)
-	if err != nil {
-		return err
-	}
-
-	// Log how many balances were updated (optional, for debugging)
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected > 0 {
-		fmt.Printf("Updated %d leave balances for leave_type_id=%d (entitlement: %d → %d, year: %d)\n",
-			rowsAffected, leaveTypeID, oldDefaultEntitlement, newDefaultEntitlement, currentYear)
-	}
-
-	return nil
-}
-
 func (r *Repository) UpdatePendingLeave(tx *sqlx.Tx, leaveID uuid.UUID, empID uuid.UUID, input models.LeaveUpdateInput, NewDays float64) error {
 
 	// 2. RE-CALCULATE DAYS using your existing service

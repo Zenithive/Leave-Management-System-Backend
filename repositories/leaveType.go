@@ -87,3 +87,15 @@ func (r *Repository) GetLeaveTypeNameByID(id int) (string, error) {
 	err := r.DB.Get(&name, query, id)
 	return name, err
 }
+
+func (r *Repository) GetAllLeaveTypes(tx *sqlx.Tx) ([]models.LeaveTypeRow, error) {
+
+	var leaveTypes []models.LeaveTypeRow
+
+	err := tx.Select(&leaveTypes, `
+		SELECT id, default_entitlement, intern_entitlement
+		FROM Tbl_Leave_type
+		WHERE is_early IS NULL OR is_early = FALSE
+	`)
+	return leaveTypes, err
+}

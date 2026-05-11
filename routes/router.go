@@ -79,6 +79,15 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 		leaveBalances.POST("/:id/adjust", h.AdjustLeaveBalance) // POST /api/leave-balances/:id/adjust
 	}
 
+	// ----------------- Admin: Leave Accrual -----------------
+	admin := r.Group("/api/admin")
+	admin.Use(middleware.AuthMiddleware(h))
+	{
+		// Manually trigger monthly leave accrual (SUPERADMIN only)
+		// ?month=5&year=2026  (defaults to current month/year)
+		admin.POST("/leave-accrual/run", h.TriggerLeaveAccrual)
+	}
+
 	// ----------------- Payroll -----------------
 	payroll := r.Group("/api/payroll")
 	payroll.Use(middleware.AuthMiddleware(h))

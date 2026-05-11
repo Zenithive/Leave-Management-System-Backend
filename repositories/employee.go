@@ -337,17 +337,18 @@ func (r *Repository) GetBirthdays(month, year int) ([]models.BirthdayEmployee, e
 	return result, nil
 }
 
-// GetAllActiveEmployeesWithRoles returns id and role for all active employees.
+// GetAllActiveEmployeesWithRoles returns id, role, and joining_date for all active employees.
 // Used when allocating leave balance for a newly created leave type.
 type ActiveEmployeeRole struct {
-	ID   uuid.UUID `db:"id"`
-	Role string    `db:"role"`
+	ID          uuid.UUID  `db:"id"`
+	Role        string     `db:"role"`
+	JoiningDate *time.Time `db:"joining_date"`
 }
 
 func (r *Repository) GetAllActiveEmployeesWithRoles(tx *sqlx.Tx) ([]ActiveEmployeeRole, error) {
 	var employees []ActiveEmployeeRole
 	err := tx.Select(&employees, `
-		SELECT e.id, r.type AS role
+		SELECT e.id, r.type AS role, e.joining_date
 		FROM Tbl_Employee e
 		JOIN Tbl_Role r ON e.role_id = r.id
 		WHERE e.status = 'active'

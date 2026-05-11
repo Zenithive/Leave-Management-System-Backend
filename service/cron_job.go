@@ -36,6 +36,8 @@ func NewBirthdayCronService(repo *repositories.Repository, env *config.ENV) *Bir
 func (s *BirthdayCronService) Start() {
 	schedule := "0 1 0 * * *" // sec min hour day month weekday
 
+	//schedule := "*/5 * * * * *"
+
 	_, err := s.cron.AddFunc(schedule, func() {
 		log.Println("[BirthdayCron] Running birthday notification job...")
 		if err := s.runBirthdayJob(); err != nil {
