@@ -167,13 +167,22 @@ func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 		if err != nil {
 			return utils.CustomErr(c, 500, "failed to allocate leave balance: ")
 		}
-		
+
+		// Determine if the employee is joining in the current year → prorate their leave.
+		// If joining_date is nil or from a prior year, allocate the full entitlement.
+		currentYear := time.Now().Year()
+		isJoiningThisYear := input.JoiningDate != nil && input.JoiningDate.Year() == currentYear
+
 		for _, leaveType := range data {
 			isEarlyLeave := leaveType.IsEarly != nil && *leaveType.IsEarly
 			if !isEarlyLeave {
 				entitlement := leaveType.DefaultEntitlement
 				if input.Role == constant.ROLE_INTERN && leaveType.InternEntitlement != nil {
 					entitlement = *leaveType.InternEntitlement
+				}
+				// Prorate only when the employee joins mid-year in the current year.
+				if isJoiningThisYear {
+					entitlement = service.CalculateProratedLeave(entitlement, int(input.JoiningDate.Month()))
 				}
 				if err := h.Query.CreateLeaveBalance(tx, id, leaveType.ID, entitlement); err != nil {
 					return utils.CustomErr(c, 500, "failed to allocate leave balance: "+err.Error())
@@ -577,11 +586,31 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 		finalEndingDate = input.EndingDate
 	}
 
-	// 8️ Update employee info
-	err = h.Query.UpdateEmployeeInfo(empID, finalName, finalEmail, finalSalary, finalJoiningDate, finalBirthDate, finalEndingDate)
-	if err != nil {
-		utils.RespondWithError(c, 500, "failed to update employee: "+err.Error())
-		return
+	// 8️ Update employee info — wrap in transaction if joining_date is changing
+	// so we can recalculate leave balances atomically.
+	if input.JoiningDate != nil {
+		if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+			if err := h.Query.UpdateEmployeeInfoTx(tx, empID, finalName, finalEmail, finalSalary, finalJoiningDate, finalBirthDate, finalEndingDate); err != nil {
+				return utils.CustomErr(c, 500, "failed to update employee: "+err.Error())
+			}
+			empRole, err := h.Query.GetEmployeeRole(empID)
+			if err != nil {
+				return utils.CustomErr(c, 500, "failed to fetch employee role: "+err.Error())
+			}
+			currentYear := time.Now().Year()
+			if err := h.Query.RecalculateLeaveBalancesForJoiningDateChange(tx, empID, finalJoiningDate, empRole, currentYear); err != nil {
+				return utils.CustomErr(c, 500, "failed to recalculate leave balances: "+err.Error())
+			}
+			return nil
+		}); err != nil {
+			utils.RespondWithError(c, 500, err.Error())
+			return
+		}
+	} else {
+		if err := h.Query.UpdateEmployeeInfo(empID, finalName, finalEmail, finalSalary, finalJoiningDate, finalBirthDate, finalEndingDate); err != nil {
+			utils.RespondWithError(c, 500, "failed to update employee: "+err.Error())
+			return
+		}
 	}
 
 	// 9️ Response

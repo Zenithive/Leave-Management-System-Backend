@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -277,4 +278,19 @@ func ValidateLeaveTiming(leaveTiming string) (time.Time, error) {
 	}
 
 	return t, nil
+}
+
+func CalculateProratedLeave(yearlyLeave int, joinMonth int) int {
+	if joinMonth < 1 || joinMonth > 12 {
+		return 0
+	}
+
+	// Remaining months including joining month
+	remainingMonths := 12 - joinMonth + 1
+
+	// Prorated calculation
+	prorated := (float64(yearlyLeave) * float64(remainingMonths)) / 12
+
+	// Round down
+	return int(math.Floor(prorated))
 }

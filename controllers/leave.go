@@ -21,8 +21,6 @@ import (
 // AdminAddLeave - POST /api/leaves/admin-add
 
 func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
-	roleRaw, _ := c.Get("role")
-	role := roleRaw.(string)
 
 	// Extract Employee Info
 	empIDRaw, ok := c.Get("user_id")
@@ -147,14 +145,14 @@ func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
 			fmt.Println("leave", leaveType.IsEarly)
 			balance, err := h.Query.GetLeaveBalance(tx, employeeID, input.LeaveTypeID)
 			if err == sql.ErrNoRows {
-				balance = float64(leaveType.DefaultEntitlement)
-				if role == constant.ROLE_INTERN {
-					balance = float64(*leaveType.InternEntitlement)
-				}
-				// Create balance if it doesn't exist
-				if err := h.Query.CreateLeaveBalance(tx, employeeID, input.LeaveTypeID, leaveType.DefaultEntitlement); err != nil {
-					return utils.CustomErr(c, 500, "Failed to create leave balance: "+err.Error())
-				}
+				// balance = float64(leaveType.DefaultEntitlement)
+				// if role == constant.ROLE_INTERN {
+				// 	balance = float64(*leaveType.InternEntitlement)
+				// }
+				// // Create balance if it doesn't exist
+				// if err := h.Query.CreateLeaveBalance(tx, employeeID, input.LeaveTypeID, leaveType.DefaultEntitlement); err != nil {
+				// 	return utils.CustomErr(c, 500, "Failed to create leave balance: "+err.Error())
+				// }
 			} else if err != nil {
 				return utils.CustomErr(c, 500, "Failed to fetch leave balance: "+err.Error())
 			}
