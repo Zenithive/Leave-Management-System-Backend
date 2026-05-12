@@ -241,8 +241,14 @@ func (r *Repository) GetAllEmployeeLeaveByMonthYear(userID uuid.UUID, month, yea
 
 	WHERE 
 		l.employee_id = $1
-		AND EXTRACT(MONTH FROM l.start_date) = $2
-		AND EXTRACT(YEAR FROM l.start_date) = $3
+
+		AND l.start_date::date <= (
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))
+			+ INTERVAL '1 month - 1 day'
+		)::date
+
+		AND l.end_date::date >=
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))::date
 
 	ORDER BY 
 		l.start_date ASC,
@@ -257,13 +263,15 @@ func (r *Repository) GetAllEmployeeLeaveByMonthYear(userID uuid.UUID, month, yea
 // MAKE_DATE($3, $2, 1)
 // GetAllleavebaseonassignManagerByMonthYear - Get manager's team leaves from given month/year onward (current + future).
 // When month/year is sent as base, returns leaves where start_date >= first day of that month.
-func (r *Repository) GetAllleavebaseonassignManagerByMonthYear(userID uuid.UUID, month, year int) ([]models.LeaveResponse, error) {
+func (r *Repository) GetAllleavebaseonassignManagerByMonthYear(
+	userID uuid.UUID,
+	month, year int,
+) ([]models.LeaveResponse, error) {
 
 	var result []models.LeaveResponse
 
 	query := `
-	SELECT 
-		l.id,
+	SELECT l.id,
 		e.full_name AS employee,
 		lt.name AS leave_type,
 		l.leave_type_id,
@@ -306,8 +314,14 @@ func (r *Repository) GetAllleavebaseonassignManagerByMonthYear(userID uuid.UUID,
 
 	WHERE
 		(e.manager_id = $1 OR l.employee_id = $1)
-		AND EXTRACT(MONTH FROM l.start_date) <= $2
-		AND EXTRACT(YEAR FROM l.start_date) <= $3
+
+		AND l.start_date::date <= (
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))
+			+ INTERVAL '1 month - 1 day'
+		)::date
+
+		AND l.end_date::date >=
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))::date
 
 	ORDER BY
 		l.start_date ASC,
@@ -321,7 +335,9 @@ func (r *Repository) GetAllleavebaseonassignManagerByMonthYear(userID uuid.UUID,
 
 // GetAllLeaveByMonthYear - Get all leaves from given month/year onward (current + future). Admin/HR/SuperAdmin.
 // When month/year is sent as base, returns leaves where start_date >= first day of that month.
-func (r *Repository) GetAllLeaveByMonthYear(month, year int) ([]models.LeaveResponse, error) {
+func (r *Repository) GetAllLeaveByMonthYear(
+	month, year int,
+) ([]models.LeaveResponse, error) {
 
 	var result []models.LeaveResponse
 
@@ -369,8 +385,13 @@ func (r *Repository) GetAllLeaveByMonthYear(month, year int) ([]models.LeaveResp
 		ON l.approved_by = approver.id
 
 	WHERE
-		EXTRACT(MONTH FROM l.start_date) <= $1
-		AND EXTRACT(YEAR FROM l.start_date) <= $2
+		l.start_date::date <= (
+			DATE_TRUNC('month', MAKE_DATE($2, $1, 1))
+			+ INTERVAL '1 month - 1 day'
+		)::date
+
+		AND l.end_date::date >=
+			DATE_TRUNC('month', MAKE_DATE($2, $1, 1))::date
 
 	ORDER BY
 		l.start_date ASC,
@@ -384,7 +405,10 @@ func (r *Repository) GetAllLeaveByMonthYear(month, year int) ([]models.LeaveResp
 
 // GetMyLeavesByMonthYear - Get current user's leaves from given month/year onward (current + future).
 // When month/year is sent as base, returns leaves where start_date >= first day of that month.
-func (r *Repository) GetMyLeavesByMonthYear(userID uuid.UUID, month, year int) ([]models.LeaveResponse, error) {
+func (r *Repository) GetMyLeavesByMonthYear(
+	userID uuid.UUID,
+	month, year int,
+) ([]models.LeaveResponse, error) {
 
 	var result []models.LeaveResponse
 
@@ -433,8 +457,14 @@ func (r *Repository) GetMyLeavesByMonthYear(userID uuid.UUID, month, year int) (
 
 	WHERE 
 		l.employee_id = $1
-		AND EXTRACT(MONTH FROM l.start_date) <= $2
-		AND EXTRACT(YEAR FROM l.start_date) <= $3
+
+		AND l.start_date::date <= (
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))
+			+ INTERVAL '1 month - 1 day'
+		)::date
+
+		AND l.end_date::date >=
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))::date
 
 	ORDER BY 
 		l.start_date ASC,
@@ -500,8 +530,15 @@ func (r *Repository) UpdateLeaveStatusWithResion(tx *sqlx.Tx, withdrawalReason s
 // GetEarlyLeaveThisMonth checks if the employee already has an early leave
 // for the given leave type in the same month/year as refDate.
 // Returns the existing leave if found, nil if not.
-func (r *Repository) GetEarlyLeaveThisMonth(tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int, refDate time.Time) (*models.Leave, error) {
+func (r *Repository) GetEarlyLeaveThisMonth(
+	tx *sqlx.Tx,
+	employeeID uuid.UUID,
+	leaveTypeID int,
+	refDate time.Time,
+) (*models.Leave, error) {
+
 	var leave models.Leave
+
 	err := tx.Get(&leave, `
 		SELECT l.*
 		FROM Tbl_Leave l
@@ -509,17 +546,18 @@ func (r *Repository) GetEarlyLeaveThisMonth(tx *sqlx.Tx, employeeID uuid.UUID, l
 		WHERE l.employee_id = $1
 		  AND l.leave_type_id = $2
 		  AND lt.is_early = TRUE
-		  AND l.status  IN ('Pending', 'APPROVED', 'MANAGER_APPROVED')
-		  AND EXTRACT(MONTH FROM l.start_date) = $3
-		  AND EXTRACT(YEAR  FROM l.start_date) = $4
+		  AND l.status IN ('Pending', 'APPROVED', 'MANAGER_APPROVED')
+		  AND $3::date BETWEEN l.start_date::date AND l.end_date::date
 		LIMIT 1
-	`, employeeID, leaveTypeID, int(refDate.Month()), refDate.Year())
+	`, employeeID, leaveTypeID, refDate)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
+
 	if err != nil {
 		return nil, err
 	}
+
 	return &leave, nil
 }

@@ -60,14 +60,17 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 		leaves.DELETE("/admin-delete/policy/:id", h.DeleteLeavePolicy) // Admin, SuperAdmin, HR delete leave policy
 		leaves.GET("/Get-All-Leave-Policy", h.GetAllLeavePolicies)     // Get all leave policies
 		leaves.GET("/manager/history", h.GetManagerLeaveHistory)       // Manager gets team leave history
-		leaves.POST("/:id/action", h.ActionLeave)                      // Approve/Reject leave
-		leaves.DELETE("/:id/cancel", h.CancelLeave)                    // Cancel pending leave (Employee/Admin)
-		leaves.POST("/:id/withdraw", h.WithdrawLeave)                  // Withdraw approved leave (Admin/Manager)
 		leaves.GET("/all", h.GetAllLeaves)                             // Get all leaves (filtered by role)
+		leaves.GET("/monthly-report", h.GetLeaveReport)                // Leave report: monthly / yearly / range (HR, ADMIN, SUPERADMIN)
+		leaves.GET("/Get-Leave-Report", h.GetLeaveReport)              // Alias for monthly-report
 		leaves.GET("/my-leaves", h.GetAllMyLeave)                      // Get current user's own leaves with month/year filtering
-		leaves.GET("/:id", h.GetLeaveByID)                             // Get leave by ID (role-based access)
 		leaves.GET("/timming", h.GetLeaveTiming)                       // Get all Leave Timing
 		leaves.PUT("/timming", h.UpdateLeaveTiming)                    // Update leave timing by super admin and admin
+		// ⚠️ Wildcard route MUST be last — Gin matches top-to-bottom
+		leaves.POST("/:id/action", h.ActionLeave)   // Approve/Reject leave
+		leaves.DELETE("/:id/cancel", h.CancelLeave) // Cancel pending leave (Employee/Admin)
+		leaves.POST("/:id/withdraw", h.WithdrawLeave) // Withdraw approved leave (Admin/Manager)
+		leaves.GET("/:id", h.GetLeaveByID)            // Get leave by ID (role-based access)
 	}
 
 	// ----------------- Leave Balances -----------------

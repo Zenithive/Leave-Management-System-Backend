@@ -150,6 +150,43 @@ type LeaveResponse struct {
 	IsEarly         *bool     `db:"is_early" json:"is_early"`
 }
 
+// Reusable across all role-based leave list endpoints.
+type LeaveCountSummary struct {
+	Total           int `json:"total"`
+	Pending         int `json:"pending"`
+	ManagerApproved int `json:"manager_approved"`
+	Approved        int `json:"approved"`
+	Rejected        int `json:"rejected"`
+	ManagerRejected int `json:"manager_rejected"`
+	Cancelled       int `json:"cancelled"`
+	Withdrawn       int `json:"withdrawn"`
+}
+
+// BuildLeaveCountSummary computes status counts from a slice of LeaveResponse.
+// Call this once after fetching leaves — no extra DB query needed.
+func BuildLeaveCountSummary(leaves []LeaveResponse) *LeaveCountSummary {
+	summary := LeaveCountSummary{Total: len(leaves)}
+	for _, l := range leaves {
+		switch l.Status {
+		case "Pending":
+			summary.Pending++
+		case "MANAGER_APPROVED":
+			summary.ManagerApproved++
+		case "APPROVED":
+			summary.Approved++
+		case "REJECTED":
+			summary.Rejected++
+		case "MANAGER_REJECTED":
+			summary.ManagerRejected++
+		case "CANCELLED":
+			summary.Cancelled++
+		case "WITHDRAWN":
+			summary.Withdrawn++
+		}
+	}
+	return &summary
+}
+
 var Validate *validator.Validate
 
 func InitValidator() *validator.Validate {
