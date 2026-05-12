@@ -1549,12 +1549,12 @@ func (h *HandlerFunc) GetLeaveReport(c *gin.Context) {
 	// Validate role filter if provided
 	if req.Role != "" {
 		validRoles := map[string]bool{
-			constant.ROLE_EMPLOYEE:   true,
-			constant.ROLE_INTERN:     true,
-			constant.ROLE_HR:         true,
-			constant.ROLE_ADMIN:      true,
+			constant.ROLE_EMPLOYEE:    true,
+			constant.ROLE_INTERN:      true,
+			constant.ROLE_HR:          true,
+			constant.ROLE_ADMIN:       true,
 			constant.ROLE_SUPER_ADMIN: true,
-			constant.ROLE_MANAGER:    true,
+			constant.ROLE_MANAGER:     true,
 		}
 		if !validRoles[strings.ToUpper(req.Role)] {
 			utils.RespondWithError(c, http.StatusBadRequest, "Invalid role filter. Must be: EMPLOYEE, INTERN, HR, ADMIN, SUPERADMIN, MANAGER")
@@ -1578,7 +1578,7 @@ func (h *HandlerFunc) GetLeaveReport(c *gin.Context) {
 	}
 
 	// 5️ Call service layer
-	response, err := h.LeaveReportSvc.GetLeaveReport(req)
+	response, err := h.LeaveReportSvc.GetLeaveReport(&req)
 	if err != nil {
 		fmt.Printf("GetLeaveReport Service Error: %v\n", err)
 		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leave report: "+err.Error())

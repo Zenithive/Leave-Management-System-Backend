@@ -1,80 +1,10 @@
 package repositories
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 )
-
-const (
-	SortEmail          = "email"
-	SortRole           = "role"
-	SortTotalLeaves    = "total_leaves"
-	SortPaidLeaves     = "paid_leaves"
-	SortUnpaidLeaves   = "unpaid_leaves"
-	SortEarlyLeaves    = "early_leaves"
-	SortAccruedLeaves  = "accrued_leaves"
-	SortBalanceLeaves  = "balance_leaves"
-	SortUsedLeaves     = "used_leaves"
-	DefaultOrderColumn = "e.full_name"
-)
-
-type LeaveReportFilter struct {
-	FromMonth int
-	FromYear  int
-
-	ToMonth int
-	ToYear  int
-
-	Search string
-	Role   string
-
-	SortBy    string
-	SortOrder string
-}
-
-func buildLeaveReportOrder(sortBy, sortOrder string) string {
-
-	orderCol := DefaultOrderColumn
-
-	switch sortBy {
-	case SortEmail:
-		orderCol = "e.email"
-
-	case SortRole:
-		orderCol = "role"
-
-	case SortTotalLeaves:
-		orderCol = "total_leaves"
-
-	case SortPaidLeaves:
-		orderCol = "paid_leaves"
-
-	case SortUnpaidLeaves:
-		orderCol = "unpaid_leaves"
-
-	case SortEarlyLeaves:
-		orderCol = "early_leaves"
-
-	case SortAccruedLeaves:
-		orderCol = "accrued_leaves"
-
-	case SortBalanceLeaves:
-		orderCol = "balance_leaves"
-
-	case SortUsedLeaves:
-		orderCol = "used_leaves"
-	}
-
-	dir := "ASC"
-
-	if strings.ToUpper(sortOrder) == "DESC" {
-		dir = "DESC"
-	}
-
-	return fmt.Sprintf(" ORDER BY %s %s", orderCol, dir)
-}
 
 func buildReportPeriodCTE() string {
 	return `
@@ -337,7 +267,7 @@ GROUP BY
 }
 
 func (r *Repository) GetLeaveReportByRange(
-	filter LeaveReportFilter,
+	filter models.LeaveReportFilter,
 ) ([]models.LeaveReportRecord, error) {
 
 	query := strings.Join([]string{
@@ -349,7 +279,7 @@ func (r *Repository) GetLeaveReportByRange(
 		buildFinalLeaveReportSelect(),
 	}, "\n")
 
-	query += buildLeaveReportOrder(
+	query += models.BuildLeaveReportOrder(
 		filter.SortBy,
 		filter.SortOrder,
 	)

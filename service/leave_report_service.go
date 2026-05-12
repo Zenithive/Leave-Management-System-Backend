@@ -22,9 +22,7 @@ func NewLeaveReportService(repo *repositories.Repository) *LeaveReportService {
 //   - "monthly"  → single month  (req.Month, req.Year)
 //   - "yearly"   → full year     (Jan–Dec of req.Year)
 //   - "range"    → custom range  (req.FromMonth/FromYear → req.ToMonth/ToYear)
-func (s *LeaveReportService) GetLeaveReport(
-	req models.LeaveReportRequest,
-) (models.LeaveReportResponse, error) {
+func (s *LeaveReportService) GetLeaveReport(req *models.LeaveReportRequest) (*models.LeaveReportResponse, error) {
 
 	var fromMonth, fromYear int
 	var toMonth, toYear int
@@ -54,18 +52,18 @@ func (s *LeaveReportService) GetLeaveReport(
 
 		// Validate range order
 		if fromYear*12+fromMonth > toYear*12+toMonth {
-			return models.LeaveReportResponse{},
+			return &models.LeaveReportResponse{},
 				fmt.Errorf("from date must be before or equal to to date")
 		}
 
 	default:
-		return models.LeaveReportResponse{},
+		return &models.LeaveReportResponse{},
 			fmt.Errorf(
 				"invalid report_type: must be monthly, yearly, or range",
 			)
 	}
 
-	filter := repositories.LeaveReportFilter{
+	filter := models.LeaveReportFilter{
 		FromMonth: fromMonth,
 		FromYear:  fromYear,
 
@@ -81,7 +79,7 @@ func (s *LeaveReportService) GetLeaveReport(
 
 	records, err := s.repo.GetLeaveReportByRange(filter)
 	if err != nil {
-		return models.LeaveReportResponse{},
+		return &models.LeaveReportResponse{},
 			fmt.Errorf("failed to fetch leave report: %w", err)
 	}
 
@@ -89,7 +87,7 @@ func (s *LeaveReportService) GetLeaveReport(
 		records = []models.LeaveReportRecord{}
 	}
 
-	return models.LeaveReportResponse{
+	return &models.LeaveReportResponse{
 		ReportType: req.ReportType,
 
 		FromMonth: fromMonth,

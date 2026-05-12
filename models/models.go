@@ -150,55 +150,6 @@ type LeaveResponse struct {
 	IsEarly         *bool     `db:"is_early" json:"is_early"`
 }
 
-// ----------------- EMPLOYEE MONTHLY LEAVE REPORT -----------------
-
-// EmployeeLeaveMonthlyReport represents a single employee's leave summary for a given month.
-
-
-// LeaveReportRequest holds parsed, validated params for all leave report types.
-type LeaveReportRequest struct {
-	ReportType string // "monthly" | "yearly" | "range"
-	Month      int    // used by monthly
-	Year       int    // used by monthly and yearly
-	FromMonth  int    // used by range
-	FromYear   int    // used by range
-	ToMonth    int    // used by range
-	ToYear     int    // used by range
-
-	// Filters & sorting
-	Search    string // search by name or email (partial, case-insensitive)
-	Role      string // filter by role: EMPLOYEE, INTERN, HR, ADMIN, SUPERADMIN, MANAGER
-	SortBy    string // name | email | role | total_leaves | paid_leaves | unpaid_leaves | early_leaves
-	SortOrder string // asc | desc
-}
-
-// LeaveReportRecord is a single employee row in any leave report response.
-type LeaveReportRecord struct {
-	EmployeeID    string  `json:"employee_id"    db:"employee_id"`
-	EmployeeName  string  `json:"employee_name"  db:"employee_name"`
-	Email         string  `json:"email"          db:"email"`
-	Role          string  `json:"role"           db:"role"`
-	AccruedLeaves float64 `json:"accrued_leaves" db:"accrued_leaves"`
-	UsedLeaves    float64 `json:"used_leaves"    db:"used_leaves"`
-	BalanceLeaves float64 `json:"balance_leaves" db:"balance_leaves"`
-	TotalLeaves   float64 `json:"total_leaves"   db:"total_leaves"`
-	PaidLeaves    float64 `json:"paid_leaves"    db:"paid_leaves"`
-	UnpaidLeaves  float64 `json:"unpaid_leaves"  db:"unpaid_leaves"`
-	EarlyLeaves   float64 `json:"early_leaves"   db:"early_leaves"`
-}
-
-// LeaveReportResponse is the unified API response for all leave report types.
-type LeaveReportResponse struct {
-	ReportType string              `json:"report_type"`
-	FromMonth  int                 `json:"from_month"`
-	FromYear   int                 `json:"from_year"`
-	ToMonth    int                 `json:"to_month"`
-	ToYear     int                 `json:"to_year"`
-	Total      int                 `json:"total"`
-	Records    []LeaveReportRecord `json:"records"`
-}
-
-// LeaveCountSummary holds status-based leave counts for a given result set.
 // Reusable across all role-based leave list endpoints.
 type LeaveCountSummary struct {
 	Total           int `json:"total"`
@@ -213,7 +164,7 @@ type LeaveCountSummary struct {
 
 // BuildLeaveCountSummary computes status counts from a slice of LeaveResponse.
 // Call this once after fetching leaves — no extra DB query needed.
-func BuildLeaveCountSummary(leaves []LeaveResponse) LeaveCountSummary {
+func BuildLeaveCountSummary(leaves []LeaveResponse) *LeaveCountSummary {
 	summary := LeaveCountSummary{Total: len(leaves)}
 	for _, l := range leaves {
 		switch l.Status {
@@ -233,7 +184,7 @@ func BuildLeaveCountSummary(leaves []LeaveResponse) LeaveCountSummary {
 			summary.Withdrawn++
 		}
 	}
-	return summary
+	return &summary
 }
 
 var Validate *validator.Validate
