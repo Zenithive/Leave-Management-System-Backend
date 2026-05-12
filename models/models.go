@@ -174,14 +174,17 @@ type LeaveReportRequest struct {
 
 // LeaveReportRecord is a single employee row in any leave report response.
 type LeaveReportRecord struct {
-	EmployeeID   string  `json:"employee_id"   db:"employee_id"`
-	EmployeeName string  `json:"employee_name" db:"employee_name"`
-	Email        string  `json:"email"         db:"email"`
-	Role         string  `json:"role"          db:"role"`
-	TotalLeaves  float64 `json:"total_leaves"  db:"total_leaves"`
-	PaidLeaves   float64 `json:"paid_leaves"   db:"paid_leaves"`
-	UnpaidLeaves float64 `json:"unpaid_leaves" db:"unpaid_leaves"`
-	EarlyLeaves  float64 `json:"early_leaves"  db:"early_leaves"`
+	EmployeeID    string  `json:"employee_id"    db:"employee_id"`
+	EmployeeName  string  `json:"employee_name"  db:"employee_name"`
+	Email         string  `json:"email"          db:"email"`
+	Role          string  `json:"role"           db:"role"`
+	AccruedLeaves float64 `json:"accrued_leaves" db:"accrued_leaves"`
+	UsedLeaves    float64 `json:"used_leaves"    db:"used_leaves"`
+	BalanceLeaves float64 `json:"balance_leaves" db:"balance_leaves"`
+	TotalLeaves   float64 `json:"total_leaves"   db:"total_leaves"`
+	PaidLeaves    float64 `json:"paid_leaves"    db:"paid_leaves"`
+	UnpaidLeaves  float64 `json:"unpaid_leaves"  db:"unpaid_leaves"`
+	EarlyLeaves   float64 `json:"early_leaves"   db:"early_leaves"`
 }
 
 // LeaveReportResponse is the unified API response for all leave report types.

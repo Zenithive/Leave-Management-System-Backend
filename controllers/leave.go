@@ -1569,9 +1569,10 @@ func (h *HandlerFunc) GetLeaveReport(c *gin.Context) {
 			"name": true, "email": true, "role": true,
 			"total_leaves": true, "paid_leaves": true,
 			"unpaid_leaves": true, "early_leaves": true,
+			"accrued_leaves": true, "balance_leaves": true, "used_leaves": true,
 		}
 		if !validSortFields[req.SortBy] {
-			utils.RespondWithError(c, http.StatusBadRequest, "Invalid sort_by. Must be: name, email, role, total_leaves, paid_leaves, unpaid_leaves, early_leaves")
+			utils.RespondWithError(c, http.StatusBadRequest, "Invalid sort_by. Must be: name, email, role, total_leaves, paid_leaves, unpaid_leaves, early_leaves, accrued_leaves, balance_leaves, used_leaves")
 			return
 		}
 	}
