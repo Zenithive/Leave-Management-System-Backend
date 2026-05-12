@@ -30,6 +30,8 @@ func buildLeaveWorkingDaysCTE() string {
 		lt.is_paid,
 		lt.is_early,
 
+		-- Total working days for the full leave span (weekends + holidays excluded)
+		-- This mirrors what CalculateWorkingDays() does at apply-time
 		(
 			SELECT COUNT(*)
 			FROM generate_series(
@@ -38,8 +40,13 @@ func buildLeaveWorkingDaysCTE() string {
 				INTERVAL '1 day'
 			) d
 			WHERE EXTRACT(DOW FROM d) NOT IN (0, 6)
+			  AND d::date NOT IN (
+				SELECT date::date FROM Tbl_Holiday
+				WHERE date::date BETWEEN l.start_date::date AND l.end_date::date
+			  )
 		) AS total_wd,
 
+		-- Working days that overlap with the report window (weekends + holidays excluded)
 		(
 			SELECT COUNT(*)
 			FROM generate_series(
@@ -48,6 +55,11 @@ func buildLeaveWorkingDaysCTE() string {
 				INTERVAL '1 day'
 			) d
 			WHERE EXTRACT(DOW FROM d) NOT IN (0, 6)
+			  AND d::date NOT IN (
+				SELECT date::date FROM Tbl_Holiday
+				WHERE date::date BETWEEN GREATEST(l.start_date, rp.win_start)::date
+				                     AND LEAST(l.end_date, rp.win_end)::date
+			  )
 		) AS overlap_wd
 
 	FROM Tbl_Leave l
@@ -72,12 +84,16 @@ func buildProratedLeavesCTE() string {
 		is_paid,
 		is_early,
 
-		ROUND(
-			days::numeric
-			* overlap_wd::numeric
-			/ NULLIF(total_wd::numeric, 0),
-			2
-		) AS prorated_days
+		CASE
+			-- no overlap
+			WHEN overlap_wd <= 0 THEN 0
+
+			-- leave fully inside window
+			WHEN total_wd = overlap_wd THEN days
+
+			-- cross-month leave
+			ELSE overlap_wd::numeric
+		END AS prorated_days
 
 	FROM leave_working_days
 
