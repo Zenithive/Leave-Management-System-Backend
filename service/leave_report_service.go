@@ -22,33 +22,67 @@ func NewLeaveReportService(repo *repositories.Repository) *LeaveReportService {
 //   - "monthly"  → single month  (req.Month, req.Year)
 //   - "yearly"   → full year     (Jan–Dec of req.Year)
 //   - "range"    → custom range  (req.FromMonth/FromYear → req.ToMonth/ToYear)
-func (s *LeaveReportService) GetLeaveReport(req models.LeaveReportRequest) (models.LeaveReportResponse, error) {
-	var fromMonth, fromYear, toMonth, toYear int
+func (s *LeaveReportService) GetLeaveReport(
+	req models.LeaveReportRequest,
+) (models.LeaveReportResponse, error) {
+
+	var fromMonth, fromYear int
+	var toMonth, toYear int
 
 	switch req.ReportType {
+
 	case "monthly":
-		fromMonth, fromYear = req.Month, req.Year
-		toMonth, toYear = req.Month, req.Year
+		fromMonth = req.Month
+		fromYear = req.Year
+
+		toMonth = req.Month
+		toYear = req.Year
 
 	case "yearly":
-		fromMonth, fromYear = 1, req.Year
-		toMonth, toYear = 12, req.Year
+		fromMonth = 1
+		fromYear = req.Year
+
+		toMonth = 12
+		toYear = req.Year
 
 	case "range":
-		fromMonth, fromYear = req.FromMonth, req.FromYear
-		toMonth, toYear = req.ToMonth, req.ToYear
+		fromMonth = req.FromMonth
+		fromYear = req.FromYear
+
+		toMonth = req.ToMonth
+		toYear = req.ToYear
+
 		// Validate range order
 		if fromYear*12+fromMonth > toYear*12+toMonth {
-			return models.LeaveReportResponse{}, fmt.Errorf("from date must be before or equal to to date")
+			return models.LeaveReportResponse{},
+				fmt.Errorf("from date must be before or equal to to date")
 		}
 
 	default:
-		return models.LeaveReportResponse{}, fmt.Errorf("invalid report_type: must be monthly, yearly, or range")
+		return models.LeaveReportResponse{},
+			fmt.Errorf(
+				"invalid report_type: must be monthly, yearly, or range",
+			)
 	}
 
-	records, err := s.repo.GetLeaveReportByRange(fromMonth, fromYear, toMonth, toYear, req.Search, req.Role, req.SortBy, req.SortOrder)
+	filter := repositories.LeaveReportFilter{
+		FromMonth: fromMonth,
+		FromYear:  fromYear,
+
+		ToMonth: toMonth,
+		ToYear:  toYear,
+
+		Search: req.Search,
+		Role:   req.Role,
+
+		SortBy:    req.SortBy,
+		SortOrder: req.SortOrder,
+	}
+
+	records, err := s.repo.GetLeaveReportByRange(filter)
 	if err != nil {
-		return models.LeaveReportResponse{}, fmt.Errorf("failed to fetch leave report: %w", err)
+		return models.LeaveReportResponse{},
+			fmt.Errorf("failed to fetch leave report: %w", err)
 	}
 
 	if records == nil {
@@ -57,11 +91,14 @@ func (s *LeaveReportService) GetLeaveReport(req models.LeaveReportRequest) (mode
 
 	return models.LeaveReportResponse{
 		ReportType: req.ReportType,
-		FromMonth:  fromMonth,
-		FromYear:   fromYear,
-		ToMonth:    toMonth,
-		ToYear:     toYear,
-		Total:      len(records),
-		Records:    records,
+
+		FromMonth: fromMonth,
+		FromYear:  fromYear,
+
+		ToMonth: toMonth,
+		ToYear:  toYear,
+
+		Total:   len(records),
+		Records: records,
 	}, nil
 }
