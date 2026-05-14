@@ -1447,14 +1447,6 @@ func (h *HandlerFunc) EditMyLeave(c *gin.Context) {
 //   - sort_by: name|email|role|total_leaves|paid_leaves|unpaid_leaves|early_leaves
 //   - sort_order: asc|desc
 func (h *HandlerFunc) GetLeaveReport(c *gin.Context) {
-	// 1️ Role guard — HR, ADMIN, SUPERADMIN only
-	role := c.GetString("role")
-	if role != constant.ROLE_HR && role != constant.ROLE_ADMIN && role != constant.ROLE_SUPER_ADMIN {
-		utils.RespondWithError(c, http.StatusForbidden, "Only HR, ADMIN, and SUPERADMIN can access leave reports")
-		return
-	}
-
-	// 2️ Parse and validate report_type
 	reportType := c.Query("report_type")
 	if reportType == "" {
 		utils.RespondWithError(c, http.StatusBadRequest, "Missing required query param: report_type (monthly|yearly|range)")
