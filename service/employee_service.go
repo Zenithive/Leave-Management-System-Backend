@@ -133,7 +133,7 @@ func (s *EmployeeService) UpdateEmployeeRole(tx *sqlx.Tx, empID uuid.UUID, newRo
 	if err != nil {
 		return nil, fmt.Errorf("failed to update role: %w", err)
 	}
-	if err := s.repo.AdjustLeaveBalancesForRoleChange(tx, empID, currentRole, newRole, time.Now().Year()); err != nil {
+	if err := s.leaveSvc.AdjustForRoleChange(tx, empID, currentRole, newRole); err != nil {
 		return nil, fmt.Errorf("failed to adjust leave balances for role change: %w", err)
 	}
 	return &UpdateRoleResult{UpdatedID: updatedID, OldRole: currentRole}, nil

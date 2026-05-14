@@ -19,6 +19,7 @@ type HandlerFunc struct {
 	LeaveTimingSvc  *service.LeaveTimingService
 	DesignationSvc  *service.DesignationService
 	HolidaySvc      *service.HolidayService
+	LeaveTypeSvc    *service.LeaveTypeService
 }
 
 // NewHandler initializes and returns a HandlerFunc
@@ -34,6 +35,7 @@ func NewHandler(env *config.ENV, query *repositories.Repository, validator *vali
 		LeaveTimingSvc:  service.NewLeaveTimingService(query),
 		DesignationSvc:  service.NewDesignationService(query),
 		HolidaySvc:      service.NewHolidayService(query),
+		LeaveTypeSvc:    service.NewLeaveTypeService(query, lbSvc),
 	}
 }
 

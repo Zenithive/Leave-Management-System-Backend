@@ -55,11 +55,11 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 	{
 		leaves.POST("/apply", h.ApplyLeave) // Employee applies for leave
 
-		leaves.PUT("/edit/:id", h.EditMyLeave)                                                                         // New Route
-		leaves.POST("/admin-add/policy", h.AdminAddLeavePolicy)                                                        // Admin creates leave policy
-		leaves.PUT("/admin-update/policy/:id", h.UpdateLeavePolicy)                                                    // Admin, SuperAdmin, HR update leave policy
-		leaves.DELETE("/admin-delete/policy/:id", h.DeleteLeavePolicy)                                                 // Admin, SuperAdmin, HR delete leave policy
-		leaves.GET("/Get-All-Leave-Policy", h.GetAllLeavePolicies)                                                     // Get all leave policies
+		leaves.PUT("/edit/:id", h.EditMyLeave)                                                                                                    // all authenticated
+		leaves.POST("/admin-add/policy", access_role.RoleMiddleware(access_role.SuperAdminOnly...), h.AdminAddLeavePolicy)                        // SUPERADMIN only
+		leaves.PUT("/admin-update/policy/:id", access_role.RoleMiddleware(access_role.AdminAccessRoles...), h.UpdateLeavePolicy)                  // SUPERADMIN, ADMIN, HR
+		leaves.DELETE("/admin-delete/policy/:id", access_role.RoleMiddleware(access_role.AdminAccessRoles...), h.DeleteLeavePolicy)               // SUPERADMIN, ADMIN, HR
+		leaves.GET("/Get-All-Leave-Policy", h.GetAllLeavePolicies)                                                                                // all authenticated
 		leaves.GET("/manager/history", h.GetManagerLeaveHistory)                                                       // Manager gets team leave history
 		leaves.GET("/all", h.GetAllLeaves)                                                                             // Get all leaves (filtered by role)
 		leaves.GET("/monthly-report", h.GetLeaveReport)                                                                // Leave report: monthly / yearly / range (HR, ADMIN, SUPERADMIN)
