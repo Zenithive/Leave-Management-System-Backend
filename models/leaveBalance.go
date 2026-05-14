@@ -2,6 +2,7 @@ package models
 
 import "github.com/google/uuid"
 
+// Balance is the API response shape for a single leave type balance.
 type Balance struct {
 	LeaveTypeID int     `json:"leave_type_id"`
 	LeaveType   string  `json:"leave_type"`
@@ -12,6 +13,8 @@ type Balance struct {
 	Total       float64 `json:"total"`
 	Available   float64 `json:"available"`
 }
+
+// LeaveTypeData is used by the repo to return leave type + entitlement info.
 type LeaveTypeData struct {
 	LeaveTypeID        int      `db:"leave_type_id"`
 	LeaveTypeName      string   `db:"leave_type_name"`
@@ -19,7 +22,7 @@ type LeaveTypeData struct {
 	InternEntitlement  *float64 `db:"intern_entitlement"`
 }
 
-// BalanceData represents raw balance data from database
+// BalanceData is the raw DB row from Tbl_Leave_balance.
 type BalanceData struct {
 	LeaveTypeID int     `db:"leave_type_id"`
 	Opening     float64 `db:"opening"`
@@ -29,7 +32,7 @@ type BalanceData struct {
 	Closing     float64 `db:"closing"`
 }
 
-// LeaveBalanceForAdjustment represents leave balance structure for adjustment operations
+// LeaveBalanceForAdjustment is the locked row fetched during an adjustment transaction.
 type LeaveBalanceForAdjustment struct {
 	ID          uuid.UUID `db:"id"`
 	Opening     float64   `db:"opening"`
@@ -40,4 +43,11 @@ type LeaveBalanceForAdjustment struct {
 	EmployeeID  uuid.UUID `db:"employee_id"`
 	LeaveTypeID int       `db:"leave_type_id"`
 	Year        int       `db:"year"`
+}
+
+// AdjustLeaveBalanceInput is the request body for POST /api/leave-balances/:id/adjust
+type AdjustLeaveBalanceInput struct {
+	LeaveTypeID int     `json:"leave_type_id" validate:"required"`
+	Quantity    float64 `json:"quantity" validate:"required"` // positive = add, negative = deduct
+	Reason      string  `json:"reason" validate:"required"`
 }

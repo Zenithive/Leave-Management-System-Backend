@@ -6,7 +6,36 @@ import (
 	"github.com/google/uuid"
 )
 
-type Employee struct {
+type Employee struct{}
+
+// UpdateEmployeeInfoInput is the request body for PATCH /api/employee/:id
+type UpdateEmployeeInfoInput struct {
+	FullName    *string    `json:"full_name"`
+	Email       *string    `json:"email"`
+	Salary      *float64   `json:"salary"`
+	JoiningDate *time.Time `json:"joining_date"`
+	BirthDate   *time.Time `json:"birth_date"`
+	EndingDate  *time.Time `json:"ending_date"`
+}
+
+// UpdatePasswordInput is the request body for PATCH /api/employee/:id/password
+type UpdatePasswordInput struct {
+	NewPassword string `json:"new_password" validate:"required,min=6"`
+}
+
+// UpdateRoleInput is the request body for PATCH /api/employee/:id/role
+type UpdateRoleInput struct {
+	Role string `json:"role" validate:"required"`
+}
+
+// UpdateManagerInput is the request body for PATCH /api/employee/:id/manager
+type UpdateManagerInput struct {
+	ManagerID string `json:"manager_id" validate:"required"`
+}
+
+// UpdateDesignationInput is the request body for PATCH /api/employee/:id/designation
+type UpdateDesignationInput struct {
+	DesignationID *string `json:"designation_id"`
 }
 
 // EmployeeFilterParams - Query parameters for filtering, sorting, and pagination

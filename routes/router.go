@@ -65,8 +65,8 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 		leaves.GET("/monthly-report", h.GetLeaveReport)                                                                // Leave report: monthly / yearly / range (HR, ADMIN, SUPERADMIN)
 		leaves.GET("/Get-Leave-Report", access_role.RoleMiddleware(access_role.AdminAccessRoles...), h.GetLeaveReport) // Alias for monthly-report
 		leaves.GET("/my-leaves", h.GetAllMyLeave)                                                                      // Get current user's own leaves with month/year filtering
-		leaves.GET("/timming", h.GetLeaveTiming)                                                                       // Get all Leave Timing
-		leaves.PUT("/timming", h.UpdateLeaveTiming)                                                                    // Update leave timing by super admin and admin
+		leaves.GET("/timming", h.GetLeaveTiming)                                                                       // Get all Leave Timing — all authenticated
+		leaves.PUT("/timming", access_role.RoleMiddleware(access_role.AdminAccessRoles...), h.UpdateLeaveTiming)        // Update leave timing — SUPERADMIN, ADMIN, HR only
 		// ⚠️ Wildcard route MUST be last — Gin matches top-to-bottom
 		leaves.POST("/:id/action", h.ActionLeave)     // Approve/Reject leave
 		leaves.DELETE("/:id/cancel", h.CancelLeave)   // Cancel pending leave (Employee/Admin)
@@ -135,11 +135,11 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 	designations := r.Group("/api/designations")
 	designations.Use(middleware.AuthMiddleware(h))
 	{
-		designations.POST("", h.CreateDesignation)       // Create designation (ADMIN, SUPERADMIN, HR)
-		designations.GET("", h.GetAllDesignations)       // Get all designations (All authenticated users)
-		designations.GET("/:id", h.GetDesignationByID)   // Get designation by ID (All authenticated users)
-		designations.PATCH("/:id", h.UpdateDesignation)  // Update designation (ADMIN, SUPERADMIN, HR)
-		designations.DELETE("/:id", h.DeleteDesignation) // Delete designation (ADMIN, SUPERADMIN, HR)
+		designations.POST("", access_role.RoleMiddleware(access_role.AdminAccessRoles...), h.CreateDesignation)    // ADMIN, SUPERADMIN, HR
+		designations.GET("", h.GetAllDesignations)                                                                 // all authenticated
+		designations.GET("/:id", h.GetDesignationByID)                                                             // all authenticated
+		designations.PATCH("/:id", access_role.RoleMiddleware(access_role.AdminAccessRoles...), h.UpdateDesignation)  // ADMIN, SUPERADMIN, HR
+		designations.DELETE("/:id", access_role.RoleMiddleware(access_role.AdminAccessRoles...), h.DeleteDesignation) // ADMIN, SUPERADMIN, HR
 	}
 	logs := r.Group("/api/logs")
 	logs.Use((middleware.AuthMiddleware(h)))
