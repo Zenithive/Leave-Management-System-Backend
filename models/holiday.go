@@ -12,8 +12,9 @@ type Holiday struct {
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
-var HolidayInput struct {
-	Name string    `json:"name" binding:"required,min=2,max=100"`
-	Date time.Time `json:"date" binding:"required"`
-	Type string    `json:"type" binding:"omitempty,oneof=HOLIDAY OPTIONAL"`
+// HolidayInput is the request body for POST /api/settings/holidays
+type HolidayInput struct {
+	Name string    `json:"name" validate:"required,min=2,max=100"`
+	Date time.Time `json:"date" validate:"required"`
+	Type string    `json:"type" validate:"omitempty,oneof=HOLIDAY OPTIONAL"`
 }

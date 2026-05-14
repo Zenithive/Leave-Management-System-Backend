@@ -126,9 +126,9 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 	holidays := r.Group("/api/settings/holidays")
 	holidays.Use(middleware.AuthMiddleware(h))
 	{
-		holidays.POST("", h.AddHoliday)          // SUPERADMIN adds holiday
-		holidays.GET("", h.GetHolidays)          // List all holidays
-		holidays.DELETE("/:id", h.DeleteHoliday) // Remove holiday
+		holidays.POST("", access_role.RoleMiddleware(access_role.AdminAccessRoles...), h.AddHoliday)    // ADMIN, SUPERADMIN, HR
+		holidays.GET("", h.GetHolidays)                                                                 // all authenticated
+		holidays.DELETE("/:id", access_role.RoleMiddleware(access_role.AdminAccessRoles...), h.DeleteHoliday) // ADMIN, SUPERADMIN, HR
 	}
 
 	// ----------------- Designations -----------------
