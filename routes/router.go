@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/controllers"
 	middleware "github.com/sanjayk-eng/UserMenagmentSystem_Backend/middlewere"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/access_role"
 )
 
 func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
@@ -54,21 +55,21 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 	{
 		leaves.POST("/apply", h.ApplyLeave) // Employee applies for leave
 
-		leaves.PUT("/edit/:id", h.EditMyLeave)                         // New Route
-		leaves.POST("/admin-add/policy", h.AdminAddLeavePolicy)        // Admin creates leave policy
-		leaves.PUT("/admin-update/policy/:id", h.UpdateLeavePolicy)    // Admin, SuperAdmin, HR update leave policy
-		leaves.DELETE("/admin-delete/policy/:id", h.DeleteLeavePolicy) // Admin, SuperAdmin, HR delete leave policy
-		leaves.GET("/Get-All-Leave-Policy", h.GetAllLeavePolicies)     // Get all leave policies
-		leaves.GET("/manager/history", h.GetManagerLeaveHistory)       // Manager gets team leave history
-		leaves.GET("/all", h.GetAllLeaves)                             // Get all leaves (filtered by role)
-		leaves.GET("/monthly-report", h.GetLeaveReport)                // Leave report: monthly / yearly / range (HR, ADMIN, SUPERADMIN)
-		leaves.GET("/Get-Leave-Report", h.GetLeaveReport)              // Alias for monthly-report
-		leaves.GET("/my-leaves", h.GetAllMyLeave)                      // Get current user's own leaves with month/year filtering
-		leaves.GET("/timming", h.GetLeaveTiming)                       // Get all Leave Timing
-		leaves.PUT("/timming", h.UpdateLeaveTiming)                    // Update leave timing by super admin and admin
+		leaves.PUT("/edit/:id", h.EditMyLeave)                                                                         // New Route
+		leaves.POST("/admin-add/policy", h.AdminAddLeavePolicy)                                                        // Admin creates leave policy
+		leaves.PUT("/admin-update/policy/:id", h.UpdateLeavePolicy)                                                    // Admin, SuperAdmin, HR update leave policy
+		leaves.DELETE("/admin-delete/policy/:id", h.DeleteLeavePolicy)                                                 // Admin, SuperAdmin, HR delete leave policy
+		leaves.GET("/Get-All-Leave-Policy", h.GetAllLeavePolicies)                                                     // Get all leave policies
+		leaves.GET("/manager/history", h.GetManagerLeaveHistory)                                                       // Manager gets team leave history
+		leaves.GET("/all", h.GetAllLeaves)                                                                             // Get all leaves (filtered by role)
+		leaves.GET("/monthly-report", h.GetLeaveReport)                                                                // Leave report: monthly / yearly / range (HR, ADMIN, SUPERADMIN)
+		leaves.GET("/Get-Leave-Report", access_role.RoleMiddleware(access_role.AdminAccessRoles...), h.GetLeaveReport) // Alias for monthly-report
+		leaves.GET("/my-leaves", h.GetAllMyLeave)                                                                      // Get current user's own leaves with month/year filtering
+		leaves.GET("/timming", h.GetLeaveTiming)                                                                       // Get all Leave Timing
+		leaves.PUT("/timming", h.UpdateLeaveTiming)                                                                    // Update leave timing by super admin and admin
 		// ⚠️ Wildcard route MUST be last — Gin matches top-to-bottom
-		leaves.POST("/:id/action", h.ActionLeave)   // Approve/Reject leave
-		leaves.DELETE("/:id/cancel", h.CancelLeave) // Cancel pending leave (Employee/Admin)
+		leaves.POST("/:id/action", h.ActionLeave)     // Approve/Reject leave
+		leaves.DELETE("/:id/cancel", h.CancelLeave)   // Cancel pending leave (Employee/Admin)
 		leaves.POST("/:id/withdraw", h.WithdrawLeave) // Withdraw approved leave (Admin/Manager)
 		leaves.GET("/:id", h.GetLeaveByID)            // Get leave by ID (role-based access)
 	}
