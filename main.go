@@ -39,7 +39,7 @@ func main() {
 	// Create a new Gin router
 	r := gin.Default()
 	models.InitValidator()
-	routes.SetupRoutes(r, handlerFunc)
+	routes.SetupRoutes(r, handlerFunc, env)
 
 	fmt.Printf("Starting server on port %s\n", env.APP_PORT)
 

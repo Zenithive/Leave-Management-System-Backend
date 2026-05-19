@@ -3,54 +3,62 @@ package config
 import (
 	"log"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/joho/godotenv"
 )
 
-// ENV holds all application environment variables in a structured way
+// ENV holds all application environment variables
 type ENV struct {
 	DB_URL          string
 	APP_PORT        string
 	SERACT_KEY      string
 	FRONTEND_SERVER string
+	ALLOWED_ORIGINS []string
 	RESEND_API_KEY  string
 	RESEND_FROM     string
 	SLACK_WEBHOOK   string
 }
 
 var (
-	cfg  *ENV      // Singleton instance of ENV
-	once sync.Once // Ensures LoadENV is executed only once (thread-safe)
+	cfg  *ENV
+	once sync.Once
 )
 
-// LoadENV loads environment variables from .env file (if exists)
-// and system environment variables. It returns a singleton ENV instance.
-//
-// Usage:
-//
-//	env := config.LoadENV()
-//	dbURL := env.DB.DB_URL
-//	port  := env.PORT.PORT
 func LoadENV() *ENV {
 	once.Do(func() {
-		// Try loading .env from the project root regardless of working directory
-		// Walk up from this file's location to find .env
+
 		if err := godotenv.Overload(".env"); err != nil {
 			log.Println("⚠ No .env file found, using system environment variables")
 		}
 
-		// Populate ENV struct with environment variables
+		// Read origins
+		rawOrigins := os.Getenv("ALLOWED_ORIGINS")
+
+		var origins []string
+
+		for _, origin := range strings.Split(rawOrigins, ",") {
+			origin = strings.TrimSpace(origin)
+
+			if origin != "" {
+				origins = append(origins, origin)
+			}
+		}
+
 		cfg = &ENV{
 			DB_URL:          os.Getenv("DB_URL"),
 			APP_PORT:        os.Getenv("APP_PORT"),
 			SERACT_KEY:      os.Getenv("SECRATE_KEY"),
 			FRONTEND_SERVER: os.Getenv("F_SERVER"),
+			ALLOWED_ORIGINS: origins,
 			RESEND_API_KEY:  os.Getenv("RESEND_API_KEY"),
 			RESEND_FROM:     os.Getenv("RESEND_FROM"),
 			SLACK_WEBHOOK:   os.Getenv("SLACK_WEBHOOK_URL"),
 		}
 	})
+
 	log.Println(" Environment variables loaded successfully")
+
 	return cfg
 }
