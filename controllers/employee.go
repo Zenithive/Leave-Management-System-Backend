@@ -520,12 +520,12 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 	}
 
 	// 6️ Permission checks
-	isAdmin := role == "SUPERADMIN" || role == "ADMIN"
+	isAdmin := role == "SUPERADMIN" || role == "ADMIN" || role == "HR"
 	isSelf := currentUserID == empID
 
 	// Check if trying to update email, salary, joining_date, birth_date, or ending_date
 	if (input.Email != nil || input.Salary != nil || input.JoiningDate != nil || input.BirthDate != nil || input.EndingDate != nil) && !isAdmin {
-		utils.RespondWithError(c, 403, "only SUPERADMIN and ADMIN can update email, salary, joining date, and ending date")
+		utils.RespondWithError(c, 403, "only SUPERADMIN aADMIN , HR can update email, salary, joining date, and ending date")
 		return
 	}
 
