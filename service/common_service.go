@@ -238,7 +238,7 @@ func CalculateLeaveBalances(leaveTypes []LeaveTypeData, balanceRecords []LeaveBa
 	// Only iterate over actual DB balance records — no synthetic entries
 	for _, balance := range balanceRecords {
 		name := nameMap[balance.LeaveTypeID]
-		total := balance.Opening + balance.Accrued
+		total := balance.Opening
 
 		calculatedBalances = append(calculatedBalances, CalculatedBalance{
 			LeaveTypeID: balance.LeaveTypeID,

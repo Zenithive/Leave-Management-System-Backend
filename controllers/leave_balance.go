@@ -178,7 +178,7 @@ func (s *HandlerFunc) AdjustLeaveBalance(c *gin.Context) {
 
 	// 6️ Apply adjustment
 	newAdjusted := balance.Adjusted + input.Quantity
-	newClosing := balance.Opening + balance.Accrued - balance.Used + newAdjusted
+	newClosing := balance.Opening - balance.Used + newAdjusted
 
 	// Update leave balance (repository layer)
 	err = s.Query.UpdateLeaveBalanceAdjustment(tx, balance.ID, newAdjusted, newClosing)
