@@ -10,6 +10,60 @@ import (
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/repositories"
 )
 
+// ValidateUnpaidLeaveApplication checks if an employee can apply for unpaid leave.
+// Business Rule: Employees cannot apply for unpaid leave if they have:
+//   1. Any paid leave balance > 0, OR
+//   2. Any pending/manager-approved paid leaves
+// Returns an error if validation fails, nil if validation passes.
+func ValidateUnpaidLeaveApplication(repo *repositories.Repository, tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int) error {
+	// First, check if the leave type being applied is unpaid or early leave
+	var result struct {
+		IsPaid  bool  `db:"is_paid"`
+		IsEarly *bool `db:"is_early"`
+	}
+	err := tx.Get(&result, `SELECT is_paid, is_early FROM Tbl_Leave_Type WHERE id=$1`, leaveTypeID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch leave type: %w", err)
+	}
+
+	// If the leave type is paid, no validation needed
+	if result.IsPaid {
+		return nil
+	}
+
+	// If the leave type is early leave, skip unpaid leave validation
+	if result.IsEarly != nil && *result.IsEarly {
+		return nil
+	}
+
+	// If applying for unpaid leave, check if employee has any paid leave balance
+	totalPaidBalance, err := repo.GetTotalPaidLeaveBalance(tx, employeeID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch paid leave balance: %w", err)
+	}
+
+	// Check if employee has any pending paid leaves
+	totalPendingPaidDays, err := repo.GetTotalPendingPaidLeaveDays(tx, employeeID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch pending paid leave days: %w", err)
+	}
+
+	// Validation logic with detailed error messages
+	if totalPaidBalance > 0 && totalPendingPaidDays > 0 {
+		return fmt.Errorf("cannot apply for unpaid leave. You have %.1f days of paid leave balance remaining and %.1f days of pending paid leaves. Please use paid leave first", totalPaidBalance, totalPendingPaidDays)
+	}
+
+	if totalPaidBalance > 0 {
+		return fmt.Errorf("cannot apply for unpaid leave. You have %.1f days of paid leave balance remaining. Please use paid leave first", totalPaidBalance)
+	}
+
+	if totalPendingPaidDays > 0 {
+		return fmt.Errorf("cannot apply for unpaid leave. You have %.1f days of pending paid leave applications. Please wait for approval or use those paid leaves first", totalPendingPaidDays)
+	}
+
+	return nil
+}
+
 func CalculateWorkingDays(Query *repositories.Repository, tx *sqlx.Tx, start, end time.Time, leaveTiming time.Time) (float64, error) {
 	// 1️ Validate date range
 	if end.Before(start) {

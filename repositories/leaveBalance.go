@@ -86,6 +86,41 @@ func (r *Repository) GetDefaultEntitlementByLeaveTypeID(tx *sqlx.Tx, leaveTypeID
 	return row.DefaultEntitlement, nil
 }
 
+// GetTotalPaidLeaveBalance returns the sum of all closing balances for paid, non-early leave types
+// for the given employee in the current year. This is used to validate unpaid leave applications.
+func (r *Repository) GetTotalPaidLeaveBalance(tx *sqlx.Tx, employeeID uuid.UUID) (float64, error) {
+	var totalBalance float64
+	err := tx.Get(&totalBalance, `
+		SELECT COALESCE(SUM(lb.closing), 0)
+		FROM Tbl_Leave_balance lb
+		JOIN Tbl_Leave_Type lt ON lb.leave_type_id = lt.id
+		WHERE lb.employee_id = $1
+		  AND lb.year = EXTRACT(YEAR FROM CURRENT_DATE)
+		  AND lt.is_paid = TRUE
+		  AND (lt.is_early IS NULL OR lt.is_early = FALSE)
+	`, employeeID)
+	return totalBalance, err
+}
+
+// GetTotalPendingPaidLeaveDays returns the sum of all pending/manager-approved leave days
+// for paid, non-early leave types for the given employee in the current year.
+// This is used to validate unpaid leave applications - employees with pending paid leaves
+// should not be allowed to apply for unpaid leave.
+func (r *Repository) GetTotalPendingPaidLeaveDays(tx *sqlx.Tx, employeeID uuid.UUID) (float64, error) {
+	var totalPendingDays float64
+	err := tx.Get(&totalPendingDays, `
+		SELECT COALESCE(SUM(l.days), 0)
+		FROM Tbl_Leave l
+		JOIN Tbl_Leave_Type lt ON l.leave_type_id = lt.id
+		WHERE l.employee_id = $1
+		  AND l.status IN ('Pending', 'MANAGER_APPROVED')
+		  AND EXTRACT(YEAR FROM l.start_date) = EXTRACT(YEAR FROM CURRENT_DATE)
+		  AND lt.is_paid = TRUE
+		  AND (lt.is_early IS NULL OR lt.is_early = FALSE)
+	`, employeeID)
+	return totalPendingDays, err
+}
+
 // CreateLeaveBalanceForAdjustment creates a new leave balance record
 func (r *Repository) CreateLeaveBalanceForAdjustment(tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int, year int, defaultEntitlement float64) (models.LeaveBalanceForAdjustment, error) {
 	var balance models.LeaveBalanceForAdjustment

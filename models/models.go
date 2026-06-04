@@ -35,42 +35,6 @@ type EmployeeInput struct {
 	DesignationName *string    `json:"designation_name,omitempty"` // optional
 }
 
-// ----------------- LEAVE -----------------
-type LeaveInput struct {
-	EmployeeID    uuid.UUID  `json:"employee_id" validate:"required"`
-	LeaveTypeID   int        `json:"leave_type_id" validate:"required"`
-	LeaveTimingID *int       `json:"leave_timing_id,omitempty"`
-	LeaveTiming   *string    `json:"leave_timing,omitempty"`
-	StartDate     time.Time  `json:"start_date" validate:"required"`
-	EndDate       time.Time  `json:"end_date" validate:"required"`
-	Reason        string     `json:"reason" validate:"required,min=10,max=500"` // Enhanced validation
-	Days          *float64   `json:"days,omitempty"`
-	Status        string     `json:"status,omitempty"`
-	AppliedByID   *uuid.UUID `json:"applied_by,omitempty"`
-	ApprovedByID  *uuid.UUID `json:"approved_by,omitempty"`
-}
-
-// ----------------- LEAVE BALANCE -----------------
-type LeaveBalanceInput struct {
-	EmployeeID  uuid.UUID `json:"employee_id" validate:"required"`
-	LeaveTypeID int       `json:"leave_type_id" validate:"required"`
-	Year        int       `json:"year,omitempty"`
-	Opening     *float64  `json:"opening,omitempty"`
-	Accrued     *float64  `json:"accrued,omitempty"`
-	Used        *float64  `json:"used,omitempty"`
-	Adjusted    *float64  `json:"adjusted,omitempty"`
-	Closing     *float64  `json:"closing,omitempty"`
-}
-
-// ----------------- LEAVE ADJUSTMENT -----------------
-type LeaveAdjustmentInput struct {
-	EmployeeID  uuid.UUID `json:"employee_id" validate:"required"`
-	LeaveTypeID int       `json:"leave_type_id" validate:"required"`
-	Quantity    float64   `json:"quantity" validate:"required"`
-	Reason      *string   `json:"reason,omitempty"`
-	CreatedByID uuid.UUID `json:"created_by" validate:"required"`
-}
-
 // ----------------- PAYROLL RUN -----------------
 type PayrollRunInput struct {
 	Month  int     `json:"month" validate:"required"`
@@ -132,60 +96,6 @@ type FullPayslipResponse struct {
 	CalculationText string    `json:"calculation"`
 	CreatedAt       string    `json:"created_at"`
 }
-type LeaveResponse struct {
-	ID              string    `db:"id" json:"id"`
-	Employee        string    `db:"employee" json:"employee"`
-	LeaveType       string    `db:"leave_type" json:"leave_type"`
-	LeaveTypeID     int       `db:"leave_type_id" json:"leave_type_id"`
-	IsPaid          bool      `db:"is_paid" json:"is_paid"`
-	LeaveTimingType string    `db:"leave_timing_type" json:"leave_timing_type"`
-	LeaveTiming     *string   `db:"leave_timing" json:"leave_timing"`
-	StartDate       time.Time `db:"start_date" json:"start_date"`
-	EndDate         time.Time `db:"end_date" json:"end_date"`
-	Days            float64   `db:"days" json:"days"`
-	Reason          string    `db:"reason" json:"reason"`
-	Status          string    `db:"status" json:"status"`
-	AppliedAt       time.Time `db:"applied_at" json:"applied_at"`
-	ApprovalName    *string   `db:"approval_name" json:"approval_name,omitempty"`
-	IsEarly         *bool     `db:"is_early" json:"is_early"`
-}
-
-// Reusable across all role-based leave list endpoints.
-type LeaveCountSummary struct {
-	Total           int `json:"total"`
-	Pending         int `json:"pending"`
-	ManagerApproved int `json:"manager_approved"`
-	Approved        int `json:"approved"`
-	Rejected        int `json:"rejected"`
-	ManagerRejected int `json:"manager_rejected"`
-	Cancelled       int `json:"cancelled"`
-	Withdrawn       int `json:"withdrawn"`
-}
-
-// BuildLeaveCountSummary computes status counts from a slice of LeaveResponse.
-// Call this once after fetching leaves — no extra DB query needed.
-func BuildLeaveCountSummary(leaves []LeaveResponse) *LeaveCountSummary {
-	summary := LeaveCountSummary{Total: len(leaves)}
-	for _, l := range leaves {
-		switch l.Status {
-		case "Pending":
-			summary.Pending++
-		case "MANAGER_APPROVED":
-			summary.ManagerApproved++
-		case "APPROVED":
-			summary.Approved++
-		case "REJECTED":
-			summary.Rejected++
-		case "MANAGER_REJECTED":
-			summary.ManagerRejected++
-		case "CANCELLED":
-			summary.Cancelled++
-		case "WITHDRAWN":
-			summary.Withdrawn++
-		}
-	}
-	return &summary
-}
 
 var Validate *validator.Validate
 
@@ -219,21 +129,4 @@ type CompanyField struct {
 	SecondaryColor          string `form:"SecondaryColor" json:"secondary_color"`
 	LogoPath                string `json:"logo_path"`
 	BirthdayMessageTemplate string `form:"BirthdayMessageTemplate" json:"birthday_message_template"`
-}
-
-type Leave struct {
-	ID            uuid.UUID  `db:"id"`
-	EmployeeID    uuid.UUID  `db:"employee_id"`
-	LeaveTypeID   int        `db:"leave_type_id"`
-	LeaveTimingID *int       `db:"half_id"`
-	LeaveTiming   *string    `db:"leave_timing"` // Timing ID (references Tbl_Half)
-	StartDate     time.Time  `db:"start_date"`
-	EndDate       time.Time  `db:"end_date"`
-	Days          float64    `db:"days"`
-	Status        string     `db:"status"`
-	AppliedByID   *uuid.UUID `db:"applied_by"`
-	ApprovedByID  *uuid.UUID `db:"approved_by"`
-	Reason        string     `db:"reason"`
-	CreatedAt     time.Time  `db:"created_at"`
-	UpdatedAt     time.Time  `db:"updated_at"`
 }
