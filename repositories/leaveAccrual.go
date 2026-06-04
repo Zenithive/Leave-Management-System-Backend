@@ -63,9 +63,9 @@ func (r *Repository) IsAccrualAlreadyRun(
 	return count > 0, err
 }
 
-// CreditMonthlyAccrual adds `days` to the accrued and closing columns of the
-// leave balance row for the given employee + leave_type + year, then records
-// the accrual in the log table so it cannot be double-credited.
+// CreditMonthlyAccrual adds `days` to the accrued column only (for tracking purposes).
+// The closing balance is NOT affected by accruals - it remains based on opening - used + adjusted.
+// The accrual is logged to prevent double-crediting.
 //
 // If no balance row exists yet for this year (e.g. employee joined mid-year),
 // it creates one with opening = 0 before crediting.
@@ -88,11 +88,10 @@ func (r *Repository) CreditMonthlyAccrual(
 		return err
 	}
 
-	// Add the accrual to accrued and closing.
+	// Add the accrual to accrued column only (closing is not affected).
 	_, err = tx.Exec(`
 		UPDATE Tbl_Leave_balance
 		SET accrued    = accrued + $1,
-		    closing    = closing + $1,
 		    updated_at = NOW()
 		WHERE employee_id   = $2
 		  AND leave_type_id = $3

@@ -43,6 +43,7 @@ func (r *Repository) GetLeaveBalancesByEmployeeAndYear(employeeID uuid.UUID, yea
 		WHERE employee_id = $1 AND year = $2
 	`
 	err := r.DB.Select(&balanceRecords, query, employeeID, year)
+
 	return balanceRecords, err
 }
 
@@ -83,6 +84,41 @@ func (r *Repository) GetDefaultEntitlementByLeaveTypeID(tx *sqlx.Tx, leaveTypeID
 		return *row.InternEntitlement, nil
 	}
 	return row.DefaultEntitlement, nil
+}
+
+// GetTotalPaidLeaveBalance returns the sum of all closing balances for paid, non-early leave types
+// for the given employee in the current year. This is used to validate unpaid leave applications.
+func (r *Repository) GetTotalPaidLeaveBalance(tx *sqlx.Tx, employeeID uuid.UUID) (float64, error) {
+	var totalBalance float64
+	err := tx.Get(&totalBalance, `
+		SELECT COALESCE(SUM(lb.closing), 0)
+		FROM Tbl_Leave_balance lb
+		JOIN Tbl_Leave_Type lt ON lb.leave_type_id = lt.id
+		WHERE lb.employee_id = $1
+		  AND lb.year = EXTRACT(YEAR FROM CURRENT_DATE)
+		  AND lt.is_paid = TRUE
+		  AND (lt.is_early IS NULL OR lt.is_early = FALSE)
+	`, employeeID)
+	return totalBalance, err
+}
+
+// GetTotalPendingPaidLeaveDays returns the sum of all pending/manager-approved leave days
+// for paid, non-early leave types for the given employee in the current year.
+// This is used to validate unpaid leave applications - employees with pending paid leaves
+// should not be allowed to apply for unpaid leave.
+func (r *Repository) GetTotalPendingPaidLeaveDays(tx *sqlx.Tx, employeeID uuid.UUID) (float64, error) {
+	var totalPendingDays float64
+	err := tx.Get(&totalPendingDays, `
+		SELECT COALESCE(SUM(l.days), 0)
+		FROM Tbl_Leave l
+		JOIN Tbl_Leave_Type lt ON l.leave_type_id = lt.id
+		WHERE l.employee_id = $1
+		  AND l.status IN ('Pending', 'MANAGER_APPROVED')
+		  AND EXTRACT(YEAR FROM l.start_date) = EXTRACT(YEAR FROM CURRENT_DATE)
+		  AND lt.is_paid = TRUE
+		  AND (lt.is_early IS NULL OR lt.is_early = FALSE)
+	`, employeeID)
+	return totalPendingDays, err
 }
 
 // CreateLeaveBalanceForAdjustment creates a new leave balance record
@@ -140,7 +176,7 @@ func (r *Repository) UpdateWidthrowLeaveBalanceByEmployeeId(tx *sqlx.Tx, employe
 // For each INTERN employee with a balance row:
 //   - If joined in the current year: new opening = prorated(newInternEntitlement, joinMonth)
 //   - Otherwise: new opening = newInternEntitlement
-//   - closing = new_opening + accrued - used + adjusted
+//   - closing = new_opening - used + adjusted
 func (r *Repository) UpdateInternLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveTypeID int, newInternEntitlement int, currentYear int) error {
 	type empRow struct {
 		ID          uuid.UUID  `db:"id"`
@@ -178,7 +214,7 @@ func (r *Repository) UpdateInternLeaveBalancesForEntitlementChange(tx *sqlx.Tx, 
 // For each affected employee:
 //   - If joined in a prior year (or no joining_date): new opening = newDefaultEntitlement
 //   - If joined in the current year: new opening = prorated(newDefaultEntitlement, joinMonth)
-//   - closing = new_opening + accrued - used + adjusted
+//   - closing = new_opening - used + adjusted
 //
 // This is a full recalculation from the new entitlement, not a diff-based patch,
 // so it is safe to call multiple times and always produces a consistent result.
@@ -224,7 +260,7 @@ func (r *Repository) UpdateLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveT
 //     (intern_entitlement if newRole==INTERN and it is set, otherwise default_entitlement)
 //   - If employee joined in the current year: new opening = prorated(entitlement, joinMonth)
 //   - Otherwise: new opening = entitlement
-//   - closing = new_opening + accrued - used + adjusted
+//   - closing = new_opening - used + adjusted
 func (r *Repository) AdjustLeaveBalancesForRoleChange(tx *sqlx.Tx, employeeID uuid.UUID, oldRole, newRole string, currentYear int) error {
 	// No leave balance change when neither side is INTERN
 	if oldRole != "INTERN" && newRole != "INTERN" {
@@ -285,7 +321,7 @@ func (r *Repository) BulkAllocateLeaveBalanceForNewLeaveType(tx *sqlx.Tx, leaveT
 //   - If new joining year == current year → prorate opening by new joining month
 //   - If new joining year != current year → restore full entitlement as opening
 //
-// closing is recalculated as: new_opening + accrued - used + adjusted
+// closing is recalculated as: new_opening - used + adjusted
 func (r *Repository) RecalculateLeaveBalancesForJoiningDateChange(tx *sqlx.Tx, employeeID uuid.UUID, newJoiningDate *time.Time, empRole string, currentYear int) error {
 	// Fetch all leave types (non-early) with entitlements
 	leaveTypes, err := r.GetAllLeaveTypes(tx)
@@ -310,7 +346,7 @@ func (r *Repository) RecalculateLeaveBalancesForJoiningDateChange(tx *sqlx.Tx, e
 
 func (r *Repository) UpdateLeaveBalance(tx *sqlx.Tx, newOpening int, employeeID uuid.UUID, ID int, currentYear int) error {
 	_, err := tx.Exec(`
-			UPDATE Tbl_Leave_balance SET opening    = $1,  closing    = $1 + accrued - used + adjusted, updated_at = NOW()
+			UPDATE Tbl_Leave_balance SET opening    = $1,  closing    = $1 - used + adjusted, updated_at = NOW()
 			WHERE employee_id   = $2
 			  AND leave_type_id = $3
 			  AND year          = $4
