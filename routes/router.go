@@ -7,13 +7,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/controllers"
 	middleware "github.com/sanjayk-eng/UserMenagmentSystem_Backend/middlewere"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/config"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/access_role"
 )
 
-func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
+func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc, env *config.ENV) {
 
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
+		AllowOrigins:     env.ALLOWED_ORIGINS,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Authorization", "token"},

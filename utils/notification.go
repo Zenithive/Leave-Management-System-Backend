@@ -254,7 +254,7 @@ Password: %s
 
 Please login to the system and change your password at your earliest convenience.
 
-Login URL: [https://leave.zenithive.com]
+Login URL: [https://leave.zenithive.org]
 
 If you have any questions, please contact your HR department.
 
@@ -564,7 +564,7 @@ For security reasons, we recommend:
 2. Change your password to something memorable
 3. Keep your password secure and do not share it with anyone
 
-Login URL: [https://leave.zenithive.com]
+Login URL: [https://leave.zenithive.org]
 
 Best regards,
 Zenithive HR Team
