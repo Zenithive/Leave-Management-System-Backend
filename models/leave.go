@@ -108,3 +108,14 @@ func BuildLeaveCountSummary(leaves []LeaveResponse) *LeaveCountSummary {
 	}
 	return &summary
 }
+
+// DailyLeaveRecord - Used for daily Slack notification of active leaves
+type DailyLeaveRecord struct {
+	EmployeeName string    `db:"employee_name"`
+	LeaveType    string    `db:"leave_type"`
+	StartDate    time.Time `db:"start_date"`
+	EndDate      time.Time `db:"end_date"`
+	Days         float64   `db:"days"`
+	Status       string    `db:"status"`
+	ApprovedBy   *string   `db:"approved_by"`
+}

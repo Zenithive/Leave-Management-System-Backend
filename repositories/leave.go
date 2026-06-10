@@ -561,3 +561,32 @@ func (r *Repository) GetEarlyLeaveThisMonth(
 
 	return &leave, nil
 }
+
+// GetTodaysActiveLeaves fetches all leaves that are active today
+// (start_date <= today AND end_date >= today)
+// Used for daily Slack notification cron job
+func (r *Repository) GetTodaysActiveLeaves() ([]models.DailyLeaveRecord, error) {
+	var leaves []models.DailyLeaveRecord
+
+	query := `
+		SELECT 
+			e.full_name AS employee_name,
+			lt.name AS leave_type,
+			l.start_date,
+			l.end_date,
+			l.days,
+			l.status,
+			approver.full_name AS approved_by
+		FROM Tbl_Leave l
+		JOIN Tbl_Employee e ON l.employee_id = e.id
+		JOIN Tbl_Leave_Type lt ON l.leave_type_id = lt.id
+		LEFT JOIN Tbl_Employee approver ON l.approved_by = approver.id
+		WHERE l.start_date <= CURRENT_DATE
+		  AND l.end_date >= CURRENT_DATE
+		  AND l.status IN ('APPROVED', 'MANAGER_APPROVED')
+		ORDER BY e.full_name
+	`
+
+	err := r.DB.Select(&leaves, query)
+	return leaves, err
+}
