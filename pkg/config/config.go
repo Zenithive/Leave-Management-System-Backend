@@ -10,13 +10,15 @@ import (
 
 // ENV holds all application environment variables in a structured way
 type ENV struct {
-	DB_URL          string
-	APP_PORT        string
-	SERACT_KEY      string
-	FRONTEND_SERVER string
-	RESEND_API_KEY  string
-	RESEND_FROM     string
-	SLACK_WEBHOOK   string
+	DB_URL           string
+	APP_PORT         string
+	SERACT_KEY       string
+	FRONTEND_SERVER  string
+	RESEND_API_KEY   string
+	RESEND_FROM      string
+	SLACK_WEBHOOK    string
+	CRON_SECRET      string
+	EXTERNAL_API_URL string
 }
 
 var (
@@ -42,13 +44,15 @@ func LoadENV() *ENV {
 
 		// Populate ENV struct with environment variables
 		cfg = &ENV{
-			DB_URL:          os.Getenv("DB_URL"),
-			APP_PORT:        os.Getenv("APP_PORT"),
-			SERACT_KEY:      os.Getenv("SECRATE_KEY"),
-			FRONTEND_SERVER: os.Getenv("F_SERVER"),
-			RESEND_API_KEY:  os.Getenv("RESEND_API_KEY"),
-			RESEND_FROM:     os.Getenv("RESEND_FROM"),
-			SLACK_WEBHOOK:   os.Getenv("SLACK_WEBHOOK_URL"),
+			DB_URL:           os.Getenv("DB_URL"),
+			APP_PORT:         os.Getenv("APP_PORT"),
+			SERACT_KEY:       os.Getenv("SECRATE_KEY"),
+			FRONTEND_SERVER:  os.Getenv("F_SERVER"),
+			RESEND_API_KEY:   os.Getenv("RESEND_API_KEY"),
+			RESEND_FROM:      os.Getenv("RESEND_FROM"),
+			SLACK_WEBHOOK:    os.Getenv("SLACK_WEBHOOK_URL"),
+			CRON_SECRET:      os.Getenv("CRON_SECRET_TOKEN"),
+			EXTERNAL_API_URL: os.Getenv("EXTERNAL_API_URL"),
 		}
 	})
 	log.Println(" Environment variables loaded successfully")

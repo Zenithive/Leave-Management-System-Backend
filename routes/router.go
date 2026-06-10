@@ -92,6 +92,14 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 		admin.POST("/leave-accrual/run", h.TriggerLeaveAccrual)
 	}
 
+	// ----------------- Cron Jobs (No Auth - Token Protected) -----------------
+	cron := r.Group("/api/cron")
+	{
+		// Daily leave Slack notification
+		// GET /api/cron/daily-leave-slack?token=<CRON_SECRET_TOKEN>
+		cron.GET("/daily-leave-slack", h.DailyLeaveSlackNotification)
+	}
+
 	// ----------------- Payroll -----------------
 	payroll := r.Group("/api/payroll")
 	payroll.Use(middleware.AuthMiddleware(h))
