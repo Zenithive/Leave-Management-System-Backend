@@ -7,8 +7,14 @@ const (
 	LEAVE_REJECTED  = "REJECTED"
 	LEAVE_CANCELLED = "CANCELLED"
 
+	// Manager first-stage (IsEarly / WFH two-stage via manager)
 	LEAVE_MANAGER_REJECTED = "MANAGER_REJECTED"
 	LEAVE_MANAGER_APPROVED = "MANAGER_APPROVED"
+
+	// Admin/HR first-stage for Default and WFH leave types
+	// (pending final approval/rejection by SuperAdmin)
+	LEAVE_ADMIN_APPROVED = "ADMIN_APPROVED"
+	LEAVE_ADMIN_REJECTED = "ADMIN_REJECTED"
 
 	LEAVE_WITHDRAWAL_PENDING = "WITHDRAWAL_PENDING"
 	LEAVE_WITHDRAWN          = "WITHDRAWN"

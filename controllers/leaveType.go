@@ -1,10 +1,20 @@
 package controllers
 
+// LeaveType controller — HTTP adapter layer.
+//
+// Responsibilities of this file:
+//   - Parse and validate HTTP request data (path params, JSON body, auth claims)
+//   - Enforce role-based access control
+//   - Open a transaction, call LeaveTypeService, write an audit log, commit
+//   - Translate service errors into appropriate HTTP status codes
+//   - Serialize the response
+//
+// Business logic lives in service/leave_type_service.go.
+// Database queries live in repositories/leaveType.go and repositories/leaveBalance.go.
+
 import (
-	"database/sql"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -15,339 +25,216 @@ import (
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
 )
 
-func (s *HandlerFunc) AdminAddLeavePolicy(c *gin.Context) {
-	// Extract Employee Info
-	empIDRaw, ok := c.Get("user_id")
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/leaves/admin-add/policy
+// ─────────────────────────────────────────────────────────────────────────────
+
+// AdminAddLeavePolicy creates a new leave type (policy).
+// Only SUPERADMIN may call this endpoint.
+func (h *HandlerFunc) AdminAddLeavePolicy(c *gin.Context) {
+	// ── Auth ─────────────────────────────────────────────────────────────────
+	employeeID, ok := extractEmployeeID(c)
 	if !ok {
-		utils.RespondWithError(c, http.StatusUnauthorized, "Employee ID missing")
 		return
 	}
 
-	empIDStr, ok := empIDRaw.(string)
-	if !ok {
-		utils.RespondWithError(c, http.StatusInternalServerError, "Invalid employee ID format")
+	if role := c.GetString("role"); role != constant.ROLE_SUPER_ADMIN {
+		utils.RespondWithError(c, http.StatusUnauthorized, "not permitted to create leave policies")
 		return
 	}
 
-	employeeID, err := uuid.Parse(empIDStr)
-	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "Invalid employee UUID")
-		return
-	}
-	roleValue, exists := c.Get("role")
-	if !exists {
-		utils.RespondWithError(c, http.StatusInternalServerError, "failed to get role")
-		return
-	}
-	userRole := roleValue.(string)
-	if userRole != "SUPERADMIN" {
-		utils.RespondWithError(c, http.StatusUnauthorized, "not permitted to assign manager")
-		return
-	}
+	// ── Input ─────────────────────────────────────────────────────────────────
 	var input models.LeaveTypeInput
-
 	if err := c.ShouldBindJSON(&input); err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "Invalid input: "+err.Error())
+		utils.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
 		return
 	}
-	// Set defaults
-	if input.IsPaid == nil {
-		defaultPaid := false
-		input.IsPaid = &defaultPaid
-	}
-	if input.DefaultEntitlement == nil {
-		defaultEntitlement := 0
-		input.DefaultEntitlement = &defaultEntitlement
-	}
-	if input.LeaveCount == nil {
-		defaultCount := 2
-		input.LeaveCount = &defaultCount
-	}
-	if input.IsEarly == nil {
-		defaultEarly := false
-		input.IsEarly = &defaultEarly
-	}
 
-	if *input.LeaveCount <= 0 {
-		utils.RespondWithError(c, http.StatusBadRequest, "leave_count must be greater than 0")
-		return
-	}
-	var leave models.LeaveType
-
-	err = common.ExecuteTransaction(c, s.Query.DB, func(tx *sqlx.Tx) error {
-		Leave, err := s.Query.AddLeaveType(tx, input)
+	// ── Transaction: service call + audit log ─────────────────────────────────
+	var result models.LeaveType
+	err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+		svcResult, err := h.LeaveTypeSvc.CreateLeaveType(tx, input)
 		if err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to insert leave type: "+err.Error())
+			return utils.CustomErr(c, http.StatusBadRequest, err.Error())
 		}
-		Leave.Name = input.Name
-		Leave.IsPaid = *input.IsPaid
-		Leave.DefaultEntitlement = *input.DefaultEntitlement
-		Leave.InternEntitlement = input.InternEntitlement
-		leave = Leave
-		if input.IsEarly != nil {
-			Leave.IsEarly = input.IsEarly
-		}
+		result = svcResult.LeaveType
 
-		// Allocate leave balance for all active employees (skip early leave types)
-		isEarly := input.IsEarly != nil && *input.IsEarly
-		if !isEarly {
-			activeEmployees, err := s.Query.GetAllActiveEmployeesWithRoles(tx)
-			if err != nil {
-				return utils.CustomErr(c, http.StatusInternalServerError, "Failed to fetch active employees: "+err.Error())
-			}
-			if err := s.Query.BulkAllocateLeaveBalanceForNewLeaveType(
-				tx,
-				Leave.ID,
-				*input.DefaultEntitlement,
-				input.InternEntitlement,
-				activeEmployees,
-			); err != nil {
-				return utils.CustomErr(c, http.StatusInternalServerError, "Failed to allocate leave balances: "+err.Error())
-			}
-		}
-
-		// Log Entry
-		data := &models.Common{
-			Component:  constant.ComponentLeaveType,
-			Action:     constant.ActionCreate,
-			FromUserID: employeeID,
-		}
-		if err := s.Query.AddLog(data, tx); err != nil {
-			return utils.CustomErr(c, 500, "Failed to create leave log: "+err.Error())
-		}
-		return nil // IMPORTANT FIX
+		return h.writeLeaveTypeLog(c, tx, constant.ActionCreate, employeeID)
 	})
-
-	// If transaction returned an error, stop (CustomErr already responded)
 	if err != nil {
-		utils.RespondWithError(c, 500, "Failed to update settings: "+err.Error())
+		// CustomErr already wrote the response; only hit this for unexpected errors.
+		utils.RespondWithError(c, http.StatusInternalServerError, "failed to create leave policy: "+err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, leave)
+
+	c.JSON(http.StatusOK, result)
 }
 
-// UpdateLeavePolicy - PUT /api/leaves/admin-update/policy/:id
-// Admin, SuperAdmin, and HR can update leave policies
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/leaves/admin-update/policy/:id
+// ─────────────────────────────────────────────────────────────────────────────
+
+// UpdateLeavePolicy updates an existing leave type and recalculates employee balances.
+// Allowed roles: SUPERADMIN, ADMIN, HR.
 func (h *HandlerFunc) UpdateLeavePolicy(c *gin.Context) {
-	// Extract Employee Info
-	empIDRaw, ok := c.Get("user_id")
+	// ── Auth ─────────────────────────────────────────────────────────────────
+	employeeID, ok := extractEmployeeID(c)
 	if !ok {
-		utils.RespondWithError(c, http.StatusUnauthorized, "Employee ID missing")
 		return
 	}
 
-	empIDStr, ok := empIDRaw.(string)
+	if role := c.GetString("role"); role != constant.ROLE_SUPER_ADMIN &&
+		role != constant.ROLE_ADMIN && role != constant.ROLE_HR {
+		utils.RespondWithError(c, http.StatusUnauthorized, "not permitted to update leave policies")
+		return
+	}
+
+	// ── Path param ────────────────────────────────────────────────────────────
+	leaveTypeID, ok := parseLeaveTypeID(c)
 	if !ok {
-		utils.RespondWithError(c, http.StatusInternalServerError, "Invalid employee ID format")
 		return
 	}
 
-	employeeID, err := uuid.Parse(empIDStr)
-	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "Invalid employee UUID")
-		return
-	}
-
-	// Role validation
-	roleValue, exists := c.Get("role")
-	if !exists {
-		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to get role")
-		return
-	}
-	userRole := roleValue.(string)
-	if userRole != "SUPERADMIN" && userRole != "ADMIN" && userRole != "HR" {
-		utils.RespondWithError(c, http.StatusUnauthorized, "Not permitted to update leave policy")
-		return
-	}
-
-	// Parse leave type ID from URL
-	leaveTypeIDStr := c.Param("id")
-	leaveTypeID, err := strconv.Atoi(leaveTypeIDStr)
-	if err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "Invalid leave type ID")
-		return
-	}
-
+	// ── Input ─────────────────────────────────────────────────────────────────
 	var input models.LeaveTypeInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "Invalid input: "+err.Error())
+		utils.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
 		return
 	}
 
-	// Set defaults if not provided
-	if input.IsPaid == nil {
-		defaultPaid := false
-		input.IsPaid = &defaultPaid
-	}
-	if input.DefaultEntitlement == nil {
-		defaultEntitlement := 0
-		input.DefaultEntitlement = &defaultEntitlement
-	}
-
-	if *input.DefaultEntitlement < 0 {
-		utils.RespondWithError(c, http.StatusBadRequest, "Default entitlement cannot be negative")
-		return
-	}
-
-	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
-		// Check if leave type exists and get old default entitlement
-		oldLeaveType, err := h.Query.GetLeaveTypeByIdTx(tx, leaveTypeID)
-		if err == sql.ErrNoRows {
-			return utils.CustomErr(c, http.StatusNotFound, "Leave type not found")
-		}
-		if err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to fetch leave type: "+err.Error())
-		}
-
-		// Get old and new default entitlement values
-		oldDefaultEntitlement := oldLeaveType.DefaultEntitlement
-		newDefaultEntitlement := *input.DefaultEntitlement
-
-		// Update leave type
-		err = h.Query.UpdateLeaveType(tx, leaveTypeID, input)
-		if err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to update leave type: "+err.Error())
-		}
-
-		// Recalculate leave balances if default_entitlement changed (non-INTERN employees)
-		if oldLeaveType.IsEarly == nil || !*oldLeaveType.IsEarly {
-			currentYear := time.Now().Year()
-			if err = h.Query.UpdateLeaveBalancesForEntitlementChange(tx, leaveTypeID, oldDefaultEntitlement, newDefaultEntitlement, currentYear); err != nil {
-				return utils.CustomErr(c, http.StatusInternalServerError, "Failed to update leave balances: "+err.Error())
+	// ── Transaction: service call + audit log ─────────────────────────────────
+	err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+		if _, err := h.LeaveTypeSvc.UpdateLeaveType(tx, leaveTypeID, input); err != nil {
+			// Map "not found" to 404, everything else to 400/500.
+			if err.Error() == "leave type not found" {
+				return utils.CustomErr(c, http.StatusNotFound, err.Error())
 			}
+			if err.Error() == "default entitlement cannot be negative" {
+				return utils.CustomErr(c, http.StatusBadRequest, err.Error())
+			}
+			return utils.CustomErr(c, http.StatusInternalServerError, err.Error())
 		}
-
-		// Recalculate INTERN leave balances when intern_entitlement changes.
-		//
-		// Resolve what INTERNs are currently allocated (their effective old entitlement):
-		//   - If intern_entitlement was set → that value
-		//   - If intern_entitlement was nil → they were allocated default_entitlement
-		//
-		// Resolve what INTERNs should now be allocated (new effective entitlement):
-		//   - If intern_entitlement provided in request → that value
-		//   - If intern_entitlement cleared (was set, now nil) → fall back to newDefaultEntitlement
-		//   - If intern_entitlement was never set and still not sent → newDefaultEntitlement
-
-		newEffectiveIntern := newDefaultEntitlement
-		if input.InternEntitlement != nil {
-			newEffectiveIntern = *input.InternEntitlement
-		}
-		currentYear := time.Now().Year()
-		if err = h.Query.UpdateInternLeaveBalancesForEntitlementChange(tx, leaveTypeID, newEffectiveIntern, currentYear); err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to update intern leave balances: "+err.Error())
-		}
-		// Log Entry
-		data := &models.Common{
-			Component:  constant.ComponentLeaveType,
-			Action:     constant.ActionUpdate,
-			FromUserID: employeeID,
-		}
-		if err := h.Query.AddLog(data, tx); err != nil {
-			return utils.CustomErr(c, 500, "Failed to create leave log: "+err.Error())
-		}
-		return nil
+		return h.writeLeaveTypeLog(c, tx, constant.ActionUpdate, employeeID)
 	})
-
 	if err != nil {
-		utils.RespondWithError(c, 500, "Failed to update leave policy: "+err.Error())
+		utils.RespondWithError(c, http.StatusInternalServerError, "failed to update leave policy: "+err.Error())
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Leave policy updated successfully",
+		"message": "leave policy updated successfully",
 		"id":      leaveTypeID,
 	})
 }
 
-// DeleteLeavePolicy - DELETE /api/leaves/admin-delete/policy/:id
-// Admin, SuperAdmin, and HR can delete leave policies
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /api/leaves/admin-delete/policy/:id
+// ─────────────────────────────────────────────────────────────────────────────
+
+// DeleteLeavePolicy deletes a leave type.
+// Allowed roles: SUPERADMIN, ADMIN, HR.
 func (h *HandlerFunc) DeleteLeavePolicy(c *gin.Context) {
-	// Extract Employee Info
-	empIDRaw, ok := c.Get("user_id")
+	// ── Auth ─────────────────────────────────────────────────────────────────
+	employeeID, ok := extractEmployeeID(c)
 	if !ok {
-		utils.RespondWithError(c, http.StatusUnauthorized, "Employee ID missing")
 		return
 	}
 
-	empIDStr, ok := empIDRaw.(string)
+	if role := c.GetString("role"); role != constant.ROLE_SUPER_ADMIN &&
+		role != constant.ROLE_ADMIN && role != constant.ROLE_HR {
+		utils.RespondWithError(c, http.StatusUnauthorized, "not permitted to delete leave policies")
+		return
+	}
+
+	// ── Path param ────────────────────────────────────────────────────────────
+	leaveTypeID, ok := parseLeaveTypeID(c)
 	if !ok {
-		utils.RespondWithError(c, http.StatusInternalServerError, "Invalid employee ID format")
 		return
 	}
 
-	employeeID, err := uuid.Parse(empIDStr)
-	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "Invalid employee UUID")
-		return
-	}
-
-	// Role validation
-	roleValue, exists := c.Get("role")
-	if !exists {
-		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to get role")
-		return
-	}
-	userRole := roleValue.(string)
-	if userRole != "SUPERADMIN" && userRole != "ADMIN" && userRole != "HR" {
-		utils.RespondWithError(c, http.StatusUnauthorized, "Not permitted to delete leave policy")
-		return
-	}
-
-	// Parse leave type ID from URL
-	leaveTypeIDStr := c.Param("id")
-	leaveTypeID, err := strconv.Atoi(leaveTypeIDStr)
-	if err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "Invalid leave type ID")
-		return
-	}
-
-	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
-		// Check if leave type exists
-		_, err := h.Query.GetLeaveTypeByIdTx(tx, leaveTypeID)
-		if err == sql.ErrNoRows {
-			return utils.CustomErr(c, http.StatusNotFound, "Leave type not found")
+	// ── Transaction: service call + audit log ─────────────────────────────────
+	err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+		if err := h.LeaveTypeSvc.DeleteLeaveType(tx, leaveTypeID); err != nil {
+			if err.Error() == "leave type not found" {
+				return utils.CustomErr(c, http.StatusNotFound, err.Error())
+			}
+			if err.Error() == "cannot delete leave type: it is being used in existing leave applications" {
+				return utils.CustomErr(c, http.StatusConflict, err.Error())
+			}
+			return utils.CustomErr(c, http.StatusInternalServerError, err.Error())
 		}
-		if err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to fetch leave type: "+err.Error())
-		}
-
-		// Delete leave type
-		err = h.Query.DeleteLeaveType(tx, leaveTypeID)
-		if err == sql.ErrNoRows {
-			return utils.CustomErr(c, http.StatusConflict, "Cannot delete leave type: it is being used in existing leave applications")
-		}
-		if err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to delete leave type: "+err.Error())
-		}
-
-		// Log Entry
-		data := &models.Common{
-			Component:  constant.ComponentLeaveType,
-			Action:     constant.ActionDelete,
-			FromUserID: employeeID,
-		}
-		if err := h.Query.AddLog(data, tx); err != nil {
-			return utils.CustomErr(c, 500, "Failed to create leave log: "+err.Error())
-		}
-		return nil
+		return h.writeLeaveTypeLog(c, tx, constant.ActionDelete, employeeID)
 	})
-
 	if err != nil {
-		utils.RespondWithError(c, 500, "Failed to delete leave policy: "+err.Error())
+		utils.RespondWithError(c, http.StatusInternalServerError, "failed to delete leave policy: "+err.Error())
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Leave policy deleted successfully",
+		"message": "leave policy deleted successfully",
 		"id":      leaveTypeID,
 	})
 }
 
-func (s *HandlerFunc) GetAllLeavePolicies(c *gin.Context) {
-	leaveType, err := s.Query.GetAllLeaveType()
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/leaves/policies
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GetAllLeavePolicies returns all leave type definitions.
+func (h *HandlerFunc) GetAllLeavePolicies(c *gin.Context) {
+	leaveTypes, err := h.LeaveTypeSvc.GetAllLeaveTypes()
 	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leave types: "+err.Error())
+		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, leaveType)
+	c.JSON(http.StatusOK, leaveTypes)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Private helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+// extractEmployeeID reads the authenticated employee's UUID from the gin context.
+// Writes the appropriate error response and returns false on failure.
+func extractEmployeeID(c *gin.Context) (uuid.UUID, bool) {
+	raw, ok := c.Get("user_id")
+	if !ok {
+		utils.RespondWithError(c, http.StatusUnauthorized, "employee ID missing")
+		return uuid.Nil, false
+	}
+	str, ok := raw.(string)
+	if !ok {
+		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee ID format")
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(str)
+	if err != nil {
+		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee UUID")
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+// parseLeaveTypeID parses and validates the ":id" path parameter.
+func parseLeaveTypeID(c *gin.Context) (int, bool) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		utils.RespondWithError(c, http.StatusBadRequest, "invalid leave type ID")
+		return 0, false
+	}
+	return id, true
+}
+
+// writeLeaveTypeLog writes an audit log entry for a leave type operation
+// inside an already-open transaction.
+func (h *HandlerFunc) writeLeaveTypeLog(c *gin.Context, tx *sqlx.Tx, action string, fromUserID uuid.UUID) error {
+	data := &models.Common{
+		Component:  constant.ComponentLeaveType,
+		Action:     action,
+		FromUserID: fromUserID,
+	}
+	if err := h.Query.AddLog(data, tx); err != nil {
+		return utils.CustomErr(c, http.StatusInternalServerError, "failed to write audit log: "+err.Error())
+	}
+	return nil
 }

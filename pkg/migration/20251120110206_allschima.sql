@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS Tbl_Leave_type (
     name TEXT NOT NULL,
     is_paid BOOLEAN,
     default_entitlement INT,
+    intern_entitlement INT,
+    is_early BOOLEAN DEFAULT FALSE,
+    is_work_from_home BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

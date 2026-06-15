@@ -421,19 +421,6 @@ func (h *HandlerFunc) UpdateEmployeeManager(c *gin.Context) {
 		return
 	}
 
-	// 5️ Check if employee already has a manager
-	// var existingManager uuid.UUID
-	// err = h.Query.DB.Get(&existingManager, "SELECT manager_id FROM Tbl_Employee WHERE id=$1", empID)
-	// if err != nil {
-	// 	utils.RespondWithError(c, 404, "employee not found")
-	// 	return
-	// }
-
-	// if existingManager != uuid.Nil {
-	// 	utils.RespondWithError(c, 400, "employee already has a manager assigned")
-	// 	return
-	// }
-
 	// 6️ Validate Manager exists, active and role = MANAGER
 	var mgrRole, mgrStatus string
 	err = h.Query.DB.Get(&mgrRole, "SELECT r.type FROM Tbl_Employee e JOIN Tbl_Role r ON e.role_id = r.id WHERE e.id=$1", managerID)
