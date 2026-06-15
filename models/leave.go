@@ -74,14 +74,16 @@ type LeaveResponse struct {
 
 // LeaveCountSummary - Statistics of leaves by status
 type LeaveCountSummary struct {
-	Total           int `json:"total"`
-	Pending         int `json:"pending"`
+	Total         int `json:"total"`
+	Pending       int `json:"pending"`
 	ManagerApproved int `json:"manager_approved"`
-	Approved        int `json:"approved"`
-	Rejected        int `json:"rejected"`
 	ManagerRejected int `json:"manager_rejected"`
-	Cancelled       int `json:"cancelled"`
-	Withdrawn       int `json:"withdrawn"`
+	AdminApproved int `json:"admin_approved"`
+	AdminRejected int `json:"admin_rejected"`
+	Approved      int `json:"approved"`
+	Rejected      int `json:"rejected"`
+	Cancelled     int `json:"cancelled"`
+	Withdrawn     int `json:"withdrawn"`
 }
 
 // BuildLeaveCountSummary computes status counts from a slice of LeaveResponse
@@ -94,12 +96,16 @@ func BuildLeaveCountSummary(leaves []LeaveResponse) *LeaveCountSummary {
 			summary.Pending++
 		case "MANAGER_APPROVED":
 			summary.ManagerApproved++
+		case "MANAGER_REJECTED":
+			summary.ManagerRejected++
+		case "ADMIN_APPROVED":
+			summary.AdminApproved++
+		case "ADMIN_REJECTED":
+			summary.AdminRejected++
 		case "APPROVED":
 			summary.Approved++
 		case "REJECTED":
 			summary.Rejected++
-		case "MANAGER_REJECTED":
-			summary.ManagerRejected++
 		case "CANCELLED":
 			summary.Cancelled++
 		case "WITHDRAWN":
