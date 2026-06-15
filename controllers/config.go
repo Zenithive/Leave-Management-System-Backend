@@ -9,11 +9,12 @@ import (
 
 // HandlerFunc holds dependencies
 type HandlerFunc struct {
-	Env             *config.ENV
-	Query           *repositories.Repository
-	Validator       *validator.Validate
-	LeaveAccrual    *service.LeaveAccrualService
-	LeaveReportSvc  *service.LeaveReportService
+	Env            *config.ENV
+	Query          *repositories.Repository
+	Validator      *validator.Validate
+	LeaveAccrual   *service.LeaveAccrualService
+	LeaveReportSvc *service.LeaveReportService
+	LeaveTypeSvc   *service.LeaveTypeService
 }
 
 // NewHandler initializes and returns a HandlerFunc
@@ -23,6 +24,7 @@ func NewHandler(env *config.ENV, query *repositories.Repository, validator *vali
 		Query:          query,
 		Validator:      validator,
 		LeaveReportSvc: service.NewLeaveReportService(query),
+		LeaveTypeSvc:   service.NewLeaveTypeService(query),
 	}
 }
 
