@@ -51,6 +51,20 @@ func (r *Repository) DeleteHoliday(id string, tx *sqlx.Tx) error {
 
 //
 
+// IsHolidayDate checks whether the given date exists in Tbl_Holiday.
+// Returns true when the date is a configured holiday.
+func (r *Repository) IsHolidayDate(date time.Time) (bool, error) {
+	var count int
+	err := r.DB.QueryRow(
+		`SELECT COUNT(*) FROM Tbl_Holiday WHERE date::date = $1::date`,
+		date,
+	).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (q *Repository) GetByFilterHolidayBetwweenTwoDates(tx *sqlx.Tx, start time.Time, end time.Time) ([]time.Time, error) {
 	var holidays []time.Time
 	query := `SELECT date FROM Tbl_Holiday 
