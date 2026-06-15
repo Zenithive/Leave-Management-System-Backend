@@ -1,5 +1,17 @@
 package controllers
 
+// | Leave Type     | First Approver                                                                                  | First Status                        | Final Approver                                                        | Final Status        | Balance Impact       |
+// | -------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------- | ------------------- | -------------------- |
+// | Default        | Manager (mgr-permission + direct report, Pending only)                                          | MANAGER_APPROVED / MANAGER_REJECTED | Admin, HR, SuperAdmin (Pending / MANAGER_APPROVED / MANAGER_REJECTED) | APPROVED / REJECTED | Deducted at APPROVED |
+// | IsEarly        | Manager (mgr-permission + direct report, Pending only)                                          | MANAGER_APPROVED / MANAGER_REJECTED | Admin, HR, SuperAdmin (Pending / MANAGER_APPROVED / MANAGER_REJECTED) | APPROVED / REJECTED | Never touched        |
+// | Work From Home | Manager (mgr-permission + direct report, Pending only), Admin (Pending only), HR (Pending only) | MANAGER_APPROVED / MANAGER_REJECTED | SuperAdmin only (Pending / MANAGER_APPROVED / MANAGER_REJECTED)       | APPROVED / REJECTED | Deducted at APPROVED |
+
+// | Leave Type     | First Withdrawer                                                                                   | First Status       | Final Withdrawer                                      | Final Status | Balance Impact        |
+// | -------------- | -------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------- | ------------ | --------------------- |
+// | Default        | Manager (mgr-permission + direct report, APPROVED only)                                            | WITHDRAWAL_PENDING | Admin, HR, SuperAdmin (APPROVED / WITHDRAWAL_PENDING) | WITHDRAWN    | Restored at WITHDRAWN |
+// | IsEarly        | Manager (mgr-permission + direct report, APPROVED only)                                            | WITHDRAWAL_PENDING | Admin, HR, SuperAdmin (APPROVED / WITHDRAWAL_PENDING) | WITHDRAWN    | Never touched         |
+// | Work From Home | Manager (mgr-permission + direct report, APPROVED only), Admin (APPROVED only), HR (APPROVED only) | WITHDRAWAL_PENDING | SuperAdmin only (APPROVED / WITHDRAWAL_PENDING)       | WITHDRAWN    | Restored at WITHDRAWN |
+
 import (
 	"database/sql"
 	"fmt"
@@ -336,24 +348,45 @@ func (s *HandlerFunc) ActionLeave(c *gin.Context) {
 			return
 		}
 
-	// ── WorkFromHome: Admin/HR = first approver, SuperAdmin = final approver ──
+	// ── WorkFromHome: Manager + Admin + HR = first approvers, SuperAdmin = final approver ──
 	case isWFH:
 		switch role {
 		case constant.ROLE_MANAGER:
-			utils.RespondWithError(c, 403, "Managers cannot approve Work From Home leaves")
-			return
+			// First approver — needs manager-permission + direct-report check
+			ok, err := s.Query.ChackManagerPermission()
+			if err != nil {
+				utils.RespondWithError(c, 500, "Failed to get manager permission")
+				return
+			}
+			if !ok {
+				utils.RespondWithError(c, 403, "Manager approval is not enabled")
+				return
+			}
+			var mgrID uuid.UUID
+			if err := s.Query.DB.Get(&mgrID, "SELECT manager_id FROM Tbl_Employee WHERE id=$1", leave.EmployeeID); err != nil {
+				utils.RespondWithError(c, 500, "Failed to verify reporting relationship")
+				return
+			}
+			if mgrID != approverID {
+				utils.RespondWithError(c, 403, "You can only approve leaves of your direct reports")
+				return
+			}
+			if leave.Status != "Pending" {
+				utils.RespondWithError(c, 400, fmt.Sprintf("Manager can only act on Pending leaves. Current status: %s", leave.Status))
+				return
+			}
 
 		case constant.ROLE_ADMIN, constant.ROLE_HR:
-			// First approver – can only act on Pending
+			// First approver — can only act on Pending
 			if leave.Status != "Pending" {
 				utils.RespondWithError(c, 400, fmt.Sprintf("Admin/HR can only act on Pending WFH leaves. Current status: %s", leave.Status))
 				return
 			}
 
 		case constant.ROLE_SUPER_ADMIN:
-			// Final approver – can act on Pending, MANAGER_APPROVED, MANAGER_REJECTED
+			// Final approver only — can act on Pending, MANAGER_APPROVED, MANAGER_REJECTED
 			if leave.Status != "Pending" && leave.Status != constant.LEAVE_MANAGER_APPROVED && leave.Status != constant.LEAVE_MANAGER_REJECTED {
-				utils.RespondWithError(c, 400, fmt.Sprintf("Cannot process leave with status: %s", leave.Status))
+				utils.RespondWithError(c, 400, fmt.Sprintf("Cannot process WFH leave with status: %s", leave.Status))
 				return
 			}
 
@@ -362,17 +395,38 @@ func (s *HandlerFunc) ActionLeave(c *gin.Context) {
 			return
 		}
 
-	// ── Default: single-stage, Admin/HR/SuperAdmin only ───────────────────────
+	// ── Default: Manager = first approver, Admin/HR/SuperAdmin = final approver ──
 	default:
 		switch role {
 		case constant.ROLE_MANAGER:
-			utils.RespondWithError(c, 403, "Managers cannot approve default leaves. Only Admin, HR, or SuperAdmin can act on this leave type")
-			return
+			// Manager is first approver for Default — same checks as IsEarly
+			ok, err := s.Query.ChackManagerPermission()
+			if err != nil {
+				utils.RespondWithError(c, 500, "Failed to get manager permission")
+				return
+			}
+			if !ok {
+				utils.RespondWithError(c, 403, "Manager approval is not enabled")
+				return
+			}
+			var mgrID uuid.UUID
+			if err := s.Query.DB.Get(&mgrID, "SELECT manager_id FROM Tbl_Employee WHERE id=$1", leave.EmployeeID); err != nil {
+				utils.RespondWithError(c, 500, "Failed to verify reporting relationship")
+				return
+			}
+			if mgrID != approverID {
+				utils.RespondWithError(c, 403, "You can only approve leaves of your direct reports")
+				return
+			}
+			if leave.Status != "Pending" {
+				utils.RespondWithError(c, 400, fmt.Sprintf("Manager can only act on Pending leaves. Current status: %s", leave.Status))
+				return
+			}
 
 		case constant.ROLE_ADMIN, constant.ROLE_HR, constant.ROLE_SUPER_ADMIN:
-			// Single-stage: only Pending is valid
-			if leave.Status != "Pending" {
-				utils.RespondWithError(c, 400, fmt.Sprintf("Cannot process leave with status: %s. Default leaves can only be actioned when Pending", leave.Status))
+			// Final approver: can act on Pending, MANAGER_APPROVED, MANAGER_REJECTED
+			if leave.Status != "Pending" && leave.Status != constant.LEAVE_MANAGER_APPROVED && leave.Status != constant.LEAVE_MANAGER_REJECTED {
+				utils.RespondWithError(c, 400, fmt.Sprintf("Cannot process leave with status: %s", leave.Status))
 				return
 			}
 
@@ -391,10 +445,11 @@ func (s *HandlerFunc) ActionLeave(c *gin.Context) {
 	startStr := leave.StartDate.Format("2006-01-02")
 	endStr := leave.EndDate.Format("2006-01-02")
 
-	// ── Determine if this role is a "first approver" in a two-stage flow ──────
-	// isFirstApprover = true  → set MANAGER_APPROVED / MANAGER_REJECTED, no balance change
-	// isFirstApprover = false → set APPROVED / REJECTED, deduct/skip balance
-	isFirstApprover := (isEarlyLeave && role == constant.ROLE_MANAGER) ||
+	// Manager is always first approver for ALL leave types.
+	// For WFH: Admin and HR are also first approvers (→ MANAGER_APPROVED/REJECTED).
+	// SuperAdmin is always final approver for WFH.
+	// For Default/IsEarly: Admin, HR, SuperAdmin are all final approvers.
+	isFirstApprover := role == constant.ROLE_MANAGER ||
 		(isWFH && (role == constant.ROLE_ADMIN || role == constant.ROLE_HR))
 
 	// ── ACTION: REJECT ────────────────────────────────────────────────────────
@@ -812,24 +867,44 @@ func (h *HandlerFunc) WithdrawLeave(c *gin.Context) {
 			return
 		}
 
-	// ── WorkFromHome: Admin/HR = first withdrawer, SuperAdmin = final withdrawer
+	// ── WorkFromHome: Manager + Admin + HR = first withdrawers, SuperAdmin = final withdrawer
 	case isWFH:
 		switch role {
 		case constant.ROLE_MANAGER:
-			utils.RespondWithError(c, 403, "Managers cannot withdraw Work From Home leaves")
-			return
+			ok, err := h.Query.ChackManagerPermission()
+			if err != nil {
+				utils.RespondWithError(c, 500, "Failed to check manager permission")
+				return
+			}
+			if !ok {
+				utils.RespondWithError(c, 403, "Manager withdrawal is not enabled")
+				return
+			}
+			var mgrID uuid.UUID
+			if err := h.Query.DB.Get(&mgrID, "SELECT manager_id FROM Tbl_Employee WHERE id=$1", leave.EmployeeID); err != nil {
+				utils.RespondWithError(c, 500, "Failed to verify manager relationship")
+				return
+			}
+			if mgrID != currentUserID {
+				utils.RespondWithError(c, 403, "You can only withdraw leaves of your direct reports")
+				return
+			}
+			if leave.Status != constant.LEAVE_APPLOVED {
+				utils.RespondWithError(c, 400, fmt.Sprintf("Manager can only withdraw APPROVED leaves. Current status: %s", leave.Status))
+				return
+			}
 
 		case constant.ROLE_ADMIN, constant.ROLE_HR:
-			// First withdrawer: can only request withdrawal on APPROVED leaves
+			// First withdrawer — can only request withdrawal on APPROVED leaves
 			if leave.Status != constant.LEAVE_APPLOVED {
 				utils.RespondWithError(c, 400, fmt.Sprintf("Admin/HR can only request withdrawal on APPROVED WFH leaves. Current status: %s", leave.Status))
 				return
 			}
 
 		case constant.ROLE_SUPER_ADMIN:
-			// Final withdrawer: can finalize APPROVED or WITHDRAWAL_PENDING
+			// Final withdrawer — can finalize APPROVED or WITHDRAWAL_PENDING
 			if leave.Status != constant.LEAVE_APPLOVED && leave.Status != constant.LEAVE_WITHDRAWAL_PENDING {
-				utils.RespondWithError(c, 400, fmt.Sprintf("Cannot withdraw leave with status: %s", leave.Status))
+				utils.RespondWithError(c, 400, fmt.Sprintf("Cannot withdraw WFH leave with status: %s", leave.Status))
 				return
 			}
 
@@ -838,16 +913,36 @@ func (h *HandlerFunc) WithdrawLeave(c *gin.Context) {
 			return
 		}
 
-	// ── Default: single-stage, Admin/HR/SuperAdmin only ──────────────────────
+	// ── Default: Manager = first withdrawer, Admin/HR/SuperAdmin = final withdrawer
 	default:
 		switch role {
 		case constant.ROLE_MANAGER:
-			utils.RespondWithError(c, 403, "Managers cannot withdraw default leaves. Only Admin, HR, or SuperAdmin can withdraw this leave type")
-			return
+			ok, err := h.Query.ChackManagerPermission()
+			if err != nil {
+				utils.RespondWithError(c, 500, "Failed to check manager permission")
+				return
+			}
+			if !ok {
+				utils.RespondWithError(c, 403, "Manager withdrawal is not enabled")
+				return
+			}
+			var mgrID uuid.UUID
+			if err := h.Query.DB.Get(&mgrID, "SELECT manager_id FROM Tbl_Employee WHERE id=$1", leave.EmployeeID); err != nil {
+				utils.RespondWithError(c, 500, "Failed to verify manager relationship")
+				return
+			}
+			if mgrID != currentUserID {
+				utils.RespondWithError(c, 403, "You can only withdraw leaves of your direct reports")
+				return
+			}
+			if leave.Status != constant.LEAVE_APPLOVED {
+				utils.RespondWithError(c, 400, fmt.Sprintf("Manager can only withdraw APPROVED leaves. Current status: %s", leave.Status))
+				return
+			}
 
 		case constant.ROLE_ADMIN, constant.ROLE_HR, constant.ROLE_SUPER_ADMIN:
-			if leave.Status != constant.LEAVE_APPLOVED {
-				utils.RespondWithError(c, 400, fmt.Sprintf("Cannot withdraw leave with status: %s. Only APPROVED leaves can be withdrawn", leave.Status))
+			if leave.Status != constant.LEAVE_APPLOVED && leave.Status != constant.LEAVE_WITHDRAWAL_PENDING {
+				utils.RespondWithError(c, 400, fmt.Sprintf("Cannot withdraw leave with status: %s", leave.Status))
 				return
 			}
 
@@ -866,10 +961,11 @@ func (h *HandlerFunc) WithdrawLeave(c *gin.Context) {
 	startStr := leave.StartDate.Format("2006-01-02")
 	endStr := leave.EndDate.Format("2006-01-02")
 
-	// ── Determine if this is a first-stage withdrawal request ────────────────
-	// isFirstWithdrawer = true  → set WITHDRAWAL_PENDING, no balance change
-	// isFirstWithdrawer = false → set WITHDRAWN, restore balance (if !IsEarly)
-	isFirstWithdrawer := (isEarlyLeave && role == constant.ROLE_MANAGER) ||
+	// Manager is always first withdrawer for ALL leave types.
+	// For WFH: Admin and HR are also first withdrawers (→ WITHDRAWAL_PENDING).
+	// SuperAdmin is always final withdrawer for WFH.
+	// For Default/IsEarly: Admin, HR, SuperAdmin are all final withdrawers.
+	isFirstWithdrawer := role == constant.ROLE_MANAGER ||
 		(isWFH && (role == constant.ROLE_ADMIN || role == constant.ROLE_HR))
 
 	withdrawalReason := input.Reason
