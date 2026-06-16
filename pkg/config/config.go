@@ -11,16 +11,17 @@ import (
 
 // ENV holds all application environment variables
 type ENV struct {
-	DB_URL           string
-	APP_PORT         string
-	SERACT_KEY       string
-	FRONTEND_SERVER  string
-	ALLOWED_ORIGINS  []string
-	RESEND_API_KEY   string
-	RESEND_FROM      string
-	SLACK_WEBHOOK    string
-	EXTERNAL_API_URL string
-	CRON_SECRET      string
+	DB_URL               string
+	APP_PORT             string
+	SERACT_KEY           string
+	FRONTEND_SERVER      string
+	ALLOWED_ORIGINS      []string
+	RESEND_API_KEY       string
+	RESEND_FROM          string
+	SLACK_WEBHOOK        string
+	EXTERNAL_API_URL     string
+	CRON_SECRET          string
+	COMPANY_EMAIL_DOMAIN string // e.g. "yourdomain.com" — used for email validation and demo seeder
 }
 
 var (
@@ -49,16 +50,17 @@ func LoadENV() *ENV {
 		}
 
 		cfg = &ENV{
-			DB_URL:           os.Getenv("DB_URL"),
-			APP_PORT:         os.Getenv("APP_PORT"),
-			SERACT_KEY:       os.Getenv("SECRATE_KEY"),
-			FRONTEND_SERVER:  os.Getenv("F_SERVER"),
-			ALLOWED_ORIGINS:  origins,
-			RESEND_API_KEY:   os.Getenv("RESEND_API_KEY"),
-			RESEND_FROM:      os.Getenv("RESEND_FROM"),
-			SLACK_WEBHOOK:    os.Getenv("SLACK_WEBHOOK_URL"),
-			EXTERNAL_API_URL: os.Getenv("EXTERNAL_API_URL"),
-			CRON_SECRET:      os.Getenv("CRON_SECRET"),
+			DB_URL:               os.Getenv("DB_URL"),
+			APP_PORT:             os.Getenv("APP_PORT"),
+			SERACT_KEY:           os.Getenv("SECRATE_KEY"),
+			FRONTEND_SERVER:      os.Getenv("F_SERVER"),
+			ALLOWED_ORIGINS:      origins,
+			RESEND_API_KEY:       os.Getenv("RESEND_API_KEY"),
+			RESEND_FROM:          os.Getenv("RESEND_FROM"),
+			SLACK_WEBHOOK:        os.Getenv("SLACK_WEBHOOK_URL"),
+			EXTERNAL_API_URL:     os.Getenv("EXTERNAL_API_URL"),
+			CRON_SECRET:          os.Getenv("CRON_SECRET"),
+			COMPANY_EMAIL_DOMAIN: os.Getenv("COMPANY_EMAIL_DOMAIN"),
 		}
 	})
 

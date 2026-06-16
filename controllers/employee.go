@@ -3,6 +3,7 @@ package controllers
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -113,12 +114,6 @@ func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 		utils.RespondWithError(c, 403, "HR and ADMIN cannot create SUPERADMIN users")
 		return
 	}
-
-	if !strings.HasSuffix(input.Email, "@zenithive.com") {
-		utils.RespondWithError(c, 400, "email must end with @zenithive.com")
-		return
-	}
-
 	// EMAIL EXIST CHECK
 	exists, err := h.Query.CheckEmailExists(input.Email)
 	if err != nil {
@@ -525,8 +520,9 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 	// 6️ Validate and update email if provided
 	var finalEmail string
 	if input.Email != nil {
-		if !strings.HasSuffix(*input.Email, "@zenithive.com") {
-			utils.RespondWithError(c, 400, "email must end with @zenithive.com")
+		emailDomain := os.Getenv("COMPANY_EMAIL_DOMAIN")
+		if emailDomain != "" && !strings.HasSuffix(*input.Email, "@"+emailDomain) {
+			utils.RespondWithError(c, 400, "email must end with @"+emailDomain)
 			return
 		}
 
@@ -688,7 +684,7 @@ func (h *HandlerFunc) UpdateEmployeePassword(c *gin.Context) {
 		err = h.Query.DB.Get(&updatedByEmail, "SELECT email FROM Tbl_Employee WHERE id=$1", currentUserID)
 		if err != nil {
 			fmt.Printf("Failed to fetch updater email for email notification: %v\n", err)
-			updatedByEmail = "admin@zenithive.com" // Fallback email
+			updatedByEmail = "admin@" + os.Getenv("COMPANY_EMAIL_DOMAIN") // Fallback email
 		}
 
 		fmt.Printf("Sending password update email to: %s\n", empDetails.Email)

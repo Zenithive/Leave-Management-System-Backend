@@ -7,17 +7,17 @@
 //	go run ./cmd/seed            → create demo accounts for all 6 roles
 //	go run ./cmd/seed --teardown → remove all demo accounts and their data
 //
-// All demo accounts use the email pattern:  demo.<role>@zenithive.com
-// Fixed password for every account:         Demo@1234
+// All demo accounts use the email pattern:  demo.<role>@<COMPANY_EMAIL_DOMAIN>
+// Password is read from DEMO_SEED_PASSWORD env var (default: Demo@1234)
 //
 // Org structure created:
 //
-//	SUPERADMIN  demo.superadmin@zenithive.com
-//	ADMIN       demo.admin@zenithive.com
-//	HR          demo.hr@zenithive.com
-//	MANAGER     demo.manager@zenithive.com
-//	  └─ EMPLOYEE  demo.employee@zenithive.com   (reports to demo manager)
-//	  └─ INTERN    demo.intern@zenithive.com     (reports to demo manager)
+//	SUPERADMIN  demo.superadmin@<domain>
+//	ADMIN       demo.admin@<domain>
+//	HR          demo.hr@<domain>
+//	MANAGER     demo.manager@<domain>
+//	  └─ EMPLOYEE  demo.employee@<domain>   (reports to demo manager)
+//	  └─ INTERN    demo.intern@<domain>     (reports to demo manager)
 
 package main
 
@@ -37,26 +37,48 @@ import (
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
-const (
-	demoPassword  = "Demo@1234"
-	demoEmailMark = "demo." // prefix that identifies all demo accounts
-)
+const demoEmailMark = "demo." // prefix that identifies all demo accounts
 
-// demoAccounts defines the accounts to create, in insertion order.
-// managerEmail is resolved at runtime after the MANAGER row is inserted.
-var demoAccounts = []struct {
+// demoPassword returns the seed password from the environment, with a safe default.
+func demoPassword() string {
+	if p := os.Getenv("DEMO_SEED_PASSWORD"); p != "" {
+		return p
+	}
+	return "Demo@1234"
+}
+
+// emailDomain returns the company email domain from the environment.
+func emailDomain() string {
+	d := os.Getenv("COMPANY_EMAIL_DOMAIN")
+	if d == "" {
+		log.Fatal("COMPANY_EMAIL_DOMAIN environment variable is not set")
+	}
+	return d
+}
+
+// buildDemoAccounts constructs the demo account list using the configured domain.
+func buildDemoAccounts(domain string) []struct {
 	fullName     string
 	email        string
 	role         string
 	salary       float64
-	managerEmail string // filled in at runtime for EMPLOYEE and INTERN
-}{
-	{"Demo SuperAdmin", "demo.superadmin@zenithive.com", "SUPERADMIN", 0, ""},
-	{"Demo Admin", "demo.admin@zenithive.com", "ADMIN", 0, ""},
-	{"Demo HR", "demo.hr@zenithive.com", "HR", 0, ""},
-	{"Demo Manager", "demo.manager@zenithive.com", "MANAGER", 50000, ""},
-	{"Demo Employee", "demo.employee@zenithive.com", "EMPLOYEE", 30000, "demo.manager@zenithive.com"},
-	{"Demo Intern", "demo.intern@zenithive.com", "INTERN", 15000, "demo.manager@zenithive.com"},
+	managerEmail string
+} {
+	mgr := "demo.manager@" + domain
+	return []struct {
+		fullName     string
+		email        string
+		role         string
+		salary       float64
+		managerEmail string
+	}{
+		{"Demo SuperAdmin", "demo.superadmin@" + domain, "SUPERADMIN", 0, ""},
+		{"Demo Admin", "demo.admin@" + domain, "ADMIN", 0, ""},
+		{"Demo HR", "demo.hr@" + domain, "HR", 0, ""},
+		{"Demo Manager", "demo.manager@" + domain, "MANAGER", 50000, ""},
+		{"Demo Employee", "demo.employee@" + domain, "EMPLOYEE", 30000, mgr},
+		{"Demo Intern", "demo.intern@" + domain, "INTERN", 15000, mgr},
+	}
 }
 
 // ─── entry point ─────────────────────────────────────────────────────────────
@@ -100,7 +122,8 @@ func connectDB() *sqlx.DB {
 func runSeed(db *sqlx.DB) {
 	log.Println("Starting demo account seeding...")
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(demoPassword), bcrypt.DefaultCost)
+	pwd := demoPassword()
+	hash, err := bcrypt.GenerateFromPassword([]byte(pwd), bcrypt.DefaultCost)
 	if err != nil {
 		log.Fatalf("Failed to hash password: %v", err)
 	}
@@ -115,6 +138,8 @@ func runSeed(db *sqlx.DB) {
 		log.Println("⚠  No leave types found in the database. Leave balances will not be allocated.")
 		log.Println("   Run the application at least once so migrations create the leave types, then re-run the seeder.")
 	}
+
+	demoAccounts := buildDemoAccounts(emailDomain())
 
 	// Track manager UUID so EMPLOYEE and INTERN can reference it
 	managerIDs := map[string]string{} // email → uuid string
@@ -193,19 +218,20 @@ func runSeed(db *sqlx.DB) {
 	fmt.Printf("║  %-12s  %-38s  %s\n", "ROLE", "EMAIL", "PASSWORD ║")
 	fmt.Println("╠══════════════════════════════════════════════════════════════════╣")
 	for _, acc := range demoAccounts {
-		fmt.Printf("║  %-12s  %-38s  %s ║\n", acc.role, acc.email, demoPassword)
+		fmt.Printf("║  %-12s  %-38s  %s ║\n", acc.role, acc.email, pwd)
 	}
 	fmt.Println("╠══════════════════════════════════════════════════════════════════╣")
 	fmt.Printf("║  Created: %-3d   Skipped (already existed): %-3d                  ║\n", created, skipped)
 	fmt.Println("╚══════════════════════════════════════════════════════════════════╝")
+	domain := emailDomain()
 	fmt.Println()
 	fmt.Println("Org structure:")
-	fmt.Println("  SUPERADMIN  demo.superadmin@zenithive.com")
-	fmt.Println("  ADMIN       demo.admin@zenithive.com")
-	fmt.Println("  HR          demo.hr@zenithive.com")
-	fmt.Println("  MANAGER     demo.manager@zenithive.com")
-	fmt.Println("    └─ EMPLOYEE  demo.employee@zenithive.com")
-	fmt.Println("    └─ INTERN    demo.intern@zenithive.com")
+	fmt.Printf("  SUPERADMIN  demo.superadmin@%s\n", domain)
+	fmt.Printf("  ADMIN       demo.admin@%s\n", domain)
+	fmt.Printf("  HR          demo.hr@%s\n", domain)
+	fmt.Printf("  MANAGER     demo.manager@%s\n", domain)
+	fmt.Printf("    └─ EMPLOYEE  demo.employee@%s\n", domain)
+	fmt.Printf("    └─ INTERN    demo.intern@%s\n", domain)
 	fmt.Println()
 	fmt.Println("To remove all demo accounts run:")
 	fmt.Println("  go run ./cmd/seed --teardown")
@@ -217,7 +243,7 @@ func runTeardown(db *sqlx.DB) {
 	log.Println("Starting demo account teardown...")
 
 	// Collect all demo employee IDs
-	rows, err := db.Query(`SELECT id, email FROM Tbl_Employee WHERE email LIKE $1`, demoEmailMark+"%@zenithive.com")
+	rows, err := db.Query(`SELECT id, email FROM Tbl_Employee WHERE email LIKE $1`, demoEmailMark+"%@"+emailDomain())
 	if err != nil {
 		log.Fatalf("Failed to query demo accounts: %v", err)
 	}
