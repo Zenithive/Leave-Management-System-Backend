@@ -29,6 +29,7 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc, env *config.ENV) {
 		auth.GET("/verify", h.VerifyToken)                           // Verify token validity
 		auth.GET("/status", h.CheckAuthStatus)                       // Check auth status without requiring auth
 		auth.POST("/logout", middleware.AuthMiddleware(h), h.Logout) // Logout (requires valid token)
+		auth.GET("/roles", h.GetAllRoles)                            // Get all available role types (public)
 	}
 
 	// ----------------- Employees -----------------
@@ -73,6 +74,15 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc, env *config.ENV) {
 		leaves.DELETE("/:id/cancel", h.CancelLeave)   // Cancel pending leave (Employee/Admin)
 		leaves.POST("/:id/withdraw", h.WithdrawLeave) // Withdraw approved leave (Admin/Manager)
 		leaves.GET("/:id", h.GetLeaveByID)            // Get leave by ID (role-based access)
+	}
+
+	approver := leaves.Group("/approver-flow")
+	approver.Use(middleware.AuthMiddleware(h), access_role.RoleMiddleware(access_role.SuperAdminOnly...))
+	{
+		approver.POST("", h.CreateApprovelFlow)
+		approver.GET("", h.GetAllApprovelFlow)
+		approver.PUT("/:id", h.UpdateLeaveApprovelFlow)
+		approver.DELETE("/:id", h.DeleteLeaveApprovelFlow)
 	}
 
 	// ----------------- Leave Balances -----------------

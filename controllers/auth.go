@@ -19,6 +19,21 @@ type EmployeeAuthData struct {
 	Status   string `db:"status"`
 }
 
+// GetAllRoles — GET /api/auth/roles
+// Returns all available role types from Tbl_Role.
+// Public endpoint — no authentication required (used for registration dropdowns etc.)
+func (s *HandlerFunc) GetAllRoles(c *gin.Context) {
+	roles, err := s.Query.GetAllRoles()
+	if err != nil {
+		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch roles: "+err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Roles fetched successfully",
+		"data":    roles,
+	})
+}
+
 func (s *HandlerFunc) Login(c *gin.Context) {
 	// 0. Check if user is already authenticated
 	authHeader := c.GetHeader("Authorization")

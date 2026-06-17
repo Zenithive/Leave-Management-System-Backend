@@ -21,7 +21,12 @@ func main() {
 	validator := models.InitValidator()
 
 	repo := repositories.InitializeRepo(db)
-	handlerFunc := controllers.NewHandler(env, repo, validator)
+
+	//leaveApproverFlow
+	leaveApproverFlowRepo := repositories.NewLeaveApprovalFlowRepository(db)
+	leaveApporverService := service.NewLeaveApprovalFlowService(db, leaveApproverFlowRepo)
+
+	handlerFunc := controllers.NewHandler(env, repo, validator, leaveApporverService)
 
 	// Start birthday cron job (runs daily at 00:01)
 	birthdayCron := service.NewBirthdayCronService(repo, env)

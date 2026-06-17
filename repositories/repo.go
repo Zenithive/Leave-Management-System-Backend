@@ -168,6 +168,13 @@ func (r *Repository) GetRoleID(role string) (string, error) {
 	return id, err
 }
 
+// ------------------ GET ALL ROLES ------------------
+func (r *Repository) GetAllRoles() ([]models.Role, error) {
+	var roles []models.Role
+	err := r.DB.Select(&roles, `SELECT id, type FROM Tbl_Role ORDER BY id`)
+	return roles, err
+}
+
 // ------------------ CREATE EMPLOYEE ------------------
 func (r *Repository) InsertEmployee(tx *sqlx.Tx, fullName, email, roleID, password string, salary *float64, joining *time.Time) (uuid.UUID, error) {
 	var employeeID uuid.UUID

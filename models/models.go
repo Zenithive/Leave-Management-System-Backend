@@ -12,6 +12,12 @@ type RoleInput struct {
 	Type string `json:"type" validate:"required"`
 }
 
+// Role is the response model for a single role entry.
+type Role struct {
+	ID   int    `json:"id" db:"id"`
+	Type string `json:"type" db:"type"`
+}
+
 // ----------------- EMPLOYEE -----------------
 
 // EmployeeInput is used for create employee (API input + validation).

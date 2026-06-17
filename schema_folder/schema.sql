@@ -315,6 +315,21 @@ CREATE TABLE IF NOT EXISTS Tbl_Audit (
 );
 
 -- =====================================================
+-- 19. TBL_LEAVE_APPROVAL_FLOW - Approval Workflow Engine
+-- =====================================================
+CREATE TABLE leave_approval_flow (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    name TEXT NOT NULL,
+
+    flow JSONB NOT NULL,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    deleted_at TIMESTAMP NULL
+);
+-- =====================================================
 -- INDEXES FOR PERFORMANCE
 -- =====================================================
 
