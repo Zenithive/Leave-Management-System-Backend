@@ -180,8 +180,17 @@ func (s *LeavePolicy) Get(ctx context.Context) (*[]models.LeaveTypeResponse, err
 		}
 		// Leave type has no approval flow — still include it with a nil flow
 		res = append(res, models.LeaveTypeResponse{
-			LeaveType:    lCopy,
-			ApprovalFlow: nil,
+			ID:                 lCopy.ID,
+			Name:               lCopy.Name,
+			IsPaid:             lCopy.IsPaid,
+			DefaultEntitlement: lCopy.DefaultEntitlement,
+			InternEntitlement:  lCopy.InternEntitlement,
+			IsEarly:            lCopy.IsEarly,
+			IsWorkFromHome:     lCopy.IsWorkFromHome,
+			ApprovalFlowID:     lCopy.ApprovalFlowID,
+			CreatedAt:          lCopy.CreatedAt,
+			UpdatedAt:          lCopy.UpdatedAt,
+			ApprovalFlow:       nil,
 		})
 	}
 	return &res, err

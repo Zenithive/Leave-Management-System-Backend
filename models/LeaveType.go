@@ -27,9 +27,19 @@ type LeaveType struct {
 	UpdatedAt          time.Time `json:"updated_at" db:"updated_at"`
 }
 
+// LeaveTypeResponse is a LeaveType with its ApprovalFlow nested inside it.
 type LeaveTypeResponse struct {
-	LeaveType    LeaveType                  `json:"leave_type"`
-	ApprovalFlow *LeaveApprovalFlowResponse `json:"approval_flow,omitempty"`
+	ID                 int                        `json:"id"`
+	Name               string                     `json:"name"`
+	IsPaid             bool                       `json:"is_paid"`
+	DefaultEntitlement int                        `json:"default_entitlement"`
+	InternEntitlement  *int                       `json:"intern_entitlement,omitempty"`
+	IsEarly            *bool                      `json:"is_early,omitempty"`
+	IsWorkFromHome     bool                       `json:"is_work_from_home"`
+	ApprovalFlowID     *string                    `json:"approval_flow_id,omitempty"`
+	CreatedAt          time.Time                  `json:"created_at"`
+	UpdatedAt          time.Time                  `json:"updated_at"`
+	ApprovalFlow       *LeaveApprovalFlowResponse `json:"approval_flow,omitempty"`
 }
 
 type LeaveTypeRow struct {
@@ -38,14 +48,24 @@ type LeaveTypeRow struct {
 	InternEntitlement  *int `db:"intern_entitlement"`
 }
 
+// MappPayload builds a LeaveTypeResponse with ApprovalFlow nested inside LeaveType.
 func MappPayload(leavetype *LeaveType, leaveApprovalFlow *LeaveApprovalFlowResponse) *LeaveTypeResponse {
-	return &LeaveTypeResponse{
-		LeaveType: *leavetype,
-		ApprovalFlow: &LeaveApprovalFlowResponse{
-			ID:       *leavetype.ApprovalFlowID,
-			Name:     leaveApprovalFlow.Name,
-			IsSystem: leaveApprovalFlow.IsSystem,
-			Flow:     leaveApprovalFlow.Flow,
-		},
+	res := &LeaveTypeResponse{
+		ID:                 leavetype.ID,
+		Name:               leavetype.Name,
+		IsPaid:             leavetype.IsPaid,
+		DefaultEntitlement: leavetype.DefaultEntitlement,
+		InternEntitlement:  leavetype.InternEntitlement,
+		IsEarly:            leavetype.IsEarly,
+		IsWorkFromHome:     leavetype.IsWorkFromHome,
+		ApprovalFlowID:     leavetype.ApprovalFlowID,
+		CreatedAt:          leavetype.CreatedAt,
+		UpdatedAt:          leavetype.UpdatedAt,
 	}
+
+	if leaveApprovalFlow != nil && leavetype.ApprovalFlowID != nil && *leavetype.ApprovalFlowID != "" {
+		res.ApprovalFlow = leaveApprovalFlow
+	}
+
+	return res
 }
