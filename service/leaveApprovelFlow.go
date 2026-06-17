@@ -18,6 +18,7 @@ import (
 
 type LeaveApprovalFlowService interface {
 	CreateLeaveApproverFlow(ctx context.Context, req *models.LeaveApprovalFlowRequest) error
+	GetLeaveApprovalFlowById(ctx context.Context, id string) (*models.LeaveApprovalFlowResponse, error)
 	GetAllLeaveApprovalFlows(ctx context.Context) ([]models.LeaveApprovalFlowResponse, error)
 	UpdateLeaveApprovelFlow(ctx context.Context, id string, req *models.LeaveApprovalFlowRequest) error
 	DeleteLeaveApprovelFlow(ctx context.Context, id string) error
@@ -79,6 +80,31 @@ func (s *leaveApprovalFlowService) GetAllLeaveApprovalFlows(ctx context.Context)
 			IsSystem: flow.IsSystem,
 			Flow:     stages,
 		})
+	}
+
+	return response, nil
+}
+func (s *leaveApprovalFlowService) GetLeaveApprovalFlowById(ctx context.Context, id string) (*models.LeaveApprovalFlowResponse, error) {
+
+	// 1. Fetch from repo
+	flow, err := s.Repo.GetById(ctx, id)
+	if err != nil {
+		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to get approval flow")
+	}
+
+	// 2. Convert JSON → struct
+	var stages []models.ApprovalStage
+
+	if err := json.Unmarshal(flow.Flow, &stages); err != nil {
+		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "invalid flow data")
+	}
+
+	// 3. Build response
+	response := &models.LeaveApprovalFlowResponse{
+		ID:       flow.ID,
+		Name:     flow.Name,
+		IsSystem: flow.IsSystem,
+		Flow:     stages,
 	}
 
 	return response, nil

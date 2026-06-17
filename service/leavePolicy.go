@@ -12,17 +12,46 @@ package service
 // It does not know about gin.Context — it works with plain Go types and returns errors.
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/repositories"
+
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/common"
 )
 
 // LeaveTypeService provides business-logic operations for leave types.
+
+type LeavePolicyService interface {
+	Create(ctx context.Context, input *models.LeaveTypeInput) (CreateLeaveTypeResult, error)
+	GetByID(ctx context.Context, leaveTypeID int) (*models.LeaveTypeResponse, error)
+	Get(ctx context.Context) (*[]models.LeaveTypeResponse, error)
+}
+
+type LeavePolicy struct {
+	DB                   *sqlx.DB
+	LeaveApporverService LeaveApprovalFlowService
+	LeavePolicyRepo      repositories.LeavePolicyRepository
+	CommRepo             *repositories.Repository
+}
+
+func NewLeavePolicy(db *sqlx.DB, leaveApporverService LeaveApprovalFlowService, leavePolicyRepo repositories.LeavePolicyRepository, commRepo *repositories.Repository) LeavePolicyService {
+	return &LeavePolicy{
+		DB:                   db,
+		LeaveApporverService: leaveApporverService,
+		LeavePolicyRepo:      leavePolicyRepo,
+		CommRepo:             commRepo,
+	}
+}
+
 type LeaveTypeService struct {
 	repo *repositories.Repository
 }
@@ -36,7 +65,7 @@ func NewLeaveTypeService(repo *repositories.Repository) *LeaveTypeService {
 // CreateLeaveTypeResult is returned by CreateLeaveType.
 // ─────────────────────────────────────────────────────────────────────────────
 type CreateLeaveTypeResult struct {
-	LeaveType models.LeaveType
+	LeaveType *models.LeaveType
 }
 
 // CreateLeaveType creates a new leave type and allocates a balance row for every
@@ -53,67 +82,109 @@ type CreateLeaveTypeResult struct {
 //     - Employees who joined in the current year get a prorated amount.
 //  5. The entire operation runs inside a single caller-provided transaction so
 //     the controller can attach logging inside the same transaction boundary.
-func (s *LeaveTypeService) CreateLeaveType(tx *sqlx.Tx,input models.LeaveTypeInput) (CreateLeaveTypeResult, error) {
 
-	// ── Apply defaults ────────────────────────────────────────────────────────
-	if input.IsPaid == nil {
-		f := false
-		input.IsPaid = &f
-	}
-	if input.DefaultEntitlement == nil {
-		zero := 0
-		input.DefaultEntitlement = &zero
-	}
-	if input.LeaveCount == nil {
-		two := 2
-		input.LeaveCount = &two
-	}
-	if input.IsEarly == nil {
-		f := false
-		input.IsEarly = &f
-	}
-	if input.IsWorkFromHome == nil {
-		f := false
-		input.IsWorkFromHome = &f
+func (s *LeavePolicy) Create(ctx context.Context, input *models.LeaveTypeInput) (CreateLeaveTypeResult, error) {
+
+	// 1. Normalize input
+	if err := s.NormalizeLeaveTypeInput(input); err != nil {
+		return CreateLeaveTypeResult{}, err
 	}
 
-	// ── Validate ─────────────────────────────────────────────────────────────
-	if *input.LeaveCount <= 0 {
-		return CreateLeaveTypeResult{}, fmt.Errorf("leave_count must be greater than 0")
-	}
+	var result CreateLeaveTypeResult
+	// 2. Transaction wrapper
+	err := common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
 
-	// ── Insert leave type ─────────────────────────────────────────────────────
-	leaveType, err := s.repo.AddLeaveType(tx, input)
-	if err != nil {
-		return CreateLeaveTypeResult{}, fmt.Errorf("failed to insert leave type: %w", err)
-	}
-
-	// Populate display fields not returned by RETURNING clause
-	leaveType.Name = input.Name
-	leaveType.IsPaid = *input.IsPaid
-	leaveType.DefaultEntitlement = *input.DefaultEntitlement
-	leaveType.InternEntitlement = input.InternEntitlement
-	// IsWorkFromHome is returned by RETURNING clause — already set via Scan
-
-	// ── Bulk-allocate balance rows (non-early leave types only) ───────────────
-	isEarly := *input.IsEarly
-	if !isEarly {
-		activeEmployees, err := s.repo.GetAllActiveEmployeesWithRoles(tx)
+		// 3. Insert leave type
+		leaveType, err := s.LeavePolicyRepo.Create(ctx, tx, input)
 		if err != nil {
-			return CreateLeaveTypeResult{}, fmt.Errorf("failed to fetch active employees: %w", err)
+			return utils.CustomErr(nil, http.StatusInternalServerError, "failed to create leave type")
 		}
-		if err := s.repo.BulkAllocateLeaveBalanceForNewLeaveType(
-			tx,
-			leaveType.ID,
-			*input.DefaultEntitlement,
-			input.InternEntitlement,
-			activeEmployees,
-		); err != nil {
-			return CreateLeaveTypeResult{}, fmt.Errorf("failed to allocate leave balances: %w", err)
+
+		// Populate display fields not returned by RETURNING clause
+		leaveType.Name = input.Name
+		leaveType.IsPaid = *input.IsPaid
+		leaveType.DefaultEntitlement = *input.DefaultEntitlement
+		leaveType.InternEntitlement = input.InternEntitlement
+
+		// 4. Bulk allocation (inside transaction)
+		if !*input.IsEarly {
+
+			activeEmployees, err := s.CommRepo.GetAllActiveEmployeesWithRoles(tx)
+			if err != nil {
+				return utils.CustomErr(nil, http.StatusInternalServerError, "failed to fetch active employees")
+			}
+
+			err = s.CommRepo.BulkAllocateLeaveBalanceForNewLeaveType(tx, leaveType.ID, *input.DefaultEntitlement, input.InternEntitlement, activeEmployees)
+			if err != nil {
+				return utils.CustomErr(nil, http.StatusInternalServerError, "failed to allocate leave balances")
+			}
 		}
+
+		result = CreateLeaveTypeResult{
+			LeaveType: leaveType,
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return CreateLeaveTypeResult{}, err
 	}
 
-	return CreateLeaveTypeResult{LeaveType: leaveType}, nil
+	return result, nil
+}
+
+func (s *LeavePolicy) GetByID(ctx context.Context, leaveTypeID int) (*models.LeaveTypeResponse, error) {
+
+	leaveType, err := s.LeavePolicyRepo.GetById(ctx, strconv.Itoa(leaveTypeID))
+	if err != nil {
+		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to get leave policy")
+	}
+	leaveApproverFlow, err := s.LeaveApporverService.GetLeaveApprovalFlowById(ctx, strconv.Itoa(leaveTypeID))
+	if err != nil {
+		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to load Leave Approvel flow")
+	}
+
+	res := models.MappPayload(leaveType, leaveApproverFlow)
+
+	return res, err
+}
+
+func (s *LeavePolicy) Get(ctx context.Context) (*[]models.LeaveTypeResponse, error) {
+
+	leaveType, err := s.LeavePolicyRepo.Get(ctx)
+	if err != nil {
+		fmt.Println("================", err.Error())
+		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to get leave policy")
+	}
+	leaveApproverFlow, err := s.LeaveApporverService.GetAllLeaveApprovalFlows(ctx)
+	if err != nil {
+		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to load Leave Approvel flow")
+	}
+
+	// Build a lookup map for O(1) flow matching by ID
+	flowMap := make(map[string]models.LeaveApprovalFlowResponse, len(leaveApproverFlow))
+	for _, f := range leaveApproverFlow {
+		flowMap[f.ID] = f
+	}
+
+	var res []models.LeaveTypeResponse
+
+	for _, l := range *leaveType {
+		lCopy := l // avoid loop-variable aliasing
+		if lCopy.ApprovalFlowID != nil && *lCopy.ApprovalFlowID != "" {
+			if flow, ok := flowMap[*lCopy.ApprovalFlowID]; ok {
+				res = append(res, *models.MappPayload(&lCopy, &flow))
+				continue
+			}
+		}
+		// Leave type has no approval flow — still include it with a nil flow
+		res = append(res, models.LeaveTypeResponse{
+			LeaveType:    lCopy,
+			ApprovalFlow: nil,
+		})
+	}
+	return &res, err
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -134,7 +205,7 @@ type UpdateLeaveTypeResult struct {
 //  4. When intern_entitlement changes (or is cleared), all INTERN employees' balances
 //     are recalculated using the resolved new effective entitlement.
 //  5. The entire operation runs inside a single caller-provided transaction.
-func (s *LeaveTypeService) UpdateLeaveType(tx *sqlx.Tx,leaveTypeID int,input models.LeaveTypeInput) (UpdateLeaveTypeResult, error) {
+func (s *LeaveTypeService) UpdateLeaveType(tx *sqlx.Tx, leaveTypeID int, input models.LeaveTypeInput) (UpdateLeaveTypeResult, error) {
 
 	// ── Apply defaults ────────────────────────────────────────────────────────
 	if input.IsPaid == nil {
@@ -210,7 +281,7 @@ func (s *LeaveTypeService) UpdateLeaveType(tx *sqlx.Tx,leaveTypeID int,input mod
 // Business rules:
 //  1. If the leave type is used in any existing leave application → return a descriptive error.
 //  2. The operation runs inside a caller-provided transaction.
-func (s *LeaveTypeService) DeleteLeaveType(tx *sqlx.Tx,leaveTypeID int) error {
+func (s *LeaveTypeService) DeleteLeaveType(tx *sqlx.Tx, leaveTypeID int) error {
 
 	// ── Verify existence ──────────────────────────────────────────────────────
 	_, err := s.repo.GetLeaveTypeByIdTx(tx, leaveTypeID)
@@ -245,22 +316,6 @@ func (s *LeaveTypeService) GetAllLeaveTypes() ([]models.LeaveType, error) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GetLeaveTypeByID returns a single leave type by its primary key.
-// ─────────────────────────────────────────────────────────────────────────────
-
-// GetLeaveTypeByID returns a single leave type or an error if not found.
-func (s *LeaveTypeService) GetLeaveTypeByID(leaveTypeID int) (models.LeaveType, error) {
-	lt, err := s.repo.GetLeaveTypeById(leaveTypeID)
-	if err == sql.ErrNoRows {
-		return models.LeaveType{}, fmt.Errorf("leave type not found")
-	}
-	if err != nil {
-		return models.LeaveType{}, fmt.Errorf("failed to fetch leave type: %w", err)
-	}
-	return lt, nil
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // LeaveTypeLogMeta is used by the controller to record an audit log entry
 // inside the same transaction, after the service call succeeds.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -269,4 +324,35 @@ func (s *LeaveTypeService) GetLeaveTypeByID(leaveTypeID int) (models.LeaveType, 
 type LeaveTypeLogMeta struct {
 	Action     string    // constant.ActionCreate / ActionUpdate / ActionDelete
 	FromUserID uuid.UUID // employee who performed the operation
+}
+
+func (s *LeavePolicy) NormalizeLeaveTypeInput(input *models.LeaveTypeInput) error {
+	if input.IsPaid == nil {
+		v := false
+		input.IsPaid = &v
+	}
+
+	if input.DefaultEntitlement == nil {
+		v := 0
+		input.DefaultEntitlement = &v
+	}
+
+	if input.LeaveCount == nil {
+		v := 2
+		input.LeaveCount = &v
+	}
+
+	if input.IsEarly == nil {
+		v := false
+		input.IsEarly = &v
+	}
+
+	if input.IsWorkFromHome == nil {
+		v := false
+		input.IsWorkFromHome = &v
+	}
+	if *input.DefaultEntitlement < 0 {
+		return fmt.Errorf("default entitlement cannot be negative")
+	}
+	return nil
 }

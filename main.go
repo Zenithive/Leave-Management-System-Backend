@@ -26,7 +26,11 @@ func main() {
 	leaveApproverFlowRepo := repositories.NewLeaveApprovalFlowRepository(db)
 	leaveApporverService := service.NewLeaveApprovalFlowService(db, leaveApproverFlowRepo)
 
-	handlerFunc := controllers.NewHandler(env, repo, validator, leaveApporverService)
+	//leavePolicy
+	leavePolicyRepo := repositories.NewLeavePolicy(db)
+	leavePolicyService := service.NewLeavePolicy(db, leaveApporverService, leavePolicyRepo, repo)
+
+	handlerFunc := controllers.NewHandler(env, repo, validator, leaveApporverService, leavePolicyService)
 
 	// Start birthday cron job (runs daily at 00:01)
 	birthdayCron := service.NewBirthdayCronService(repo, env)

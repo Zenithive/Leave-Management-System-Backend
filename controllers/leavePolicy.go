@@ -23,6 +23,7 @@ import (
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/common"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/helper"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -31,12 +32,7 @@ import (
 
 // AdminAddLeavePolicy creates a new leave type (policy).
 // Only SUPERADMIN may call this endpoint.
-func (h *HandlerFunc) AdminAddLeavePolicy(c *gin.Context) {
-	// ── Auth ─────────────────────────────────────────────────────────────────
-	employeeID, ok := extractEmployeeID(c)
-	if !ok {
-		return
-	}
+func (h *HandlerFunc) LeavePolicy(c *gin.Context) {
 
 	if role := c.GetString("role"); role != constant.ROLE_SUPER_ADMIN {
 		utils.RespondWithError(c, http.StatusUnauthorized, "not permitted to create leave policies")
@@ -50,24 +46,26 @@ func (h *HandlerFunc) AdminAddLeavePolicy(c *gin.Context) {
 		return
 	}
 
-	// ── Transaction: service call + audit log ─────────────────────────────────
-	var result models.LeaveType
-	err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
-		svcResult, err := h.LeaveTypeSvc.CreateLeaveType(tx, input)
-		if err != nil {
-			return utils.CustomErr(c, http.StatusBadRequest, err.Error())
-		}
-		result = svcResult.LeaveType
-
-		return h.writeLeaveTypeLog(c, tx, constant.ActionCreate, employeeID)
-	})
+	svcResult, err := h.LeavePolicyService.Create(c, &input)
 	if err != nil {
-		// CustomErr already wrote the response; only hit this for unexpected errors.
-		utils.RespondWithError(c, http.StatusInternalServerError, "failed to create leave policy: "+err.Error())
+		utils.Error(c, err)
 		return
 	}
+	var result models.LeaveType
+
+	result = *svcResult.LeaveType
 
 	c.JSON(http.StatusOK, result)
+}
+
+// GetAllLeavePolicies returns all leave type definitions.
+func (h *HandlerFunc) GetAllLeavePolicies(c *gin.Context) {
+	res, err := h.LeavePolicyService.Get(c)
+	if err != nil {
+		utils.Error(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, res)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -78,7 +76,7 @@ func (h *HandlerFunc) AdminAddLeavePolicy(c *gin.Context) {
 // Allowed roles: SUPERADMIN, ADMIN, HR.
 func (h *HandlerFunc) UpdateLeavePolicy(c *gin.Context) {
 	// ── Auth ─────────────────────────────────────────────────────────────────
-	employeeID, ok := extractEmployeeID(c)
+	employeeID, ok := helper.ExtractEmployeeID(c)
 	if !ok {
 		return
 	}
@@ -135,7 +133,7 @@ func (h *HandlerFunc) UpdateLeavePolicy(c *gin.Context) {
 // Allowed roles: SUPERADMIN, ADMIN, HR.
 func (h *HandlerFunc) DeleteLeavePolicy(c *gin.Context) {
 	// ── Auth ─────────────────────────────────────────────────────────────────
-	employeeID, ok := extractEmployeeID(c)
+	employeeID, ok := helper.ExtractEmployeeID(c)
 	if !ok {
 		return
 	}
@@ -180,40 +178,9 @@ func (h *HandlerFunc) DeleteLeavePolicy(c *gin.Context) {
 // GET /api/leaves/policies
 // ─────────────────────────────────────────────────────────────────────────────
 
-// GetAllLeavePolicies returns all leave type definitions.
-func (h *HandlerFunc) GetAllLeavePolicies(c *gin.Context) {
-	leaveTypes, err := h.LeaveTypeSvc.GetAllLeaveTypes()
-	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
-		return
-	}
-	c.JSON(http.StatusOK, leaveTypes)
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Private helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-// extractEmployeeID reads the authenticated employee's UUID from the gin context.
-// Writes the appropriate error response and returns false on failure.
-func extractEmployeeID(c *gin.Context) (uuid.UUID, bool) {
-	raw, ok := c.Get("user_id")
-	if !ok {
-		utils.RespondWithError(c, http.StatusUnauthorized, "employee ID missing")
-		return uuid.Nil, false
-	}
-	str, ok := raw.(string)
-	if !ok {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee ID format")
-		return uuid.Nil, false
-	}
-	id, err := uuid.Parse(str)
-	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "invalid employee UUID")
-		return uuid.Nil, false
-	}
-	return id, true
-}
 
 // parseLeaveTypeID parses and validates the ":id" path parameter.
 func parseLeaveTypeID(c *gin.Context) (int, bool) {

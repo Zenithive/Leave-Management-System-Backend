@@ -1,22 +1,126 @@
 package repositories
 
 import (
+	"context"
 	"database/sql"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 )
 
-func (r *Repository) AddLeaveType(tx *sqlx.Tx, input models.LeaveTypeInput) (models.LeaveType, error) {
+type LeavePolicyRepository interface {
+	Create(ctx context.Context, tx *sqlx.Tx, input *models.LeaveTypeInput) (*models.LeaveType, error)
+	GetById(ctx context.Context, id string) (*models.LeaveType, error)
+	Get(ctx context.Context) (*[]models.LeaveType, error)
+}
+
+type leavePolicy struct {
+	DB *sqlx.DB
+}
+
+func NewLeavePolicy(db *sqlx.DB) LeavePolicyRepository {
+	return &leavePolicy{
+		DB: db,
+	}
+}
+
+func (r *leavePolicy) GetById(ctx context.Context, id string) (*models.LeaveType, error) {
+
 	var leave models.LeaveType
+
 	query := `
-		INSERT INTO Tbl_Leave_type (name, is_paid, default_entitlement, intern_entitlement, is_early, is_work_from_home)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, is_work_from_home, created_at, updated_at, is_early
+		SELECT 
+			id,
+			name,
+			is_paid,
+			default_entitlement,
+			intern_entitlement,
+			is_early,
+			is_work_from_home,
+			approval_flow_id,
+			created_at,
+			updated_at
+		FROM Tbl_Leave_type
+		WHERE id = $1
 	`
-	err := tx.QueryRow(query, input.Name, *input.IsPaid, *input.DefaultEntitlement, input.InternEntitlement, *input.IsEarly, *input.IsWorkFromHome).
-		Scan(&leave.ID, &leave.IsWorkFromHome, &leave.CreatedAt, &leave.UpdatedAt, &leave.IsEarly)
-	return leave, err
+
+	err := r.DB.QueryRowxContext(ctx, query, id).StructScan(&leave)
+	if err != nil {
+		return nil, err
+	}
+
+	return &leave, nil
+}
+func (r *leavePolicy) Get(ctx context.Context) (*[]models.LeaveType, error) {
+
+	var leave []models.LeaveType
+
+	query := `
+		SELECT 
+			id,
+			name,
+			is_paid,
+			default_entitlement,
+			intern_entitlement,
+			is_early,
+			is_work_from_home,
+			approval_flow_id,
+			created_at,
+			updated_at
+		FROM Tbl_Leave_type
+	`
+
+	rows, err := r.DB.QueryxContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var lt models.LeaveType
+		if err := rows.StructScan(&lt); err != nil {
+			return nil, err
+		}
+		leave = append(leave, lt)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return &leave, nil
+}
+func (r *leavePolicy) Create(ctx context.Context, tx *sqlx.Tx, input *models.LeaveTypeInput) (*models.LeaveType, error) {
+
+	var leave models.LeaveType
+
+	query := `
+		INSERT INTO Tbl_Leave_type 
+			(name, is_paid, default_entitlement, intern_entitlement, is_early, is_work_from_home, approval_flow_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, is_work_from_home, created_at, updated_at, is_early, approval_flow_id
+	`
+
+	err := tx.QueryRowxContext(
+		ctx,
+		query,
+		input.Name,
+		*input.IsPaid,
+		*input.DefaultEntitlement,
+		input.InternEntitlement,
+		*input.IsEarly,
+		*input.IsWorkFromHome,
+		input.ApprovalFlowID,
+	).Scan(
+		&leave.ID,
+		&leave.IsWorkFromHome,
+		&leave.CreatedAt,
+		&leave.UpdatedAt,
+		&leave.IsEarly,
+		&leave.ApprovalFlowID,
+	)
+
+	return &leave, err
 }
 
 // UpdateLeaveType - Update leave policy

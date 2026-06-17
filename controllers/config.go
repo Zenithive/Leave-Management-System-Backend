@@ -16,10 +16,11 @@ type HandlerFunc struct {
 	LeaveReportSvc           *service.LeaveReportService
 	LeaveTypeSvc             *service.LeaveTypeService
 	LeaveApproverFlowService service.LeaveApprovalFlowService
+	LeavePolicyService       service.LeavePolicyService
 }
 
 // NewHandler initializes and returns a HandlerFunc
-func NewHandler(env *config.ENV, query *repositories.Repository, validator *validator.Validate, leaveApproverFlowService service.LeaveApprovalFlowService) *HandlerFunc {
+func NewHandler(env *config.ENV, query *repositories.Repository, validator *validator.Validate, leaveApproverFlowService service.LeaveApprovalFlowService, leavePolicyService service.LeavePolicyService) *HandlerFunc {
 	return &HandlerFunc{
 		Env:                      env,
 		Query:                    query,
@@ -27,6 +28,7 @@ func NewHandler(env *config.ENV, query *repositories.Repository, validator *vali
 		LeaveReportSvc:           service.NewLeaveReportService(query),
 		LeaveTypeSvc:             service.NewLeaveTypeService(query),
 		LeaveApproverFlowService: leaveApproverFlowService,
+		LeavePolicyService:       leavePolicyService,
 	}
 }
 

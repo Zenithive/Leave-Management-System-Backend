@@ -16,6 +16,7 @@ import (
 type LeaveApprovalFlowRepository interface {
 	InsertFlow(ctx context.Context, req *models.LeaveApprovalFlowRequest) error
 	GetAllFlows(ctx context.Context) ([]models.LeaveApprovalFlow, error)
+	GetById(ctx context.Context, id string) (*models.LeaveApprovalFlow, error)
 	UpdateLeaveApprovelFlow(ctx context.Context, id string, req *models.LeaveApprovalFlowRequest) error
 	DeleteLeaveApprovelFlow(ctx context.Context, id string) error
 }
@@ -74,7 +75,29 @@ func (r *leaveApprovalFlowRepo) GetAllFlows(ctx context.Context) ([]models.Leave
 
 	return flows, nil
 }
+func (r *leaveApprovalFlowRepo) GetById(ctx context.Context, id string) (*models.LeaveApprovalFlow, error) {
 
+	query := `
+		SELECT 
+			id, 
+			name, 
+			is_system, 
+			flow, 
+			created_at, 
+			updated_at
+		FROM leave_approval_flow
+		WHERE id = $1
+	`
+
+	var flow models.LeaveApprovalFlow
+
+	err := r.db.GetContext(ctx, &flow, query, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &flow, nil
+}
 func (r *leaveApprovalFlowRepo) UpdateLeaveApprovelFlow(ctx context.Context, id string, req *models.LeaveApprovalFlowRequest) error {
 
 	query := `
