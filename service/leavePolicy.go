@@ -140,21 +140,26 @@ func (s *LeavePolicy) GetByID(ctx context.Context, leaveTypeID int) (*models.Lea
 	if err != nil {
 		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to get leave policy")
 	}
-	leaveApproverFlow, err := s.LeaveApporverService.GetLeaveApprovalFlowById(ctx, strconv.Itoa(leaveTypeID))
+
+	// No approval flow assigned — return leave type with nil flow
+	if leaveType.ApprovalFlowID == nil || *leaveType.ApprovalFlowID == "" {
+		return models.MappPayload(leaveType, nil), nil
+	}
+
+	// Fetch the approval flow using its own UUID (not the leave type ID)
+	leaveApproverFlow, err := s.LeaveApporverService.GetLeaveApprovalFlowById(ctx, *leaveType.ApprovalFlowID)
 	if err != nil {
 		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to load Leave Approvel flow")
 	}
 
-	res := models.MappPayload(leaveType, leaveApproverFlow)
-
-	return res, err
+	return models.MappPayload(leaveType, leaveApproverFlow), nil
 }
 
 func (s *LeavePolicy) Get(ctx context.Context) (*[]models.LeaveTypeResponse, error) {
 
 	leaveType, err := s.LeavePolicyRepo.Get(ctx)
 	if err != nil {
-		fmt.Println("================", err.Error())
+
 		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to get leave policy")
 	}
 	leaveApproverFlow, err := s.LeaveApporverService.GetAllLeaveApprovalFlows(ctx)
