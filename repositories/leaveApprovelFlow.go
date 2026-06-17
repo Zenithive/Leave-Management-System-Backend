@@ -61,10 +61,8 @@ func (r *leaveApprovalFlowRepo) InsertFlow(ctx context.Context, req *models.Leav
 func (r *leaveApprovalFlowRepo) GetAllFlows(ctx context.Context) ([]models.LeaveApprovalFlow, error) {
 
 	query := `
-		SELECT id, name, flow, created_at, updated_at
-		FROM leave_approval_flow
-		WHERE deleted_at IS NULL
-		ORDER BY created_at DESC
+		SELECT id, name, is_system, flow, created_at, updated_at
+            FROM leave_approval_flow ORDER BY created_at DESC;
 	`
 
 	var flows []models.LeaveApprovalFlow
@@ -85,7 +83,7 @@ func (r *leaveApprovalFlowRepo) UpdateLeaveApprovelFlow(ctx context.Context, id 
 			name = $1,
 			flow = $2,
 			updated_at = CURRENT_TIMESTAMP
-		WHERE id = $3 AND deleted_at IS NULL
+		WHERE id = $3 AND is_system = false
 	`
 
 	flowBytes, err := json.Marshal(req.Flow)
@@ -114,7 +112,7 @@ func (r *leaveApprovalFlowRepo) DeleteLeaveApprovelFlow(ctx context.Context, id 
 
 	query := `
 		DELETE FROM leave_approval_flow
-		WHERE id = $1
+		WHERE id = $1 AND is_system = false
 	`
 
 	res, err := r.db.ExecContext(ctx, query, id)

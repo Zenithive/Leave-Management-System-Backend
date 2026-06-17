@@ -58,6 +58,7 @@ func (s *leaveApprovalFlowService) GetAllLeaveApprovalFlows(ctx context.Context)
 	// 1. Fetch from repo
 	flows, err := s.Repo.GetAllFlows(ctx)
 	if err != nil {
+		fmt.Println("errError", err.Error())
 		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to get approval flows")
 	}
 
@@ -73,9 +74,10 @@ func (s *leaveApprovalFlowService) GetAllLeaveApprovalFlows(ctx context.Context)
 		}
 
 		response = append(response, models.LeaveApprovalFlowResponse{
-			ID:   flow.ID,
-			Name: flow.Name,
-			Flow: stages,
+			ID:       flow.ID,
+			Name:     flow.Name,
+			IsSystem: flow.IsSystem,
+			Flow:     stages,
 		})
 	}
 

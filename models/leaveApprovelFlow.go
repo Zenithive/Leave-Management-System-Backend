@@ -28,6 +28,7 @@ type ApprovalStage struct {
 type LeaveApprovalFlow struct {
 	ID        string          `json:"id" db:"id"`
 	Name      string          `json:"name" db:"name"`
+	IsSystem  bool            `json:"is_system" db:"is_system"`
 	Flow      json.RawMessage `json:"flow" db:"flow"`
 	CreatedAt time.Time       `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at" db:"updated_at"`
@@ -45,7 +46,8 @@ type LeaveApprovalFlowRequest struct {
 // Response Model
 // ------------------------------
 type LeaveApprovalFlowResponse struct {
-	ID   string          `json:"id"`
-	Name string          `json:"name"`
-	Flow []ApprovalStage `json:"flow"`
+	ID       string          `json:"id"`
+	Name     string          `json:"name"`
+	IsSystem bool            `json:"is_system"`
+	Flow     []ApprovalStage `json:"flow"`
 }
