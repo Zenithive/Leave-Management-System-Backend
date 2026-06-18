@@ -3,14 +3,14 @@ package models
 import "time"
 
 type LeaveTypeInput struct {
-	Name               string `json:"name" validate:"required"`
-	IsPaid             *bool  `json:"is_paid,omitempty"`
-	IsEarly            *bool  `json:"is_early,omitempty" validate:"omitempty"`
-	IsWorkFromHome     *bool  `json:"is_work_from_home,omitempty"`
-	DefaultEntitlement *int   `json:"default_entitlement,omitempty"`
-	InternEntitlement  *int   `json:"intern_entitlement,omitempty"`
-	LeaveCount         *int   `json:"leave_count,omitempty" validate:"omitempty,gt=0"`
-	ApprovalFlowID     string `json:"approval_flow_id,omitempty"`
+	Name               string  `json:"name" validate:"required"`
+	IsPaid             *bool   `json:"is_paid,omitempty"`
+	IsEarly            *bool   `json:"is_early,omitempty" validate:"omitempty"`
+	IsWorkFromHome     *bool   `json:"is_work_from_home,omitempty"`
+	DefaultEntitlement *int    `json:"default_entitlement,omitempty"`
+	InternEntitlement  *int    `json:"intern_entitlement,omitempty"`
+	LeaveCount         *int    `json:"leave_count,omitempty" validate:"omitempty,gt=0"`
+	ApprovalFlowID     *string `json:"approval_flow_id,omitempty"`
 }
 
 // ----------------- LEAVE TYPE -----------------

@@ -12,6 +12,8 @@ type LeavePolicyRepository interface {
 	Create(ctx context.Context, tx *sqlx.Tx, input *models.LeaveTypeInput) (*models.LeaveType, error)
 	GetById(ctx context.Context, id string) (*models.LeaveType, error)
 	Get(ctx context.Context) (*[]models.LeaveType, error)
+	Update(ctx context.Context, tx *sqlx.Tx, id string, input *models.LeaveTypeInput) (*models.LeaveType, error)
+	Delete(tx *sqlx.Tx, leaveTypeID int) error
 }
 
 type leavePolicy struct {
@@ -122,33 +124,68 @@ func (r *leavePolicy) Create(ctx context.Context, tx *sqlx.Tx, input *models.Lea
 
 	return &leave, err
 }
+func (r *leavePolicy) Update(ctx context.Context, tx *sqlx.Tx, id string, input *models.LeaveTypeInput) (*models.LeaveType, error) {
 
-// UpdateLeaveType - Update leave policy
-func (r *Repository) UpdateLeaveType(tx *sqlx.Tx, leaveTypeID int, input models.LeaveTypeInput) error {
+	var leave models.LeaveType
+
 	query := `
-		UPDATE Tbl_Leave_type 
-		SET name = $1, is_paid = $2, default_entitlement = $3, intern_entitlement = $4, is_work_from_home = $5, updated_at = NOW()
-		WHERE id = $6
+		UPDATE Tbl_Leave_type
+		SET 
+			name = $1,
+			is_paid = $2,
+			default_entitlement = $3,
+			intern_entitlement = $4,
+			is_early = $5,
+			is_work_from_home = $6,
+			approval_flow_id = $7,
+			updated_at = NOW()
+		WHERE id = $8
+		RETURNING 
+			id,
+			name,
+			is_paid,
+			default_entitlement,
+			intern_entitlement,
+			is_early,
+			is_work_from_home,
+			approval_flow_id,
+			created_at,
+			updated_at
 	`
-	result, err := tx.Exec(query, input.Name, *input.IsPaid, *input.DefaultEntitlement, input.InternEntitlement, *input.IsWorkFromHome, leaveTypeID)
+
+	err := tx.QueryRowxContext(
+		ctx,
+		query,
+		input.Name,
+		*input.IsPaid,
+		*input.DefaultEntitlement,
+		input.InternEntitlement,
+		*input.IsEarly,
+		*input.IsWorkFromHome,
+		input.ApprovalFlowID,
+		id,
+	).Scan(
+		&leave.ID,
+		&leave.Name,
+		&leave.IsPaid,
+		&leave.DefaultEntitlement,
+		&leave.InternEntitlement,
+		&leave.IsEarly,
+		&leave.IsWorkFromHome,
+		&leave.ApprovalFlowID,
+		&leave.CreatedAt,
+		&leave.UpdatedAt,
+	)
+
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rowsAffected == 0 {
-		return sql.ErrNoRows
-	}
-
-	return nil
+	return &leave, nil
 }
 
 // DeleteLeaveType - Delete leave policy
-func (r *Repository) DeleteLeaveType(tx *sqlx.Tx, leaveTypeID int) error {
+func (r *leavePolicy) Delete(tx *sqlx.Tx, leaveTypeID int) error {
 	// Check if leave type is being used in any leave applications
 	var count int
 	err := tx.Get(&count, "SELECT COUNT(*) FROM Tbl_Leave WHERE leave_type_id = $1", leaveTypeID)
