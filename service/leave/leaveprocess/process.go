@@ -111,7 +111,7 @@ func skipStages(log []models.LeaveFlowStage, stageNo int, actingRole string) {
 		}
 	}
 }
-func skipAllWaitingStages(log []models.LeaveFlowStage, stageNo int, actingRole string) {
+func skipAllWaitingStages(log []models.LeaveFlowStage, stageNo int, _ string) {
 	for i := range log {
 		s := &log[i]
 

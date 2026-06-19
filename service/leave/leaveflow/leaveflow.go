@@ -116,18 +116,15 @@ func (s *leaveFlow) ActionLeave(ctx context.Context, req models.ActionLeaveReq, 
 	if err != nil {
 		return err
 	}
-	if leave.Status != string(constant.LEAVE_PENDING) {
-		return utils.CustomErr(nil, http.StatusBadRequest, "process only pending leave")
-	}
 	if leave.EmployeeID == empID {
-		return utils.CustomErr(nil, http.StatusForbidden, "You cannot approve your own leave request")
+		return utils.CustomErr(nil, http.StatusForbidden, "You cannot process your own leave request")
 	}
 	leaveLogFlow, err := s.LeaveFlowLogService.GetByLeaveID(ctx, uuid.MustParse(leaveID))
 	if err != nil {
 		return err
 	}
 	// velidate
-	if err := s.ActionValidator(ctx, leaveLogFlow, role, req.Action); err != nil {
+	if err := s.ActionValidator(ctx, leaveLogFlow, role, req.Action, leave.Status); err != nil {
 		return err
 	}
 
@@ -257,7 +254,7 @@ func (s *leaveFlow) ValidateLeave(ctx context.Context, leave *models.LeaveInput)
 	return leaveTypeInfo, leaveTiming, nil
 }
 
-func (s *leaveFlow) ActionValidator(ctx context.Context, flow *models.LeaveFlow, role string, action string) error {
+func (s *leaveFlow) ActionValidator(ctx context.Context, flow *models.LeaveFlow, role string, action string, status string) error {
 
 	action = strings.ToUpper(action)
 
@@ -279,7 +276,13 @@ func (s *leaveFlow) ActionValidator(ctx context.Context, flow *models.LeaveFlow,
 
 	case string(models.APPROVE):
 		// APPROVE requires ordered processing — stage must be WAITING
+		if status != string(constant.LEAVE_PENDING) {
+			return utils.CustomErr(nil, http.StatusBadRequest, "process only pending leave")
+		}
 		if stage.State != models.WAITING {
+			if status != string(constant.LEAVE_PENDING) {
+				return utils.CustomErr(nil, http.StatusBadRequest, "process only pending leave")
+			}
 			return utils.CustomErr(nil, http.StatusBadRequest, "approve allowed only in waiting state")
 		}
 		return nil
