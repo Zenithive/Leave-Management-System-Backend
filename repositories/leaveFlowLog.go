@@ -13,6 +13,8 @@ type LeaveFlowLog interface {
 	Create(ctx context.Context, tx *sqlx.Tx, leaveFlow *models.LeaveFlow) error
 	GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*models.LeaveFlowDB, error)
 	UpdateApprovalLog(ctx context.Context, tx *sqlx.Tx, leaveID uuid.UUID, log []models.LeaveFlowStage) error
+	// GetApproverNames fetches employee names for a set of IDs in one query.
+	GetApproverNames(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]string, error)
 }
 
 type leaveFlowLog struct {
@@ -51,8 +53,7 @@ func (r *leaveFlowLog) GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*mo
 
 	var flow models.LeaveFlowDB
 
-	query := `
-		SELECT * FROM Tbl_Leave_Flow WHERE leave_id = $1 AND deleted_at IS NULL`
+	query := `SELECT * FROM Tbl_Leave_Flow WHERE leave_id = $1 AND deleted_at IS NULL`
 
 	err := r.DB.GetContext(ctx, &flow, query, leaveID)
 	if err != nil {
@@ -63,7 +64,6 @@ func (r *leaveFlowLog) GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*mo
 }
 
 // UpdateApprovalLog re-marshals the mutated stage slice and writes it back to the DB.
-// Called inside an open transaction after a processor has stamped the relevant stage.
 func (r *leaveFlowLog) UpdateApprovalLog(ctx context.Context, tx *sqlx.Tx, leaveID uuid.UUID, log []models.LeaveFlowStage) error {
 	data, err := json.Marshal(log)
 	if err != nil {
@@ -74,4 +74,37 @@ func (r *leaveFlowLog) UpdateApprovalLog(ctx context.Context, tx *sqlx.Tx, leave
 		data, leaveID,
 	)
 	return err
+}
+
+// GetApproverNames fetches full_name for a set of employee UUIDs in one query.
+// Returns a map of id → name for enriching approval log stages.
+func (r *leaveFlowLog) GetApproverNames(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]string, error) {
+	if len(ids) == 0 {
+		return map[uuid.UUID]string{}, nil
+	}
+
+	type row struct {
+		ID       uuid.UUID `db:"id"`
+		FullName string    `db:"full_name"`
+	}
+
+	var rows []row
+	query, args, err := sqlx.In(
+		`SELECT id, full_name FROM Tbl_Employee WHERE id IN (?)`,
+		ids,
+	)
+	if err != nil {
+		return nil, err
+	}
+	// sqlx.In uses ? placeholders — rebind for postgres ($1, $2 …)
+	query = r.DB.Rebind(query)
+	if err := r.DB.SelectContext(ctx, &rows, query, args...); err != nil {
+		return nil, err
+	}
+
+	result := make(map[uuid.UUID]string, len(rows))
+	for _, row := range rows {
+		result[row.ID] = row.FullName
+	}
+	return result, nil
 }

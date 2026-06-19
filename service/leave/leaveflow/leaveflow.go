@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
@@ -23,6 +24,7 @@ type LeaveFlowService interface {
 	Create(ctx context.Context, leave *models.LeaveInput, role string) error
 	GetByID(ctx context.Context, leaveID string) (*models.Leave, error)
 	ActionLeave(ctx context.Context, req models.ActionLeaveReq, leaveID string, empID uuid.UUID, role string) error
+	GetLeaves(ctx context.Context, empID uuid.UUID, role string, month int, year int) (gin.H, error)
 }
 
 type leaveFlow struct {
@@ -154,7 +156,8 @@ func (s *leaveFlow) ActionLeave(ctx context.Context, req models.ActionLeaveReq, 
 
 	return common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
 		return processor.Process(ctx, tx, lctx)
-	})}
+	})
+}
 
 func (s *leaveFlow) GetByID(ctx context.Context, leaveID string) (*models.Leave, error) {
 	leave, err := s.Repo.GetByID(ctx, leaveID)
@@ -162,6 +165,55 @@ func (s *leaveFlow) GetByID(ctx context.Context, leaveID string) (*models.Leave,
 		return nil, utils.CustomErr(nil, http.StatusBadRequest, err.Error())
 	}
 	return leave, err
+}
+
+func (s *leaveFlow) GetLeaves(ctx context.Context, empID uuid.UUID, role string, month int, year int) (gin.H, error) {
+
+	var (
+		result []models.LeaveResponse
+		err    error
+	)
+	switch role {
+
+	case constant.ROLE_EMPLOYEE, constant.ROLE_INTERN:
+		result, err = s.Repo.GetAllEmployeeLeaveByMonthYear(empID, month, year)
+	case constant.ROLE_MANAGER:
+
+		result, err = s.Repo.GetAllleavebaseonassignManagerByMonthYear(empID, month, year)
+
+	case constant.ROLE_ADMIN, constant.ROLE_HR, constant.ROLE_SUPER_ADMIN:
+		result, err = s.Repo.GetAllLeaveByMonthYear(month, year)
+
+	default:
+		return nil, utils.CustomErr(nil, http.StatusForbidden, "invalid role")
+	}
+
+	if err != nil {
+		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to fetch leaves")
+	}
+
+	if result == nil {
+		result = []models.LeaveResponse{}
+	}
+	for i := range result {
+		flow, err := s.LeaveFlowLogService.GetByLeaveID(ctx, uuid.MustParse(result[i].ID))
+		if err != nil {
+			return nil, err
+		}
+
+		if flow != nil {
+			result[i].ApprovalLog = flow.ApprovalLog
+		}
+	}
+
+	return gin.H{
+		"message": "Leaves fetched successfully",
+		"role":    role,
+		"month":   month,
+		"year":    year,
+		"summary": models.BuildLeaveCountSummary(result),
+		"data":    result,
+	}, nil
 }
 
 //validare _logic

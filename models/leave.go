@@ -18,25 +18,6 @@ type LeaveUpdateInput struct {
 	Reason        string    `json:"reason" validate:"required,min=10,max=500"`
 }
 
-// LeaveResponse - API response for leave details (with joins)
-type LeaveResponse struct {
-	ID              string    `db:"id" json:"id"`
-	Employee        string    `db:"employee" json:"employee"`
-	LeaveType       string    `db:"leave_type" json:"leave_type"`
-	LeaveTypeID     int       `db:"leave_type_id" json:"leave_type_id"`
-	IsPaid          bool      `db:"is_paid" json:"is_paid"`
-	IsEarly         *bool     `db:"is_early" json:"is_early"`
-	LeaveTimingType string    `db:"leave_timing_type" json:"leave_timing_type"` // FIRST_HALF, SECOND_HALF, FULL, EARLY
-	LeaveTiming     *string   `db:"leave_timing" json:"leave_timing"`           // Timing details
-	StartDate       time.Time `db:"start_date" json:"start_date"`
-	EndDate         time.Time `db:"end_date" json:"end_date"`
-	Days            float64   `db:"days" json:"days"`
-	Reason          string    `db:"reason" json:"reason"`
-	Status          string    `db:"status" json:"status"`
-	AppliedAt       time.Time `db:"applied_at" json:"applied_at"`
-	ApprovalName    *string   `db:"approval_name" json:"approval_name,omitempty"`
-}
-
 // LeaveCountSummary - Statistics of leaves by status
 type LeaveCountSummary struct {
 	Total           int `json:"total"`

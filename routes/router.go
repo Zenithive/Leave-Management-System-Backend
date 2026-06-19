@@ -63,7 +63,7 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc, env *config.ENV) {
 		leaves.DELETE("/admin-delete/policy/:id", h.DeleteLeavePolicy)                                                 // Admin, SuperAdmin, HR delete leave policy
 		leaves.GET("/Get-All-Leave-Policy", h.GetAllLeavePolicies)                                                     // Get all leave policies
 		leaves.GET("/manager/history", h.GetManagerLeaveHistory)                                                       // Manager gets team leave history
-		leaves.GET("/all", h.GetAllLeaves)                                                                             // Get all leaves (filtered by role)
+		leaves.GET("/all", h.GetLeaves)                                                                                // Get all leaves (filtered by role)
 		leaves.GET("/monthly-report", h.GetLeaveReport)                                                                // Leave report: monthly / yearly / range (HR, ADMIN, SUPERADMIN)
 		leaves.GET("/Get-Leave-Report", access_role.RoleMiddleware(access_role.AdminAccessRoles...), h.GetLeaveReport) // Alias for monthly-report
 		leaves.GET("/my-leaves", h.GetAllMyLeave)                                                                      // Get current user's own leaves with month/year filtering

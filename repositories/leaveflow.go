@@ -12,6 +12,9 @@ import (
 
 type LeaveFlowRepository interface {
 	InsertLeave(tx *sqlx.Tx, leave *models.LeaveInput, leaveTimingStr *string) (uuid.UUID, error)
+	GetAllEmployeeLeaveByMonthYear(userID uuid.UUID, month, year int) ([]models.LeaveResponse, error)
+	GetAllleavebaseonassignManagerByMonthYear(userID uuid.UUID, month, year int) ([]models.LeaveResponse, error)
+	GetAllLeaveByMonthYear(month, year int) ([]models.LeaveResponse, error)
 	GetByID(ctx context.Context, leaveID string) (*models.Leave, error)
 }
 
@@ -68,4 +71,205 @@ func (r *leaveFlow) GetByID(ctx context.Context, leaveID string) (*models.Leave,
 	}
 
 	return &leave, nil
+}
+
+func (r *leaveFlow) GetAllEmployeeLeaveByMonthYear(userID uuid.UUID, month, year int) ([]models.LeaveResponse, error) {
+
+	var result []models.LeaveResponse
+
+	query := `
+	SELECT 
+		l.id,
+		e.full_name AS employee,
+		lt.name AS leave_type,
+		l.leave_type_id,
+		lt.is_paid,
+		lt.is_early,
+
+		CASE 
+			WHEN lt.is_early = true 
+			THEN l.leave_timing
+			ELSE COALESCE(h.timing, 'Full Day')
+		END AS leave_timing,
+
+		CASE 
+			WHEN lt.is_early = true 
+			THEN 'EARLY'
+			ELSE COALESCE(h.type, 'FULL')
+		END AS leave_timing_type,
+
+		l.start_date,
+		l.end_date,
+		l.days,
+		COALESCE(l.reason,'') AS reason,
+		l.status,
+		l.created_at AS applied_at,
+		approver.full_name AS approval_name
+
+	FROM Tbl_Leave l
+
+	INNER JOIN Tbl_Employee e
+		ON l.employee_id = e.id
+
+	INNER JOIN Tbl_Leave_Type lt
+		ON lt.id = l.leave_type_id
+
+	LEFT JOIN Tbl_Half h
+		ON l.half_id = h.id
+
+	LEFT JOIN Tbl_Employee approver
+		ON l.approved_by = approver.id
+
+	WHERE 
+		l.employee_id = $1
+
+		AND l.start_date::date <= (
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))
+			+ INTERVAL '1 month - 1 day'
+		)::date
+
+		AND l.end_date::date >=
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))::date
+
+	ORDER BY 
+		l.start_date ASC,
+		l.created_at DESC
+	`
+
+	err := r.DB.Select(&result, query, userID, month, year)
+
+	return result, err
+}
+
+func (r *leaveFlow) GetAllleavebaseonassignManagerByMonthYear(userID uuid.UUID, month, year int) ([]models.LeaveResponse, error) {
+
+	var result []models.LeaveResponse
+
+	query := `
+	SELECT l.id,
+		e.full_name AS employee,
+		lt.name AS leave_type,
+		l.leave_type_id,
+		lt.is_paid,
+		lt.is_early,
+
+		CASE 
+			WHEN lt.is_early = true 
+			THEN l.leave_timing
+			ELSE COALESCE(h.timing, 'Full Day')
+		END AS leave_timing,
+
+		CASE 
+			WHEN lt.is_early = true 
+			THEN 'EARLY'
+			ELSE COALESCE(h.type, 'FULL')
+		END AS leave_timing_type,
+
+		l.start_date,
+		l.end_date,
+		l.days,
+		COALESCE(l.reason,'') AS reason,
+		l.status,
+		l.created_at AS applied_at,
+		approver.full_name AS approval_name
+
+	FROM Tbl_Leave l
+
+	INNER JOIN Tbl_Employee e
+		ON l.employee_id = e.id
+
+	INNER JOIN Tbl_Leave_Type lt
+		ON lt.id = l.leave_type_id
+
+	LEFT JOIN Tbl_Half h
+		ON l.half_id = h.id
+
+	LEFT JOIN Tbl_Employee approver
+		ON l.approved_by = approver.id
+
+	WHERE
+		(e.manager_id = $1 OR l.employee_id = $1)
+
+		AND l.start_date::date <= (
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))
+			+ INTERVAL '1 month - 1 day'
+		)::date
+
+		AND l.end_date::date >=
+			DATE_TRUNC('month', MAKE_DATE($3, $2, 1))::date
+
+	ORDER BY
+		l.start_date ASC,
+		l.created_at DESC
+	`
+
+	err := r.DB.Select(&result, query, userID, month, year)
+
+	return result, err
+}
+
+func (r *leaveFlow) GetAllLeaveByMonthYear(month, year int) ([]models.LeaveResponse, error) {
+
+	var result []models.LeaveResponse
+
+	query := `
+	SELECT 
+		l.id,
+		e.full_name AS employee,
+		lt.name AS leave_type,
+		l.leave_type_id,
+		lt.is_paid,
+		lt.is_early,
+
+		CASE 
+			WHEN lt.is_early = true 
+			THEN l.leave_timing
+			ELSE COALESCE(h.timing, 'Full Day')
+		END AS leave_timing,
+
+		CASE 
+			WHEN lt.is_early = true 
+			THEN 'EARLY'
+			ELSE COALESCE(h.type, 'FULL')
+		END AS leave_timing_type,
+
+		l.start_date,
+		l.end_date,
+		l.days,
+		COALESCE(l.reason,'') AS reason,
+		l.status,
+		l.created_at AS applied_at,
+		approver.full_name AS approval_name
+
+	FROM Tbl_Leave l
+
+	INNER JOIN Tbl_Employee e
+		ON l.employee_id = e.id
+
+	INNER JOIN Tbl_Leave_Type lt
+		ON lt.id = l.leave_type_id
+
+	LEFT JOIN Tbl_Half h
+		ON l.half_id = h.id
+
+	LEFT JOIN Tbl_Employee approver
+		ON l.approved_by = approver.id
+
+	WHERE
+		l.start_date::date <= (
+			DATE_TRUNC('month', MAKE_DATE($2, $1, 1))
+			+ INTERVAL '1 month - 1 day'
+		)::date
+
+		AND l.end_date::date >=
+			DATE_TRUNC('month', MAKE_DATE($2, $1, 1))::date
+
+	ORDER BY
+		l.start_date ASC,
+		l.created_at DESC
+	`
+
+	err := r.DB.Select(&result, query, month, year)
+
+	return result, err
 }

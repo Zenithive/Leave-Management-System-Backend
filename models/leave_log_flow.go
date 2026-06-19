@@ -22,7 +22,8 @@ type LeaveFlowStage struct {
 
 	State State `json:"state"`
 
-	ApprovedBy *uuid.UUID `json:"approved_by,omitempty"`
+	ApprovedBy     *uuid.UUID `json:"approved_by,omitempty"`
+	ApprovedByName *string    `json:"approved_by_name,omitempty"` // resolved via JOIN, not stored in DB
 
 	Remarks string `json:"remarks,omitempty"`
 

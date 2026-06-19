@@ -15,7 +15,6 @@ type LeaveFlowLog interface {
 	GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*models.LeaveFlow, error)
 	UpdateApprovalLog(ctx context.Context, tx *sqlx.Tx, leaveID uuid.UUID, log []models.LeaveFlowStage) error
 }
-
 type leaveFlowLog struct {
 	DB                 *sqlx.DB
 	LeavePolicyService LeavePolicyService
@@ -87,6 +86,28 @@ func (s *leaveFlowLog) GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*mo
 	if len(dbFlow.ApprovalLog) > 0 {
 		if err := json.Unmarshal(dbFlow.ApprovalLog, &approvalLog); err != nil {
 			return nil, err
+		}
+	}
+
+	// Collect all approver UUIDs that have acted (non-nil approved_by)
+	var approverIDs []uuid.UUID
+	for _, stage := range approvalLog {
+		if stage.ApprovedBy != nil {
+			approverIDs = append(approverIDs, *stage.ApprovedBy)
+		}
+	}
+
+	// Fetch names in one JOIN query and map back to each stage
+	if len(approverIDs) > 0 {
+		nameMap, err := s.Repo.GetApproverNames(ctx, approverIDs)
+		if err == nil { // non-critical — enrich when possible
+			for i := range approvalLog {
+				if approvalLog[i].ApprovedBy != nil {
+					if name, ok := nameMap[*approvalLog[i].ApprovedBy]; ok {
+						approvalLog[i].ApprovedByName = &name
+					}
+				}
+			}
 		}
 	}
 

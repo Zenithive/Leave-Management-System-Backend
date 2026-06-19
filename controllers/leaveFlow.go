@@ -1,7 +1,10 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
@@ -55,4 +58,38 @@ func (h *HandlerFunc) LeaveAction(c *gin.Context) {
 		"success": true,
 		"message": "leave approver or  reject Successfully",
 	})
+}
+
+func (h *HandlerFunc) GetLeaves(c *gin.Context) {
+	empID, ok := helper.ExtractEmployeeID(c)
+	if !ok {
+		utils.RespondWithError(c, http.StatusUnauthorized, "missing EpID")
+		return
+	}
+
+	role := c.GetString("role")
+
+	month, err := strconv.Atoi(
+		c.DefaultQuery("month", fmt.Sprintf("%d", int(time.Now().Month()))),
+	)
+	if err != nil {
+		utils.RespondWithError(c, http.StatusBadRequest, "invalid month")
+		return
+	}
+
+	year, err := strconv.Atoi(
+		c.DefaultQuery("year", fmt.Sprintf("%d", time.Now().Year())),
+	)
+	if err != nil {
+		utils.RespondWithError(c, http.StatusBadRequest, "invalid year")
+		return
+	}
+
+	res, err := h.LeaveFlowService.GetLeaves(c, empID, role, month, year)
+	if err != nil {
+		utils.Error(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
 }
