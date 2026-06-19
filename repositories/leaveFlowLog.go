@@ -12,6 +12,7 @@ import (
 type LeaveFlowLog interface {
 	Create(ctx context.Context, tx *sqlx.Tx, leaveFlow *models.LeaveFlow) error
 	GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*models.LeaveFlowDB, error)
+	UpdateApprovalLog(ctx context.Context, tx *sqlx.Tx, leaveID uuid.UUID, log []models.LeaveFlowStage) error
 }
 
 type leaveFlowLog struct {
@@ -59,4 +60,18 @@ func (r *leaveFlowLog) GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*mo
 	}
 
 	return &flow, nil
+}
+
+// UpdateApprovalLog re-marshals the mutated stage slice and writes it back to the DB.
+// Called inside an open transaction after a processor has stamped the relevant stage.
+func (r *leaveFlowLog) UpdateApprovalLog(ctx context.Context, tx *sqlx.Tx, leaveID uuid.UUID, log []models.LeaveFlowStage) error {
+	data, err := json.Marshal(log)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx,
+		`UPDATE Tbl_Leave_Flow SET approval_log = $1, updated_at = NOW() WHERE leave_id = $2 AND deleted_at IS NULL`,
+		data, leaveID,
+	)
+	return err
 }

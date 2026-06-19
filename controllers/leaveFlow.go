@@ -47,7 +47,12 @@ func (h *HandlerFunc) LeaveAction(c *gin.Context) {
 	}
 	leaveID := c.Param("id")
 
-	h.LeaveFlowService.ActionLeave(c, req, leaveID, empID, role)
+	if err := h.LeaveFlowService.ActionLeave(c, req, leaveID, empID, role); err != nil {
+		utils.Error(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "leave approver or  reject Successfully",
+	})
 }
-
-

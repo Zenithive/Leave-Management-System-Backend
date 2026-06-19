@@ -13,6 +13,7 @@ import (
 type LeaveFlowLog interface {
 	Create(ctx context.Context, tx *sqlx.Tx, leaveID uuid.UUID, leaveTypeRes *models.LeaveTypeResponse, role string) error
 	GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*models.LeaveFlow, error)
+	UpdateApprovalLog(ctx context.Context, tx *sqlx.Tx, leaveID uuid.UUID, log []models.LeaveFlowStage) error
 }
 
 type leaveFlowLog struct {
@@ -97,4 +98,9 @@ func (s *leaveFlowLog) GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*mo
 		UpdatedAt:   dbFlow.UpdatedAt,
 		DeletedAt:   dbFlow.DeletedAt,
 	}, nil
+}
+
+// UpdateApprovalLog delegates to the repository to persist the mutated stage slice.
+func (s *leaveFlowLog) UpdateApprovalLog(ctx context.Context, tx *sqlx.Tx, leaveID uuid.UUID, log []models.LeaveFlowStage) error {
+	return s.Repo.UpdateApprovalLog(ctx, tx, leaveID, log)
 }

@@ -37,7 +37,7 @@ func main() {
 
 	//LeaveFlow
 	leaveFlowRepo := repositories.NewLeaveFlow(db)
-	leaveFlowService := leaveflow.NewLeaveFlow(db, leaveFlowLogService, leavePolicyService, leaveFlowRepo, leavePolicyRepo, repo)
+	leaveFlowService := leaveflow.NewLeaveFlow(db, leaveFlowLogService, leavePolicyService, leaveFlowRepo, leavePolicyRepo, leaveFlowLogRepo, repo)
 
 	handlerFunc := controllers.NewHandler(env, repo, validator, leaveApporverService, leavePolicyService, leaveFlowService, leaveFlowLogService)
 

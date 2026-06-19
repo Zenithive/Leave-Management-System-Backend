@@ -2,17 +2,36 @@ package leaveprocess
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
 )
 
-type RejectProcessor struct {
-}
+type RejectProcessor struct{}
 
-func (p *RejectProcessor) Process(ctx context.Context, tx *sqlx.Tx, flow *models.LeaveFlow, leave *models.Leave, leaveType *models.LeaveType) error {
+func (p *RejectProcessor) Process(ctx context.Context, tx *sqlx.Tx, lctx *LeaveActionContext) error {
 
-	// Reject logic
+	// 1. Find caller's stage
+	stage := findStage(lctx.Flow, lctx.Role)
+
+	// 2. Stamp this stage → REJECTED
+	stampStage(stage, models.REJECTED, lctx.ApproverID, lctx.Remarks)
+
+	// 3. Auto-SKIP all other WAITING siblings at the same stage_no or less then stage
+	skipAllWaitingStages(lctx.Flow.ApprovalLog, stage.StageNo, lctx.Role)
+
+	// 3. Persist the updated approval log
+	if err := lctx.FlowLogRepo.UpdateApprovalLog(ctx, tx, lctx.Leave.ID, lctx.Flow.ApprovalLog); err != nil {
+		return utils.CustomErr(nil, http.StatusInternalServerError, "failed to update approval log: "+err.Error())
+	}
+
+	// 4. Rejection is always final — set leave status immediately
+	if err := lctx.CommRepo.UpdateLeaveStatusWithApprover(tx.Tx, lctx.Leave.ID, constant.LEAVE_REJECTED, lctx.ApproverID); err != nil {
+		return utils.CustomErr(nil, http.StatusInternalServerError, "failed to reject leave: "+err.Error())
+	}
 
 	return nil
 }

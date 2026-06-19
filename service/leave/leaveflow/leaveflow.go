@@ -31,20 +31,23 @@ type leaveFlow struct {
 	Repo                repositories.LeaveFlowRepository
 	CommRepo            *repositories.Repository
 	LeavePolicyRepo     repositories.LeavePolicyRepository
+	LeaveFlowLogRepo    repositories.LeaveFlowLog
 	LeaveFlowLogService service.LeaveFlowLog
 	LeavePolicyService  service.LeavePolicyService
-	processor           leaveprocess.LeaveActionProcessor
+	registry            *leaveprocess.ProcessorRegistry
 }
 
-func NewLeaveFlow(db *sqlx.DB, leaveFlowLogService service.LeaveFlowLog, leavePolicyService service.LeavePolicyService, leaveFlowRepo repositories.LeaveFlowRepository, leavePolicyRepo repositories.LeavePolicyRepository, commRepo *repositories.Repository) LeaveFlowService {
+func NewLeaveFlow(db *sqlx.DB, leaveFlowLogService service.LeaveFlowLog, leavePolicyService service.LeavePolicyService, leaveFlowRepo repositories.LeaveFlowRepository, leavePolicyRepo repositories.LeavePolicyRepository, leaveFlowLogRepo repositories.LeaveFlowLog, commRepo *repositories.Repository) LeaveFlowService {
 	return &leaveFlow{
 		DB:                  db,
 		Repo:                leaveFlowRepo,
 		CommRepo:            commRepo,
 		LeaveValidationSvc:  NewLeaveValidationService(commRepo),
 		LeavePolicyRepo:     leavePolicyRepo,
+		LeaveFlowLogRepo:    leaveFlowLogRepo,
 		LeaveFlowLogService: leaveFlowLogService,
 		LeavePolicyService:  leavePolicyService,
+		registry:            leaveprocess.NewProcessorRegistry(),
 	}
 }
 
@@ -130,13 +133,28 @@ func (s *leaveFlow) ActionLeave(ctx context.Context, req models.ActionLeaveReq, 
 	if err != nil {
 		return utils.CustomErr(nil, 500, "Failed to fetch leave type: "+err.Error())
 	}
-	err = common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
 
-		return nil
-	})
+	// Resolve the processor for the requested action via the registry
+	processor, err := s.registry.Resolve(strings.ToUpper(req.Action))
+	if err != nil {
+		return err
+	}
 
-	return nil
-}
+	// Build the context object — single place where all data is assembled
+	lctx := &leaveprocess.LeaveActionContext{
+		ApproverID:  empID,
+		Role:        role,
+		Remarks:     req.Remarks,
+		Leave:       leave,
+		Flow:        leaveLogFlow,
+		LeaveType:   leavePolicy,
+		FlowLogRepo: s.LeaveFlowLogRepo,
+		CommRepo:    s.CommRepo,
+	}
+
+	return common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
+		return processor.Process(ctx, tx, lctx)
+	})}
 
 func (s *leaveFlow) GetByID(ctx context.Context, leaveID string) (*models.Leave, error) {
 	leave, err := s.Repo.GetByID(ctx, leaveID)
@@ -193,7 +211,7 @@ func (s *leaveFlow) ActionValidator(ctx context.Context, flow *models.LeaveFlow,
 
 	var stage *models.LeaveFlowStage
 
-	// 1. find role
+	// find this role's stage
 	for i := range flow.ApprovalLog {
 		if string(flow.ApprovalLog[i].ApproverRole) == role {
 			stage = &flow.ApprovalLog[i]
@@ -205,12 +223,20 @@ func (s *leaveFlow) ActionValidator(ctx context.Context, flow *models.LeaveFlow,
 		return utils.CustomErr(nil, http.StatusForbidden, "role not allowed for this flow")
 	}
 
-	// 2. rules
 	switch action {
 
-	case string(models.APPROVE), string(models.REJECT):
+	case string(models.APPROVE):
+		// APPROVE requires ordered processing — stage must be WAITING
 		if stage.State != models.WAITING {
-			return utils.CustomErr(nil, http.StatusBadRequest, "action allowed only in waiting state")
+			return utils.CustomErr(nil, http.StatusBadRequest, "approve allowed only in waiting state")
+		}
+		return nil
+
+	case string(models.REJECT):
+		// REJECT is a single final action — only check that stage is WAITING,
+		// no ordering constraint applies
+		if stage.State != models.WAITING {
+			return utils.CustomErr(nil, http.StatusBadRequest, "reject allowed only in waiting state")
 		}
 		return nil
 
@@ -219,7 +245,6 @@ func (s *leaveFlow) ActionValidator(ctx context.Context, flow *models.LeaveFlow,
 			return utils.CustomErr(nil, http.StatusBadRequest, "withdraw allowed only after approval")
 		}
 		return nil
-
 	default:
 		return utils.CustomErr(nil, http.StatusBadRequest, "invalid action")
 	}

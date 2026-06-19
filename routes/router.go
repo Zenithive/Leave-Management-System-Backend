@@ -57,7 +57,7 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc, env *config.ENV) {
 	{
 		leaves.POST("/apply", h.ApplyLeave) // Employee applies for leave
 
-		leaves.PUT("/edit/:id", h.EditMyLeave)                                                                         // New Route
+		//leaves.PUT("/edit/:id", h.EditMyLeave)                                                                         // New Route
 		leaves.POST("/admin-add/policy", h.LeavePolicy)                                                                // Admin creates leave policy
 		leaves.PUT("/admin-update/policy/:id", h.UpdateLeavePolicy)                                                    // Admin, SuperAdmin, HR update leave policy
 		leaves.DELETE("/admin-delete/policy/:id", h.DeleteLeavePolicy)                                                 // Admin, SuperAdmin, HR delete leave policy
@@ -70,7 +70,7 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc, env *config.ENV) {
 		leaves.GET("/timming", h.GetLeaveTiming)                                                                       // Get all Leave Timing
 		leaves.PUT("/timming", h.UpdateLeaveTiming)                                                                    // Update leave timing by super admin and admin
 		// ⚠️ Wildcard route MUST be last — Gin matches top-to-bottom
-		leaves.POST("/:id/action", h.ActionLeave)     // Approve/Reject leave
+		leaves.POST("/:id/action", h.LeaveAction)     // Approve/Reject leave
 		leaves.DELETE("/:id/cancel", h.CancelLeave)   // Cancel pending leave (Employee/Admin)
 		leaves.POST("/:id/withdraw", h.WithdrawLeave) // Withdraw approved leave (Admin/Manager)
 		leaves.GET("/:id", h.GetLeaveByID)            // Get leave by ID (role-based access)

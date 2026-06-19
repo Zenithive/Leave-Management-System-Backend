@@ -47,5 +47,6 @@ const (
 )
 
 type ActionLeaveReq struct {
-	Action string `json:"action" validate:"required"` // APPROVE / REJECT
+	Action  string `json:"action" validate:"required"` // APPROVE / REJECT / WITHDRAW
+	Remarks string `json:"remarks,omitempty"`          // Optional note from the approver
 }

@@ -23,9 +23,9 @@ VALUES (
     true,
     '[
         {"stage_no": 1, "approver_role": "MANAGER"},
-        {"stage_no": 2, "approver_role": "ADMIN"},
-        {"stage_no": 3, "approver_role": "HR"},
-        {"stage_no": 4, "approver_role": "SUPERADMIN"}
+        {"stage_no": 1, "approver_role": "ADMIN"},
+        {"stage_no": 1, "approver_role": "HR"},
+        {"stage_no": 2, "approver_role": "SUPERADMIN"}
     ]'::jsonb
 );
 
