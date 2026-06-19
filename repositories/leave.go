@@ -131,38 +131,6 @@ func (r *Repository) GetOverlappingLeaves(
 	return result, err
 }
 
-func (r *Repository) InsertLeave(
-	tx *sqlx.Tx,
-	employeeID uuid.UUID,
-	leaveTypeID int,
-	leaveTimingID int,
-	startDate, endDate time.Time,
-	days float64,
-	reason string,
-	leaveTiming *string,
-) (uuid.UUID, error) {
-
-	var leaveID uuid.UUID
-
-	err := tx.QueryRow(`
-		INSERT INTO Tbl_Leave 
-		(employee_id, leave_type_id, half_id, start_date, end_date, days, status, reason, leave_timing)
-		VALUES ($1,$2,$3,$4,$5,$6,'Pending',$7,$8)
-		RETURNING id
-	`,
-		employeeID,
-		leaveTypeID,
-		leaveTimingID,
-		startDate,
-		endDate,
-		days,
-		reason,
-		leaveTiming,
-	).Scan(&leaveID)
-
-	return leaveID, err
-}
-
 func (r *Repository) UpdateLeaveStatus(tx *sql.Tx, leaveID uuid.UUID, status string) error {
 	query := `UPDATE Tbl_Leave SET status = $1, updated_at = NOW() WHERE id = $2`
 	_, err := tx.Exec(query, status, leaveID)

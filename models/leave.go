@@ -2,28 +2,11 @@ package models
 
 import (
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // ============================================================================
 // LEAVE APPLICATION MODELS
 // ============================================================================
-
-// LeaveInput - Request payload for creating a new leave application
-type LeaveInput struct {
-	EmployeeID    uuid.UUID  `json:"employee_id" validate:"required"`
-	LeaveTypeID   int        `json:"leave_type_id" validate:"required"`
-	LeaveTimingID *int       `json:"leave_timing_id,omitempty"`      // 1=First Half, 2=Second Half, 3=Full Day
-	LeaveTiming   *string    `json:"leave_timing,omitempty"`         // For early leave: HH:MM format
-	StartDate     time.Time  `json:"start_date" validate:"required"`
-	EndDate       time.Time  `json:"end_date" validate:"required"`
-	Reason        string     `json:"reason" validate:"required,min=10,max=500"`
-	Days          *float64   `json:"days,omitempty"`                 // Calculated by system
-	Status        string     `json:"status,omitempty"`               // Calculated by system
-	AppliedByID   *uuid.UUID `json:"applied_by,omitempty"`           // Who applied (manager on behalf)
-	ApprovedByID  *uuid.UUID `json:"approved_by,omitempty"`          // Who approved
-}
 
 // LeaveUpdateInput - Request payload for editing a pending leave application
 type LeaveUpdateInput struct {
@@ -33,24 +16,6 @@ type LeaveUpdateInput struct {
 	StartDate     time.Time `json:"start_date" validate:"required"`
 	EndDate       time.Time `json:"end_date" validate:"required"`
 	Reason        string    `json:"reason" validate:"required,min=10,max=500"`
-}
-
-// Leave - Database model for Tbl_Leave
-type Leave struct {
-	ID            uuid.UUID  `db:"id"`
-	EmployeeID    uuid.UUID  `db:"employee_id"`
-	LeaveTypeID   int        `db:"leave_type_id"`
-	LeaveTimingID *int       `db:"half_id"`          // References Tbl_Half
-	LeaveTiming   *string    `db:"leave_timing"`     // For early leave timing
-	StartDate     time.Time  `db:"start_date"`
-	EndDate       time.Time  `db:"end_date"`
-	Days          float64    `db:"days"`
-	Status        string     `db:"status"`           // Pending, MANAGER_APPROVED, APPROVED, etc.
-	AppliedByID   *uuid.UUID `db:"applied_by"`
-	ApprovedByID  *uuid.UUID `db:"approved_by"`
-	Reason        string     `db:"reason"`
-	CreatedAt     time.Time  `db:"created_at"`
-	UpdatedAt     time.Time  `db:"updated_at"`
 }
 
 // LeaveResponse - API response for leave details (with joins)
@@ -74,16 +39,16 @@ type LeaveResponse struct {
 
 // LeaveCountSummary - Statistics of leaves by status
 type LeaveCountSummary struct {
-	Total         int `json:"total"`
-	Pending       int `json:"pending"`
+	Total           int `json:"total"`
+	Pending         int `json:"pending"`
 	ManagerApproved int `json:"manager_approved"`
 	ManagerRejected int `json:"manager_rejected"`
-	AdminApproved int `json:"admin_approved"`
-	AdminRejected int `json:"admin_rejected"`
-	Approved      int `json:"approved"`
-	Rejected      int `json:"rejected"`
-	Cancelled     int `json:"cancelled"`
-	Withdrawn     int `json:"withdrawn"`
+	AdminApproved   int `json:"admin_approved"`
+	AdminRejected   int `json:"admin_rejected"`
+	Approved        int `json:"approved"`
+	Rejected        int `json:"rejected"`
+	Cancelled       int `json:"cancelled"`
+	Withdrawn       int `json:"withdrawn"`
 }
 
 // BuildLeaveCountSummary computes status counts from a slice of LeaveResponse

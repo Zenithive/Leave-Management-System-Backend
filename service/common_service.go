@@ -12,8 +12,9 @@ import (
 
 // ValidateUnpaidLeaveApplication checks if an employee can apply for unpaid leave.
 // Business Rule: Employees cannot apply for unpaid leave if they have:
-//   1. Any paid leave balance > 0, OR
-//   2. Any pending/manager-approved paid leaves
+//  1. Any paid leave balance > 0, OR
+//  2. Any pending/manager-approved paid leaves
+//
 // Returns an error if validation fails, nil if validation passes.
 func ValidateUnpaidLeaveApplication(repo *repositories.Repository, tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int) error {
 	// First, check if the leave type being applied is unpaid or early leave
@@ -74,14 +75,11 @@ func CalculateWorkingDays(Query *repositories.Repository, tx *sqlx.Tx, start, en
 	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC)
 	end = time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, time.UTC)
 
-	fmt.Println("1s")
-
 	// 2️ Fetch holidays within range
 	holidays, err := Query.GetByFilterHolidayBetwweenTwoDates(tx, start, end)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch holidays: %v", err)
 	}
-	fmt.Println("2s")
 
 	// Convert slice to a map for O(1) lookup
 	holidayMap := make(map[string]bool)
@@ -310,6 +308,22 @@ func CalculateLeaveBalances(leaveTypes []LeaveTypeData, balanceRecords []LeaveBa
 }
 
 // validateLeaveTiming
+
+func CalculateProratedLeave(yearlyLeave int, joinMonth int) int {
+	if joinMonth < 1 || joinMonth > 12 {
+		return 0
+	}
+
+	// Remaining months including joining month
+	remainingMonths := 12 - joinMonth + 1
+
+	// Prorated calculation
+	prorated := (float64(yearlyLeave) * float64(remainingMonths)) / 12
+
+	// Round down
+	return int(math.Floor(prorated))
+}
+
 func ValidateLeaveTiming(leaveTiming string) (time.Time, error) {
 
 	// Expected format: "18:02"
@@ -332,19 +346,4 @@ func ValidateLeaveTiming(leaveTiming string) (time.Time, error) {
 	}
 
 	return t, nil
-}
-
-func CalculateProratedLeave(yearlyLeave int, joinMonth int) int {
-	if joinMonth < 1 || joinMonth > 12 {
-		return 0
-	}
-
-	// Remaining months including joining month
-	remainingMonths := 12 - joinMonth + 1
-
-	// Prorated calculation
-	prorated := (float64(yearlyLeave) * float64(remainingMonths)) / 12
-
-	// Round down
-	return int(math.Floor(prorated))
 }

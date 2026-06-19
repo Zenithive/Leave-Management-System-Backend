@@ -30,207 +30,201 @@ import (
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
 )
 
-// AdminAddLeave - POST /api/leaves/admin-add
+// // AdminAddLeave - POST /api/leaves/admin-add
 
-func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
+// func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
 
-	// Extract Employee Info
-	empIDRaw, ok := c.Get("user_id")
-	if !ok {
-		utils.RespondWithError(c, http.StatusUnauthorized, "Employee ID missing")
-		return
-	}
+// 	// Extract Employee Info
+// 	empIDRaw, ok := c.Get("user_id")
+// 	if !ok {
+// 		utils.RespondWithError(c, http.StatusUnauthorized, "Employee ID missing")
+// 		return
+// 	}
 
-	empIDStr, ok := empIDRaw.(string)
-	if !ok {
-		utils.RespondWithError(c, http.StatusInternalServerError, "Invalid employee ID format")
-		return
-	}
+// 	empIDStr, ok := empIDRaw.(string)
+// 	if !ok {
+// 		utils.RespondWithError(c, http.StatusInternalServerError, "Invalid employee ID format")
+// 		return
+// 	}
 
-	employeeID, err := uuid.Parse(empIDStr)
-	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "Invalid employee UUID")
-		return
-	}
+// 	employeeID, err := uuid.Parse(empIDStr)
+// 	if err != nil {
+// 		utils.RespondWithError(c, http.StatusInternalServerError, "Invalid employee UUID")
+// 		return
+// 	}
 
-	// Initialize validation service
-	leaveValidationSvc := service.NewLeaveValidationService(h.Query)
+// 	// Initialize validation service
+// 	leaveValidationSvc := service.NewLeaveValidationService(h.Query)
 
-	// Validate Employee Status
-	if err := leaveValidationSvc.ValidateEmployeeStatus(employeeID); err != nil {
-		utils.RespondWithError(c, 403, err.Error())
-		return
-	}
+// 	// Bind Input
+// 	var input models.LeaveInput
+// 	if err := c.ShouldBindJSON(&input); err != nil {
+// 		utils.RespondWithError(c, http.StatusBadRequest, "Invalid input: "+err.Error())
+// 		return
+// 	}
+// 	input.EmployeeID = employeeID
 
-	// Bind Input
-	var input models.LeaveInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "Invalid input: "+err.Error())
-		return
-	}
-	input.EmployeeID = employeeID
+// 	var leaveTiming time.Time = time.Time{} // Zero value indicates not provided
 
-	var leaveTiming time.Time = time.Time{} // Zero value indicates not provided
+// 	// If LeaveTiming string is provided, validate it
+// 	if input.LeaveTiming != nil {
+// 		leaveTiming, err = service.ValidateLeaveTiming(*input.LeaveTiming)
+// 		if err != nil {
+// 			utils.RespondWithError(c, 400, err.Error())
+// 			return
+// 		}
+// 	}
 
-	// If LeaveTiming string is provided, validate it
-	if input.LeaveTiming != nil {
-		leaveTiming, err = service.ValidateLeaveTiming(*input.LeaveTiming)
-		if err != nil {
-			utils.RespondWithError(c, 400, err.Error())
-			return
-		}
-	}
+// 	// Validate timing ID
+// 	if err := leaveValidationSvc.ValidateLeaveTimingID(input.LeaveTimingID); err != nil {
+// 		utils.RespondWithError(c, 400, err.Error())
+// 		return
+// 	}
 
-	// Validate timing ID
-	if err := leaveValidationSvc.ValidateLeaveTimingID(input.LeaveTimingID); err != nil {
-		utils.RespondWithError(c, 400, err.Error())
-		return
-	}
+// 	// Validate Reason
+// 	if err := leaveValidationSvc.ValidateLeaveReason(input.Reason); err != nil {
+// 		utils.RespondWithError(c, 400, err.Error())
+// 		return
+// 	}
 
-	// Validate Reason
-	if err := leaveValidationSvc.ValidateLeaveReason(input.Reason); err != nil {
-		utils.RespondWithError(c, 400, err.Error())
-		return
-	}
+// 	// Validate Dates
+// 	if err := leaveValidationSvc.ValidateLeaveDates(input.StartDate, input.EndDate); err != nil {
+// 		utils.RespondWithError(c, 400, err.Error())
+// 		return
+// 	}
 
-	// Validate Dates
-	if err := leaveValidationSvc.ValidateLeaveDates(input.StartDate, input.EndDate); err != nil {
-		utils.RespondWithError(c, 400, err.Error())
-		return
-	}
+// 	// Final Leave ID to return
+// 	var leaveID uuid.UUID
+// 	var Days float64
 
-	// Final Leave ID to return
-	var leaveID uuid.UUID
-	var Days float64
+// 	// Execute Transaction
+// 	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 
-	// Execute Transaction
-	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+// 		// Fetch Leave Type and resolve timing ID
+// 		leaveTypeInfo, err := leaveValidationSvc.GetLeaveTypeAndResolveTimingID(input.LeaveTypeID, input.LeaveTimingID)
+// 		if err != nil {
+// 			return utils.CustomErr(c, 400, err.Error())
+// 		}
 
-		// Fetch Leave Type and resolve timing ID
-		leaveTypeInfo, err := leaveValidationSvc.GetLeaveTypeAndResolveTimingID(tx, input.LeaveTypeID, input.LeaveTimingID)
-		if err != nil {
-			return utils.CustomErr(c, 400, err.Error())
-		}
+// 		// Calculate working days with timing consideration
+// 		leaveDays, err := service.CalculateWorkingDaysWithTiming(h.Query, tx, input.StartDate, input.EndDate, leaveTypeInfo.TimingID, leaveTiming)
+// 		if err != nil {
+// 			return utils.CustomErr(c, 400, err.Error())
+// 		}
+// 		if leaveDays <= 0 {
+// 			return utils.CustomErr(c, 400, "Calculated leave days must be greater than zero. Please check the dates and timing")
+// 		}
+// 		input.Days = &leaveDays
+// 		Days = leaveDays
 
-		// Calculate working days with timing consideration
-		leaveDays, err := service.CalculateWorkingDaysWithTiming(h.Query, tx, input.StartDate, input.EndDate, leaveTypeInfo.TimingID, leaveTiming)
-		if err != nil {
-			return utils.CustomErr(c, 400, err.Error())
-		}
-		if leaveDays <= 0 {
-			return utils.CustomErr(c, 400, "Calculated leave days must be greater than zero. Please check the dates and timing")
-		}
-		input.Days = &leaveDays
-		Days = leaveDays
+// 		// Validate unpaid leave application: Cannot apply for unpaid leave if paid balance > 0
+// 		if err := service.ValidateUnpaidLeaveApplication(h.Query, tx, employeeID, input.LeaveTypeID); err != nil {
+// 			return utils.CustomErr(c, 400, err.Error())
+// 		}
 
-		// Validate unpaid leave application: Cannot apply for unpaid leave if paid balance > 0
-		if err := service.ValidateUnpaidLeaveApplication(h.Query, tx, employeeID, input.LeaveTypeID); err != nil {
-			return utils.CustomErr(c, 400, err.Error())
-		}
+// 		// Comprehensive leave validation (balance, early leave limit, overlapping)
+// 		validationParams := service.ValidateLeaveApplicationParams{
+// 			EmployeeID:     employeeID,
+// 			LeaveTypeID:    input.LeaveTypeID,
+// 			StartDate:      input.StartDate,
+// 			EndDate:        input.EndDate,
+// 			LeaveDays:      leaveDays,
+// 			ExcludeLeaveID: nil,
+// 		}
+// 		if err := leaveValidationSvc.ValidateLeaveApplication(tx, validationParams, leaveTypeInfo.LeaveType); err != nil {
+// 			return utils.CustomErr(c, 400, err.Error())
+// 		}
 
-		// Comprehensive leave validation (balance, early leave limit, overlapping)
-		validationParams := service.ValidateLeaveApplicationParams{
-			EmployeeID:     employeeID,
-			LeaveTypeID:    input.LeaveTypeID,
-			StartDate:      input.StartDate,
-			EndDate:        input.EndDate,
-			LeaveDays:      leaveDays,
-			ExcludeLeaveID: nil,
-		}
-		if err := leaveValidationSvc.ValidateLeaveApplication(tx, validationParams, leaveTypeInfo.LeaveType); err != nil {
-			return utils.CustomErr(c, 400, err.Error())
-		}
+// 		///Insert Leave
+// 		//For IsEarly leave types, pass the leave_timing string
+// 		var leaveTimingStr *string
+// 		if leaveTypeInfo.LeaveType.IsEarly != nil && *leaveTypeInfo.LeaveType.IsEarly && input.LeaveTiming != nil {
+// 			leaveTimingStr = input.LeaveTiming
+// 		}
 
-		// Insert Leave
-		// For IsEarly leave types, pass the leave_timing string
-		var leaveTimingStr *string
-		if leaveTypeInfo.LeaveType.IsEarly != nil && *leaveTypeInfo.LeaveType.IsEarly && input.LeaveTiming != nil {
-			leaveTimingStr = input.LeaveTiming
-		}
+// 		id, err := h.Query.InsertLeave(tx, employeeID, input.LeaveTypeID, leaveTypeInfo.TimingID, input.StartDate, input.EndDate, leaveDays, input.Reason, leaveTimingStr)
+// 		if err != nil {
+// 			return utils.CustomErr(c, 500, "Failed to apply leave: "+err.Error())
+// 		}
+// 		leaveID = id
 
-		id, err := h.Query.InsertLeave(tx, employeeID, input.LeaveTypeID, leaveTypeInfo.TimingID, input.StartDate, input.EndDate, leaveDays, input.Reason, leaveTimingStr)
-		if err != nil {
-			return utils.CustomErr(c, 500, "Failed to apply leave: "+err.Error())
-		}
-		leaveID = id
+// 		// Log Entry
+// 		data := &models.Common{
+// 			Component:  constant.ComponentLeave,
+// 			Action:     constant.ActionCreate,
+// 			FromUserID: employeeID,
+// 		}
+// 		if err := h.Query.AddLog(data, tx); err != nil {
+// 			return utils.CustomErr(c, 500, "Failed to create leave log: "+err.Error())
+// 		}
 
-		// Log Entry
-		data := &models.Common{
-			Component:  constant.ComponentLeave,
-			Action:     constant.ActionCreate,
-			FromUserID: employeeID,
-		}
-		if err := h.Query.AddLog(data, tx); err != nil {
-			return utils.CustomErr(c, 500, "Failed to create leave log: "+err.Error())
-		}
+// 		return nil
+// 	})
 
-		return nil
-	})
+// 	// If transaction returned an error, stop (CustomErr already responded)
+// 	if err != nil {
+// 		utils.RespondWithError(c, 500, "Failed to update leave: "+err.Error())
+// 		return
+// 	}
 
-	// If transaction returned an error, stop (CustomErr already responded)
-	if err != nil {
-		utils.RespondWithError(c, 500, "Failed to update leave: "+err.Error())
-		return
-	}
+// 	go func() {
+// 		leaveType, _ := h.Query.GetLeaveTypeById(input.LeaveTypeID)
 
-	go func() {
-		leaveType, _ := h.Query.GetLeaveTypeById(input.LeaveTypeID)
+// 		recipients, err := h.Query.GetAdminAndEmployeeEmail(employeeID)
 
-		recipients, err := h.Query.GetAdminAndEmployeeEmail(employeeID)
+// 		if err != nil {
+// 			fmt.Printf("Failed to get notification recipients: %v\n", err)
+// 			return
+// 		}
 
-		if err != nil {
-			fmt.Printf("Failed to get notification recipients: %v\n", err)
-			return
-		}
+// 		empDetails, err := h.Query.GetEmployeeDetailsForNotification(employeeID)
+// 		if err != nil {
+// 			fmt.Printf("Failed to get employee details for notification: %v\n", err)
+// 			return
+// 		}
 
-		empDetails, err := h.Query.GetEmployeeDetailsForNotification(employeeID)
-		if err != nil {
-			fmt.Printf("Failed to get employee details for notification: %v\n", err)
-			return
-		}
+// 		if len(recipients) > 0 {
+// 			utils.SendLeaveApplicationEmail(
+// 				recipients,
+// 				empDetails.FullName,
+// 				leaveType.Name,
+// 				input.StartDate.Format("2006-01-02"),
+// 				input.EndDate.Format("2006-01-02"),
+// 				Days,
+// 				input.Reason,
+// 			)
 
-		if len(recipients) > 0 {
-			utils.SendLeaveApplicationEmail(
-				recipients,
-				empDetails.FullName,
-				leaveType.Name,
-				input.StartDate.Format("2006-01-02"),
-				input.EndDate.Format("2006-01-02"),
-				Days,
-				input.Reason,
-			)
+// 			// Send HR-specific email
+// 			var hrEmails []string
+// 			h.Query.DB.Select(&hrEmails, `
+// 				SELECT e.email
+// 				FROM Tbl_Employee e
+// 				JOIN Tbl_Role r ON e.role_id = r.id
+// 				WHERE r.type = 'HR' AND e.status = 'active'
+// 			`)
+// 			if len(hrEmails) > 0 {
+// 				utils.SendLeaveApplicationEmailToHR(
+// 					hrEmails,
+// 					empDetails.FullName,
+// 					empDetails.Email,
+// 					leaveType.Name,
+// 					input.StartDate.Format("2006-01-02"),
+// 					input.EndDate.Format("2006-01-02"),
+// 					Days,
+// 					input.Reason,
+// 				)
+// 			}
+// 		}
+// 	}()
 
-			// Send HR-specific email
-			var hrEmails []string
-			h.Query.DB.Select(&hrEmails, `
-				SELECT e.email
-				FROM Tbl_Employee e
-				JOIN Tbl_Role r ON e.role_id = r.id
-				WHERE r.type = 'HR' AND e.status = 'active'
-			`)
-			if len(hrEmails) > 0 {
-				utils.SendLeaveApplicationEmailToHR(
-					hrEmails,
-					empDetails.FullName,
-					empDetails.Email,
-					leaveType.Name,
-					input.StartDate.Format("2006-01-02"),
-					input.EndDate.Format("2006-01-02"),
-					Days,
-					input.Reason,
-				)
-			}
-		}
-	}()
-
-	// Send response
-	c.JSON(200, gin.H{
-		"message":  "Leave applied successfully",
-		"leave_id": leaveID,
-		"days":     Days,
-		"reason":   input.Reason,
-	})
-}
+// 	// Send response
+// 	c.JSON(200, gin.H{
+// 		"message":  "Leave applied successfully",
+// 		"leave_id": leaveID,
+// 		"days":     Days,
+// 		"reason":   input.Reason,
+// 	})
+// }
 
 // ActionLeave - POST /api/leaves/:id/action
 //
@@ -251,57 +245,57 @@ func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
 //              (MANAGER_APPROVED/REJECTED here means "first-approved by Admin/HR")
 
 func (s *HandlerFunc) ActionLeave(c *gin.Context) {
-	roleRaw, _ := c.Get("role")
-	role := roleRaw.(string)
+	// roleRaw, _ := c.Get("role")
+	// role := roleRaw.(string)
 
-	if role == constant.ROLE_EMPLOYEE || role == constant.ROLE_INTERN {
-		utils.RespondWithError(c, 403, "Employees cannot approve or reject leaves")
-		return
-	}
+	// if role == constant.ROLE_EMPLOYEE || role == constant.ROLE_INTERN {
+	// 	utils.RespondWithError(c, 403, "Employees cannot approve or reject leaves")
+	// 	return
+	// }
 
-	approverIDRaw, _ := c.Get("user_id")
-	approverID, _ := uuid.Parse(approverIDRaw.(string))
+	// approverIDRaw, _ := c.Get("user_id")
+	// approverID, _ := uuid.Parse(approverIDRaw.(string))
 
-	leaveID, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		utils.RespondWithError(c, 400, "Invalid leave ID")
-		return
-	}
+	// leaveID, err := uuid.Parse(c.Param("id"))
+	// if err != nil {
+	// 	utils.RespondWithError(c, 400, "Invalid leave ID")
+	// 	return
+	// }
 
-	var body struct {
-		Action string `json:"action" validate:"required"` // APPROVE / REJECT
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		utils.RespondWithError(c, 400, "Invalid payload: "+err.Error())
-		return
-	}
-	body.Action = strings.ToUpper(body.Action)
-	if body.Action != constant.LEAVE_APPROVE && body.Action != constant.LEAVE_REJECT {
-		utils.RespondWithError(c, 400, "Action must be APPROVE or REJECT")
-		return
-	}
+	// var body struct {
+	// 	Action string `json:"action" validate:"required"` // APPROVE / REJECT
+	// }
+	// if err := c.ShouldBindJSON(&body); err != nil {
+	// 	utils.RespondWithError(c, 400, "Invalid payload: "+err.Error())
+	// 	return
+	// }
+	// body.Action = strings.ToUpper(body.Action)
+	// if body.Action != constant.LEAVE_APPROVE && body.Action != constant.LEAVE_REJECT {
+	// 	utils.RespondWithError(c, 400, "Action must be APPROVE or REJECT")
+	// 	return
+	// }
 
-	leave, err := s.Query.GetLeaveById(leaveID)
-	if err != nil {
-		utils.RespondWithError(c, 404, "Leave not found: "+err.Error())
-		return
-	}
+	// leave, err := s.Query.GetLeaveById(leaveID)
+	// if err != nil {
+	// 	utils.RespondWithError(c, 404, "Leave not found: "+err.Error())
+	// 	return
+	// }
 
 	// Prevent self-approval
-	if leave.EmployeeID == approverID {
-		utils.RespondWithError(c, 403, "You cannot approve your own leave request")
-		return
-	}
+	// if leave.EmployeeID == approverID {
+	// 	utils.RespondWithError(c, 403, "You cannot approve your own leave request")
+	// 	return
+	// }
 
 	// ── Fetch leave type to determine the approval flow ───────────────────────
-	leaveType, err := s.Query.GetLeaveTypeById(leave.LeaveTypeID)
-	if err != nil {
-		utils.RespondWithError(c, 500, "Failed to fetch leave type: "+err.Error())
-		return
-	}
+	// leaveType, err := s.Query.GetLeaveTypeById(leave.LeaveTypeID)
+	// if err != nil {
+	// 	utils.RespondWithError(c, 500, "Failed to fetch leave type: "+err.Error())
+	// 	return
+	// }
 
-	isEarlyLeave := leaveType.IsEarly != nil && *leaveType.IsEarly
-	isWFH := leaveType.IsWorkFromHome
+	// isEarlyLeave := leaveType.IsEarly != nil && *leaveType.IsEarly
+	// isWFH := leaveType.IsWorkFromHome
 
 	// ── Role + leave-type permission guard ───────────────────────────────────
 	switch {
@@ -1221,12 +1215,6 @@ func (h *HandlerFunc) EditMyLeave(c *gin.Context) {
 	// Initialize validation service
 	leaveValidationSvc := service.NewLeaveValidationService(h.Query)
 
-	// Validate Employee Status
-	if err := leaveValidationSvc.ValidateEmployeeStatus(empID); err != nil {
-		utils.RespondWithError(c, 403, err.Error())
-		return
-	}
-
 	// 3. Bind Input (JSON)
 	var input models.LeaveUpdateInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -1266,7 +1254,7 @@ func (h *HandlerFunc) EditMyLeave(c *gin.Context) {
 	// 4. Execute Transaction
 	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		// Fetch Leave Type and resolve timing ID
-		leaveTypeInfo, err := leaveValidationSvc.GetLeaveTypeAndResolveTimingID(tx, input.LeaveTypeID, input.LeaveTimingID)
+		leaveTypeInfo, err := leaveValidationSvc.GetLeaveTypeAndResolveTimingID(input.LeaveTypeID, input.LeaveTimingID)
 		if err != nil {
 			return utils.CustomErr(c, 400, err.Error())
 		}

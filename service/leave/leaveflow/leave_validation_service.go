@@ -1,4 +1,4 @@
-package service
+package leaveflow
 
 import (
 	"fmt"
@@ -18,18 +18,6 @@ type LeaveValidationService struct {
 
 func NewLeaveValidationService(repo *repositories.Repository) *LeaveValidationService {
 	return &LeaveValidationService{repo: repo}
-}
-
-// ValidateEmployeeStatus checks if employee account is active
-func (s *LeaveValidationService) ValidateEmployeeStatus(employeeID uuid.UUID) error {
-	empStatus, err := s.repo.GetEmployeeStatus(employeeID)
-	if err != nil {
-		return fmt.Errorf("failed to verify employee status: %w", err)
-	}
-	if empStatus == "deactive" {
-		return fmt.Errorf("your account is deactivated. You cannot apply or edit leave")
-	}
-	return nil
 }
 
 // ValidateLeaveTimingID validates timing ID is 1, 2, or 3
@@ -68,8 +56,8 @@ type LeaveTypeInfo struct {
 
 // GetLeaveTypeAndResolveTimingID fetches leave type and resolves timing ID
 // For IsEarly leave types, timing ID is forced to 3 (Full Day)
-func (s *LeaveValidationService) GetLeaveTypeAndResolveTimingID(tx *sqlx.Tx, leaveTypeID int, requestedTimingID *int) (*LeaveTypeInfo, error) {
-	leaveType, err := s.repo.GetLeaveTypeByIdTx(tx, leaveTypeID)
+func (s *LeaveValidationService) GetLeaveTypeAndResolveTimingID(leaveTypeID int, requestedTimingID *int) (*LeaveTypeInfo, error) {
+	leaveType, err := s.repo.GetLeaveTypeById(leaveTypeID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid leave type: %w", err)
 	}
@@ -159,12 +147,12 @@ func (s *LeaveValidationService) ValidateOverlappingLeaves(tx *sqlx.Tx, employee
 
 // ValidateLeaveApplicationParams contains all parameters needed for comprehensive validation
 type ValidateLeaveApplicationParams struct {
-	EmployeeID      uuid.UUID
-	LeaveTypeID     int
-	StartDate       time.Time
-	EndDate         time.Time
-	LeaveDays       float64
-	ExcludeLeaveID  *uuid.UUID // For edit operations, exclude this leave from overlap/pending checks
+	EmployeeID     uuid.UUID
+	LeaveTypeID    int
+	StartDate      time.Time
+	EndDate        time.Time
+	LeaveDays      float64
+	ExcludeLeaveID *uuid.UUID // For edit operations, exclude this leave from overlap/pending checks
 }
 
 // ValidateLeaveApplication performs comprehensive validation for leave application/edit

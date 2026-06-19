@@ -12,6 +12,7 @@ import (
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/repositories"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/routes"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service/leave/leaveflow"
 )
 
 func main() {
@@ -30,7 +31,15 @@ func main() {
 	leavePolicyRepo := repositories.NewLeavePolicy(db)
 	leavePolicyService := service.NewLeavePolicy(db, leaveApporverService, leavePolicyRepo, repo)
 
-	handlerFunc := controllers.NewHandler(env, repo, validator, leaveApporverService, leavePolicyService)
+	//leaveFlowLog
+	leaveFlowLogRepo := repositories.NewLeaveFlowLog(db)
+	leaveFlowLogService := service.NewLeaveFlowLog(db, leavePolicyService, leaveFlowLogRepo)
+
+	//LeaveFlow
+	leaveFlowRepo := repositories.NewLeaveFlow(db)
+	leaveFlowService := leaveflow.NewLeaveFlow(db, leaveFlowLogService, leavePolicyService, leaveFlowRepo, leavePolicyRepo, repo)
+
+	handlerFunc := controllers.NewHandler(env, repo, validator, leaveApporverService, leavePolicyService, leaveFlowService, leaveFlowLogService)
 
 	// Start birthday cron job (runs daily at 00:01)
 	birthdayCron := service.NewBirthdayCronService(repo, env)
