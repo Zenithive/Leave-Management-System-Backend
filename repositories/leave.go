@@ -158,10 +158,7 @@ func (r *Repository) GetLeaveApprovalNameByEmployeeID(approvalId uuid.UUID) (str
 
 // GetMyLeavesByMonthYear - Get current user's leaves from given month/year onward (current + future).
 // When month/year is sent as base, returns leaves where start_date >= first day of that month.
-func (r *Repository) GetMyLeavesByMonthYear(
-	userID uuid.UUID,
-	month, year int,
-) ([]models.LeaveResponse, error) {
+func (r *Repository) GetMyLeavesByMonthYear(userID uuid.UUID,month, year int) ([]models.LeaveResponse, error) {
 
 	var result []models.LeaveResponse
 

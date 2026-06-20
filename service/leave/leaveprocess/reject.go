@@ -16,6 +16,9 @@ func (p *RejectProcessor) Process(ctx context.Context, tx *sqlx.Tx, lctx *LeaveA
 
 	// 1. Find caller's stage
 	stage := findStage(lctx.Flow, lctx.Role)
+	if stage == nil {
+		return utils.CustomErr(nil, http.StatusForbidden, "leave alredy process")
+	}
 
 	// 2. Stamp this stage → REJECTED
 	stampStage(stage, models.REJECTED, lctx.ApproverID, lctx.Remarks)

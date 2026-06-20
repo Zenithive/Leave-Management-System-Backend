@@ -296,7 +296,9 @@ func (s *leaveFlow) ActionValidator(ctx context.Context, flow *models.LeaveFlow,
 		return nil
 
 	case "WITHDRAW":
-		if stage.State != models.APPROVED {
+		// Stage must be APPROVED (original approver) or WAITING
+		// (reset to WAITING by a lower-stage withdrawal that needs higher confirmation)
+		if status != string(constant.LEAVE_APPLOVED) && status != string(constant.LEAVE_WITHDRAWAL_PENDING) {
 			return utils.CustomErr(nil, http.StatusBadRequest, "withdraw allowed only after approval")
 		}
 		return nil

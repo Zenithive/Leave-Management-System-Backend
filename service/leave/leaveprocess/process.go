@@ -84,7 +84,7 @@ func (r *ProcessorRegistry) Resolve(action string) (LeaveActionProcessor, error)
 // findStage returns a pointer to the caller's stage in the approval log, or nil.
 func findStage(flow *models.LeaveFlow, role string) *models.LeaveFlowStage {
 	for i := range flow.ApprovalLog {
-		if string(flow.ApprovalLog[i].ApproverRole) == role {
+		if string(flow.ApprovalLog[i].ApproverRole) == role{
 			return &flow.ApprovalLog[i]
 		}
 	}
@@ -147,34 +147,35 @@ func stampStage(stage *models.LeaveFlowStage, state models.State, actorID uuid.U
 	stage.ActionAt = &now
 }
 
-// skipSiblingsForWithdraw marks every other APPROVED stage at the same stage_no
-// as SKIPPED. In practice siblings were already skipped on approve, but this
-// keeps symmetry with the approve path.
-func skipSiblingsForWithdraw(log []models.LeaveFlowStage, stageNo int, actingRole string) {
+// ── Withdraw helpers ──────────────────────────────────────────────────────────
+
+// resetLogForWithdraw prepares the approval log when a withdrawal starts.
+// Mirrors skipStages used in approve but in the withdrawal direction:
+//   - All stages with stage_no <= actingStageNo → SKIPPED  (already acted, not needed)
+//   - All stages with stage_no >  actingStageNo → WAITING  (must confirm the withdrawal)
+//   - The acting stage itself is stamped separately by stampStage.
+func resetLogForWithdraw(log []models.LeaveFlowStage, actingStageNo int, actingRole string) {
 	for i := range log {
 		s := &log[i]
-		if s.StageNo == stageNo && string(s.ApproverRole) != actingRole && s.State == models.APPROVED {
+
+		// The acting stage itself — skip, handled by stampStage
+		if s.StageNo == actingStageNo && string(s.ApproverRole) == actingRole {
+			continue
+		}
+		if s.StageNo <= actingStageNo && s.State != models.WITHDRAWN {
+			// Same stage siblings or lower stages — no longer needed
 			s.State = models.SKIPPED
+		} else if s.State != models.WITHDRAWN {
+			// Higher stages — must also withdraw to complete the chain
+			s.State = models.WAITING
 		}
 	}
 }
 
 // allStagesSettledForWithdraw returns true when every stage is WITHDRAWN or SKIPPED.
-// This means the highest approver has also withdrawn — full withdrawal complete.
 func allStagesSettledForWithdraw(log []models.LeaveFlowStage) bool {
 	for _, s := range log {
 		if s.State != models.WITHDRAWN && s.State != models.SKIPPED {
-			return false
-		}
-	}
-	return true
-}
-
-// isFinalWithdrawStage returns true when this stage_no is the highest in the log.
-// Balance restore only happens when the final approver withdraws.
-func isFinalWithdrawStage(log []models.LeaveFlowStage, stageNo int) bool {
-	for _, s := range log {
-		if s.StageNo > stageNo {
 			return false
 		}
 	}
