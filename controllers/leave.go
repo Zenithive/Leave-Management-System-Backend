@@ -18,7 +18,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -560,67 +559,6 @@ import (
 // 	c.JSON(200, gin.H{"message": "Leave approved successfully. Balance deducted.", "status": constant.LEAVE_APPLOVED})
 // }
 
-
-// GetAllMyLeave - GET /api/leaves/my
-// Get current user's own leaves with month/year filtering
-func (h *HandlerFunc) GetAllMyLeave(c *gin.Context) {
-	// 1️ Get User ID with validation
-	userIDStr := c.GetString("user_id")
-	if userIDStr == "" {
-		utils.RespondWithError(c, http.StatusUnauthorized, "User ID not found in context")
-		return
-	}
-	userID, err := uuid.Parse(userIDStr)
-	if err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "Invalid user ID format: "+err.Error())
-		return
-	}
-
-	// 2️ Parse query parameters for month and year filtering
-	now := time.Now()
-	monthStr := c.DefaultQuery("month", fmt.Sprintf("%d", int(now.Month())))
-	yearStr := c.DefaultQuery("year", fmt.Sprintf("%d", now.Year()))
-
-	// Validate month (1-12)
-	month, err := strconv.Atoi(monthStr)
-	if err != nil || month < 1 || month > 12 {
-		utils.RespondWithError(c, http.StatusBadRequest, "Invalid month. Must be between 1-12")
-		return
-	}
-
-	// Validate year
-	year, err := strconv.Atoi(yearStr)
-	if err != nil || year < 2000 || year > 2100 {
-		utils.RespondWithError(c, http.StatusBadRequest, "Invalid year. Must be between 2000-2100")
-		return
-	}
-
-	// 3️ Execute query to get user's own leaves
-	result, err := h.Query.GetMyLeavesByMonthYear(userID, month, year)
-
-	// 4️ Handle query errors
-	if err != nil {
-		fmt.Printf("GetAllMyLeave DB Error: %v\n", err)
-		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch my leaves: "+err.Error())
-		return
-	}
-
-	// 5️ Handle empty result
-	if result == nil {
-		result = []models.LeaveResponse{}
-	}
-
-	// 6️ Return success with metadata + status counts
-	c.JSON(http.StatusOK, gin.H{
-		"message": "My leaves fetched successfully",
-		"user_id": userID,
-		"month":   month,
-		"year":    year,
-		"summary": models.BuildLeaveCountSummary(result),
-		"data":    result,
-	})
-}
-
 // CancelLeave - DELETE /api/leaves/:id/cancel
 // Allows employees to cancel their own pending leaves
 func (h *HandlerFunc) CancelLeave(c *gin.Context) {
@@ -696,262 +634,262 @@ func (h *HandlerFunc) CancelLeave(c *gin.Context) {
 //  │  WorkFromHome   │  Admin / HR → WITHDRAWAL_PENDING │  SuperAdmin only         │
 //  └─────────────────┴──────────────────────────────┴──────────────────────────────┘
 
-func (h *HandlerFunc) WithdrawLeave(c *gin.Context) {
-	role := c.GetString("role")
-	currentUserIDRaw, _ := c.Get("user_id")
-	currentUserID, _ := uuid.Parse(currentUserIDRaw.(string))
+// func (h *HandlerFunc) WithdrawLeave(c *gin.Context) {
+// 	role := c.GetString("role")
+// 	currentUserIDRaw, _ := c.Get("user_id")
+// 	currentUserID, _ := uuid.Parse(currentUserIDRaw.(string))
 
-	// Base permission: only these roles can withdraw at all
-	if role != constant.ROLE_SUPER_ADMIN && role != constant.ROLE_ADMIN &&
-		role != constant.ROLE_HR && role != constant.ROLE_MANAGER {
-		utils.RespondWithError(c, 403, "Only SUPERADMIN, ADMIN, HR, and MANAGER can withdraw approved leaves")
-		return
-	}
+// 	// Base permission: only these roles can withdraw at all
+// 	if role != constant.ROLE_SUPER_ADMIN && role != constant.ROLE_ADMIN &&
+// 		role != constant.ROLE_HR && role != constant.ROLE_MANAGER {
+// 		utils.RespondWithError(c, 403, "Only SUPERADMIN, ADMIN, HR, and MANAGER can withdraw approved leaves")
+// 		return
+// 	}
 
-	leaveID, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		utils.RespondWithError(c, 400, "Invalid leave ID")
-		return
-	}
+// 	leaveID, err := uuid.Parse(c.Param("id"))
+// 	if err != nil {
+// 		utils.RespondWithError(c, 400, "Invalid leave ID")
+// 		return
+// 	}
 
-	var input struct {
-		Reason string `json:"reason"`
-	}
-	c.ShouldBindJSON(&input)
+// 	var input struct {
+// 		Reason string `json:"reason"`
+// 	}
+// 	c.ShouldBindJSON(&input)
 
-	leave, err := h.Query.GetLeaveById(leaveID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			utils.RespondWithError(c, 404, "Leave not found")
-			return
-		}
-		utils.RespondWithError(c, 500, "Failed to fetch leave: "+err.Error())
-		return
-	}
+// 	leave, err := h.Query.GetLeaveById(leaveID)
+// 	if err != nil {
+// 		if err == sql.ErrNoRows {
+// 			utils.RespondWithError(c, 404, "Leave not found")
+// 			return
+// 		}
+// 		utils.RespondWithError(c, 500, "Failed to fetch leave: "+err.Error())
+// 		return
+// 	}
 
-	// Prevent self-withdrawal
-	if leave.EmployeeID == currentUserID {
-		utils.RespondWithError(c, 403, "You cannot withdraw your own leave")
-		return
-	}
+// 	// Prevent self-withdrawal
+// 	if leave.EmployeeID == currentUserID {
+// 		utils.RespondWithError(c, 403, "You cannot withdraw your own leave")
+// 		return
+// 	}
 
-	// Fetch leave type to determine the withdrawal flow
-	leaveType, err := h.Query.GetLeaveTypeById(leave.LeaveTypeID)
-	if err != nil {
-		utils.RespondWithError(c, 500, "Failed to fetch leave type: "+err.Error())
-		return
-	}
+// 	// Fetch leave type to determine the withdrawal flow
+// 	leaveType, err := h.Query.GetLeaveTypeById(leave.LeaveTypeID)
+// 	if err != nil {
+// 		utils.RespondWithError(c, 500, "Failed to fetch leave type: "+err.Error())
+// 		return
+// 	}
 
-	isEarlyLeave := leaveType.IsEarly != nil && *leaveType.IsEarly
-	isWFH := leaveType.IsWorkFromHome
+// 	isEarlyLeave := leaveType.IsEarly != nil && *leaveType.IsEarly
+// 	isWFH := leaveType.IsWorkFromHome
 
-	// ── Role + leave-type permission guard ───────────────────────────────────
-	switch {
+// 	// ── Role + leave-type permission guard ───────────────────────────────────
+// 	switch {
 
-	// ── IsEarly: Manager is first withdrawer ─────────────────────────────────
-	case isEarlyLeave:
-		switch role {
-		case constant.ROLE_MANAGER:
-			ok, err := h.Query.ChackManagerPermission()
-			if err != nil {
-				utils.RespondWithError(c, 500, "Failed to check manager permission")
-				return
-			}
-			if !ok {
-				utils.RespondWithError(c, 403, "Manager withdrawal is not enabled")
-				return
-			}
-			var mgrID uuid.UUID
-			if err := h.Query.DB.Get(&mgrID, "SELECT manager_id FROM Tbl_Employee WHERE id=$1", leave.EmployeeID); err != nil {
-				utils.RespondWithError(c, 500, "Failed to verify manager relationship")
-				return
-			}
-			if mgrID != currentUserID {
-				utils.RespondWithError(c, 403, "You can only withdraw leaves of your direct reports")
-				return
-			}
-			if leave.Status != constant.LEAVE_APPLOVED {
-				utils.RespondWithError(c, 400, fmt.Sprintf("Manager can only withdraw APPROVED leaves. Current status: %s", leave.Status))
-				return
-			}
+// 	// ── IsEarly: Manager is first withdrawer ─────────────────────────────────
+// 	case isEarlyLeave:
+// 		switch role {
+// 		case constant.ROLE_MANAGER:
+// 			ok, err := h.Query.ChackManagerPermission()
+// 			if err != nil {
+// 				utils.RespondWithError(c, 500, "Failed to check manager permission")
+// 				return
+// 			}
+// 			if !ok {
+// 				utils.RespondWithError(c, 403, "Manager withdrawal is not enabled")
+// 				return
+// 			}
+// 			var mgrID uuid.UUID
+// 			if err := h.Query.DB.Get(&mgrID, "SELECT manager_id FROM Tbl_Employee WHERE id=$1", leave.EmployeeID); err != nil {
+// 				utils.RespondWithError(c, 500, "Failed to verify manager relationship")
+// 				return
+// 			}
+// 			if mgrID != currentUserID {
+// 				utils.RespondWithError(c, 403, "You can only withdraw leaves of your direct reports")
+// 				return
+// 			}
+// 			if leave.Status != constant.LEAVE_APPLOVED {
+// 				utils.RespondWithError(c, 400, fmt.Sprintf("Manager can only withdraw APPROVED leaves. Current status: %s", leave.Status))
+// 				return
+// 			}
 
-		case constant.ROLE_ADMIN, constant.ROLE_HR, constant.ROLE_SUPER_ADMIN:
-			if leave.Status != constant.LEAVE_APPLOVED && leave.Status != constant.LEAVE_WITHDRAWAL_PENDING {
-				utils.RespondWithError(c, 400, fmt.Sprintf("Cannot withdraw leave with status: %s", leave.Status))
-				return
-			}
+// 		case constant.ROLE_ADMIN, constant.ROLE_HR, constant.ROLE_SUPER_ADMIN:
+// 			if leave.Status != constant.LEAVE_APPLOVED && leave.Status != constant.LEAVE_WITHDRAWAL_PENDING {
+// 				utils.RespondWithError(c, 400, fmt.Sprintf("Cannot withdraw leave with status: %s", leave.Status))
+// 				return
+// 			}
 
-		default:
-			utils.RespondWithError(c, 403, "You do not have permission to withdraw this leave")
-			return
-		}
+// 		default:
+// 			utils.RespondWithError(c, 403, "You do not have permission to withdraw this leave")
+// 			return
+// 		}
 
-	// ── WorkFromHome: Manager + Admin + HR = first withdrawers, SuperAdmin = final withdrawer
-	case isWFH:
-		switch role {
-		case constant.ROLE_MANAGER:
-			ok, err := h.Query.ChackManagerPermission()
-			if err != nil {
-				utils.RespondWithError(c, 500, "Failed to check manager permission")
-				return
-			}
-			if !ok {
-				utils.RespondWithError(c, 403, "Manager withdrawal is not enabled")
-				return
-			}
-			var mgrID uuid.UUID
-			if err := h.Query.DB.Get(&mgrID, "SELECT manager_id FROM Tbl_Employee WHERE id=$1", leave.EmployeeID); err != nil {
-				utils.RespondWithError(c, 500, "Failed to verify manager relationship")
-				return
-			}
-			if mgrID != currentUserID {
-				utils.RespondWithError(c, 403, "You can only withdraw leaves of your direct reports")
-				return
-			}
-			if leave.Status != constant.LEAVE_APPLOVED {
-				utils.RespondWithError(c, 400, fmt.Sprintf("Manager can only withdraw APPROVED leaves. Current status: %s", leave.Status))
-				return
-			}
+// 	// ── WorkFromHome: Manager + Admin + HR = first withdrawers, SuperAdmin = final withdrawer
+// 	case isWFH:
+// 		switch role {
+// 		case constant.ROLE_MANAGER:
+// 			ok, err := h.Query.ChackManagerPermission()
+// 			if err != nil {
+// 				utils.RespondWithError(c, 500, "Failed to check manager permission")
+// 				return
+// 			}
+// 			if !ok {
+// 				utils.RespondWithError(c, 403, "Manager withdrawal is not enabled")
+// 				return
+// 			}
+// 			var mgrID uuid.UUID
+// 			if err := h.Query.DB.Get(&mgrID, "SELECT manager_id FROM Tbl_Employee WHERE id=$1", leave.EmployeeID); err != nil {
+// 				utils.RespondWithError(c, 500, "Failed to verify manager relationship")
+// 				return
+// 			}
+// 			if mgrID != currentUserID {
+// 				utils.RespondWithError(c, 403, "You can only withdraw leaves of your direct reports")
+// 				return
+// 			}
+// 			if leave.Status != constant.LEAVE_APPLOVED {
+// 				utils.RespondWithError(c, 400, fmt.Sprintf("Manager can only withdraw APPROVED leaves. Current status: %s", leave.Status))
+// 				return
+// 			}
 
-		case constant.ROLE_ADMIN, constant.ROLE_HR:
-			// First withdrawer — can only request withdrawal on APPROVED leaves
-			if leave.Status != constant.LEAVE_APPLOVED {
-				utils.RespondWithError(c, 400, fmt.Sprintf("Admin/HR can only request withdrawal on APPROVED WFH leaves. Current status: %s", leave.Status))
-				return
-			}
+// 		case constant.ROLE_ADMIN, constant.ROLE_HR:
+// 			// First withdrawer — can only request withdrawal on APPROVED leaves
+// 			if leave.Status != constant.LEAVE_APPLOVED {
+// 				utils.RespondWithError(c, 400, fmt.Sprintf("Admin/HR can only request withdrawal on APPROVED WFH leaves. Current status: %s", leave.Status))
+// 				return
+// 			}
 
-		case constant.ROLE_SUPER_ADMIN:
-			// Final withdrawer — can finalize APPROVED or WITHDRAWAL_PENDING
-			if leave.Status != constant.LEAVE_APPLOVED && leave.Status != constant.LEAVE_WITHDRAWAL_PENDING {
-				utils.RespondWithError(c, 400, fmt.Sprintf("Cannot withdraw WFH leave with status: %s", leave.Status))
-				return
-			}
+// 		case constant.ROLE_SUPER_ADMIN:
+// 			// Final withdrawer — can finalize APPROVED or WITHDRAWAL_PENDING
+// 			if leave.Status != constant.LEAVE_APPLOVED && leave.Status != constant.LEAVE_WITHDRAWAL_PENDING {
+// 				utils.RespondWithError(c, 400, fmt.Sprintf("Cannot withdraw WFH leave with status: %s", leave.Status))
+// 				return
+// 			}
 
-		default:
-			utils.RespondWithError(c, 403, "You do not have permission to withdraw this leave")
-			return
-		}
+// 		default:
+// 			utils.RespondWithError(c, 403, "You do not have permission to withdraw this leave")
+// 			return
+// 		}
 
-	// ── Default: Manager = first withdrawer, Admin/HR/SuperAdmin = final withdrawer
-	default:
-		switch role {
-		case constant.ROLE_MANAGER:
-			ok, err := h.Query.ChackManagerPermission()
-			if err != nil {
-				utils.RespondWithError(c, 500, "Failed to check manager permission")
-				return
-			}
-			if !ok {
-				utils.RespondWithError(c, 403, "Manager withdrawal is not enabled")
-				return
-			}
-			var mgrID uuid.UUID
-			if err := h.Query.DB.Get(&mgrID, "SELECT manager_id FROM Tbl_Employee WHERE id=$1", leave.EmployeeID); err != nil {
-				utils.RespondWithError(c, 500, "Failed to verify manager relationship")
-				return
-			}
-			if mgrID != currentUserID {
-				utils.RespondWithError(c, 403, "You can only withdraw leaves of your direct reports")
-				return
-			}
-			if leave.Status != constant.LEAVE_APPLOVED {
-				utils.RespondWithError(c, 400, fmt.Sprintf("Manager can only withdraw APPROVED leaves. Current status: %s", leave.Status))
-				return
-			}
+// 	// ── Default: Manager = first withdrawer, Admin/HR/SuperAdmin = final withdrawer
+// 	default:
+// 		switch role {
+// 		case constant.ROLE_MANAGER:
+// 			ok, err := h.Query.ChackManagerPermission()
+// 			if err != nil {
+// 				utils.RespondWithError(c, 500, "Failed to check manager permission")
+// 				return
+// 			}
+// 			if !ok {
+// 				utils.RespondWithError(c, 403, "Manager withdrawal is not enabled")
+// 				return
+// 			}
+// 			var mgrID uuid.UUID
+// 			if err := h.Query.DB.Get(&mgrID, "SELECT manager_id FROM Tbl_Employee WHERE id=$1", leave.EmployeeID); err != nil {
+// 				utils.RespondWithError(c, 500, "Failed to verify manager relationship")
+// 				return
+// 			}
+// 			if mgrID != currentUserID {
+// 				utils.RespondWithError(c, 403, "You can only withdraw leaves of your direct reports")
+// 				return
+// 			}
+// 			if leave.Status != constant.LEAVE_APPLOVED {
+// 				utils.RespondWithError(c, 400, fmt.Sprintf("Manager can only withdraw APPROVED leaves. Current status: %s", leave.Status))
+// 				return
+// 			}
 
-		case constant.ROLE_ADMIN, constant.ROLE_HR, constant.ROLE_SUPER_ADMIN:
-			if leave.Status != constant.LEAVE_APPLOVED && leave.Status != constant.LEAVE_WITHDRAWAL_PENDING {
-				utils.RespondWithError(c, 400, fmt.Sprintf("Cannot withdraw leave with status: %s", leave.Status))
-				return
-			}
+// 		case constant.ROLE_ADMIN, constant.ROLE_HR, constant.ROLE_SUPER_ADMIN:
+// 			if leave.Status != constant.LEAVE_APPLOVED && leave.Status != constant.LEAVE_WITHDRAWAL_PENDING {
+// 				utils.RespondWithError(c, 400, fmt.Sprintf("Cannot withdraw leave with status: %s", leave.Status))
+// 				return
+// 			}
 
-		default:
-			utils.RespondWithError(c, 403, "You do not have permission to withdraw this leave")
-			return
-		}
-	}
+// 		default:
+// 			utils.RespondWithError(c, 403, "You do not have permission to withdraw this leave")
+// 			return
+// 		}
+// 	}
 
-	// ── Notification data ─────────────────────────────────────────────────────
-	empDetails, _ := h.Query.GetEmployeeDetailsForNotification(leave.EmployeeID)
-	leaveTypeName, _ := h.Query.GetLeaveTypeNameByID(leave.LeaveTypeID)
-	approverName, _ := h.Query.GetLeaveApprovalNameByEmployeeID(currentUserID)
-	recipient, _ := h.Query.GetAdminAndEmployeeEmail(leave.EmployeeID)
+// 	// ── Notification data ─────────────────────────────────────────────────────
+// 	empDetails, _ := h.Query.GetEmployeeDetailsForNotification(leave.EmployeeID)
+// 	leaveTypeName, _ := h.Query.GetLeaveTypeNameByID(leave.LeaveTypeID)
+// 	approverName, _ := h.Query.GetLeaveApprovalNameByEmployeeID(currentUserID)
+// 	recipient, _ := h.Query.GetAdminAndEmployeeEmail(leave.EmployeeID)
 
-	startStr := leave.StartDate.Format("2006-01-02")
-	endStr := leave.EndDate.Format("2006-01-02")
+// 	startStr := leave.StartDate.Format("2006-01-02")
+// 	endStr := leave.EndDate.Format("2006-01-02")
 
-	// Manager is always first withdrawer for ALL leave types.
-	// For WFH: Admin and HR are also first withdrawers (→ WITHDRAWAL_PENDING).
-	// SuperAdmin is always final withdrawer for WFH.
-	// For Default/IsEarly: Admin, HR, SuperAdmin are all final withdrawers.
-	isFirstWithdrawer := role == constant.ROLE_MANAGER ||
-		(isWFH && (role == constant.ROLE_ADMIN || role == constant.ROLE_HR))
+// 	// Manager is always first withdrawer for ALL leave types.
+// 	// For WFH: Admin and HR are also first withdrawers (→ WITHDRAWAL_PENDING).
+// 	// SuperAdmin is always final withdrawer for WFH.
+// 	// For Default/IsEarly: Admin, HR, SuperAdmin are all final withdrawers.
+// 	isFirstWithdrawer := role == constant.ROLE_MANAGER ||
+// 		(isWFH && (role == constant.ROLE_ADMIN || role == constant.ROLE_HR))
 
-	withdrawalReason := input.Reason
+// 	withdrawalReason := input.Reason
 
-	// ── First-stage: WITHDRAWAL_PENDING ──────────────────────────────────────
-	if isFirstWithdrawer {
-		if withdrawalReason == "" {
-			withdrawalReason = fmt.Sprintf("Withdrawal requested by %s", role)
-		}
-		if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
-			return h.Query.UpdateLeaveStatusWithResion(tx, withdrawalReason, currentUserID, leaveID, constant.LEAVE_WITHDRAWAL_PENDING)
-		}); err != nil {
-			utils.RespondWithError(c, 500, "Failed to request withdrawal: "+err.Error())
-			return
-		}
-		go func() {
-			if len(recipient) > 0 {
-				utils.SendLeaveWithdrawalPendingEmail(recipient, empDetails.FullName, leaveTypeName, startStr, endStr, leave.Days, approverName, withdrawalReason)
-			}
-		}()
-		c.JSON(200, gin.H{
-			"message":           "Withdrawal request submitted. Pending final approval from SuperAdmin",
-			"status":            constant.LEAVE_WITHDRAWAL_PENDING,
-			"leave_id":          leaveID,
-			"withdrawal_by":     currentUserID,
-			"withdrawal_reason": withdrawalReason,
-		})
-		return
-	}
+// 	// ── First-stage: WITHDRAWAL_PENDING ──────────────────────────────────────
+// 	if isFirstWithdrawer {
+// 		if withdrawalReason == "" {
+// 			withdrawalReason = fmt.Sprintf("Withdrawal requested by %s", role)
+// 		}
+// 		if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+// 			return h.Query.UpdateLeaveStatusWithResion(tx, withdrawalReason, currentUserID, leaveID, constant.LEAVE_WITHDRAWAL_PENDING)
+// 		}); err != nil {
+// 			utils.RespondWithError(c, 500, "Failed to request withdrawal: "+err.Error())
+// 			return
+// 		}
+// 		go func() {
+// 			if len(recipient) > 0 {
+// 				utils.SendLeaveWithdrawalPendingEmail(recipient, empDetails.FullName, leaveTypeName, startStr, endStr, leave.Days, approverName, withdrawalReason)
+// 			}
+// 		}()
+// 		c.JSON(200, gin.H{
+// 			"message":           "Withdrawal request submitted. Pending final approval from SuperAdmin",
+// 			"status":            constant.LEAVE_WITHDRAWAL_PENDING,
+// 			"leave_id":          leaveID,
+// 			"withdrawal_by":     currentUserID,
+// 			"withdrawal_reason": withdrawalReason,
+// 		})
+// 		return
+// 	}
 
-	// ── Final-stage: WITHDRAWN + restore balance ──────────────────────────────
-	if withdrawalReason == "" {
-		withdrawalReason = fmt.Sprintf("Withdrawn by %s", role)
-	}
-	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
-		if err := h.Query.UpdateLeaveStatusWithResion(tx, withdrawalReason, currentUserID, leaveID, constant.LEAVE_WITHDRAWN); err != nil {
-			return err
-		}
-		// Restore balance only for non-IsEarly types
-		if !isEarlyLeave {
-			if err := h.Query.UpdateWidthrowLeaveBalanceByEmployeeId(tx, leave.EmployeeID, leave.LeaveTypeID, leave.Days); err != nil {
-				return err
-			}
-		}
-		return nil
-	}); err != nil {
-		utils.RespondWithError(c, 500, "Failed to withdraw leave: "+err.Error())
-		return
-	}
-	go func() {
-		if empDetails.Email != "" {
-			utils.SendLeaveWithdrawalEmail(recipient, empDetails.Email, empDetails.FullName, leaveTypeName, startStr, endStr, leave.Days, approverName, role, withdrawalReason)
-			if hrEmails := h.Query.GetHrEamil(); len(hrEmails) > 0 {
-				utils.SendLeaveWithdrawalEmailToHR(hrEmails, empDetails.FullName, empDetails.Email, leaveTypeName, startStr, endStr, leave.Days, approverName, role, withdrawalReason)
-			}
-		}
-	}()
-	c.JSON(200, gin.H{
-		"message":           "Leave withdrawn successfully and balance restored",
-		"status":            constant.LEAVE_WITHDRAWN,
-		"leave_id":          leaveID,
-		"days_restored":     leave.Days,
-		"withdrawal_by":     currentUserID,
-		"withdrawal_role":   role,
-		"withdrawal_reason": withdrawalReason,
-	})
-}
+// 	// ── Final-stage: WITHDRAWN + restore balance ──────────────────────────────
+// 	if withdrawalReason == "" {
+// 		withdrawalReason = fmt.Sprintf("Withdrawn by %s", role)
+// 	}
+// 	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+// 		if err := h.Query.UpdateLeaveStatusWithResion(tx, withdrawalReason, currentUserID, leaveID, constant.LEAVE_WITHDRAWN); err != nil {
+// 			return err
+// 		}
+// 		// Restore balance only for non-IsEarly types
+// 		if !isEarlyLeave {
+// 			if err := h.Query.UpdateWidthrowLeaveBalanceByEmployeeId(tx, leave.EmployeeID, leave.LeaveTypeID, leave.Days); err != nil {
+// 				return err
+// 			}
+// 		}
+// 		return nil
+// 	}); err != nil {
+// 		utils.RespondWithError(c, 500, "Failed to withdraw leave: "+err.Error())
+// 		return
+// 	}
+// 	go func() {
+// 		if empDetails.Email != "" {
+// 			utils.SendLeaveWithdrawalEmail(recipient, empDetails.Email, empDetails.FullName, leaveTypeName, startStr, endStr, leave.Days, approverName, role, withdrawalReason)
+// 			if hrEmails := h.Query.GetHrEamil(); len(hrEmails) > 0 {
+// 				utils.SendLeaveWithdrawalEmailToHR(hrEmails, empDetails.FullName, empDetails.Email, leaveTypeName, startStr, endStr, leave.Days, approverName, role, withdrawalReason)
+// 			}
+// 		}
+// 	}()
+// 	c.JSON(200, gin.H{
+// 		"message":           "Leave withdrawn successfully and balance restored",
+// 		"status":            constant.LEAVE_WITHDRAWN,
+// 		"leave_id":          leaveID,
+// 		"days_restored":     leave.Days,
+// 		"withdrawal_by":     currentUserID,
+// 		"withdrawal_role":   role,
+// 		"withdrawal_reason": withdrawalReason,
+// 	})
+// }
 
 // GetManagerLeaveHistory - GET /api/leaves/manager/history
 // Manager gets leave history of their team members
@@ -1034,94 +972,94 @@ func (h *HandlerFunc) GetManagerLeaveHistory(c *gin.Context) {
 
 // GetLeaveByID - GET /api/leaves/:id
 // Get specific leave details by ID
-func (h *HandlerFunc) GetLeaveByID(c *gin.Context) {
-	// Get user info from middleware
-	userIDRaw, _ := c.Get("user_id")
-	userID, _ := uuid.Parse(userIDRaw.(string))
-	role := c.GetString("role")
+// func (h *HandlerFunc) GetLeaveByID(c *gin.Context) {
+// 	// Get user info from middleware
+// 	userIDRaw, _ := c.Get("user_id")
+// 	userID, _ := uuid.Parse(userIDRaw.(string))
+// 	role := c.GetString("role")
 
-	// Parse leave ID from URL
-	leaveID, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		utils.RespondWithError(c, 400, "Invalid leave ID")
-		return
-	}
+// 	// Parse leave ID from URL
+// 	leaveID, err := uuid.Parse(c.Param("id"))
+// 	if err != nil {
+// 		utils.RespondWithError(c, 400, "Invalid leave ID")
+// 		return
+// 	}
 
-	// Query to get leave details with timing information
-	query := `
-		SELECT 
-			l.id,
-			e.full_name AS employee,
-			lt.name AS leave_type,
-			lt.is_paid AS is_paid,
-			COALESCE(h.type, 'FULL') AS leave_timing_type,
-			COALESCE(h.timing, 'Full Day') AS leave_timing,
-			l.start_date,
-			l.end_date,
-			l.days,
-			COALESCE(l.reason, '') AS reason,
-			l.status,
-			l.created_at AS applied_at,
-			approver.full_name AS approval_name
-		FROM Tbl_Leave l
-		INNER JOIN Tbl_Employee e ON l.employee_id = e.id
-		INNER JOIN Tbl_Leave_Type lt ON lt.id = l.leave_type_id
-		LEFT JOIN Tbl_Half h ON l.half_id = h.id
-		LEFT JOIN Tbl_Employee approver ON l.approved_by = approver.id
-		WHERE l.id = $1
-	`
+// 	// Query to get leave details with timing information
+// 	query := `
+// 		SELECT
+// 			l.id,
+// 			e.full_name AS employee,
+// 			lt.name AS leave_type,
+// 			lt.is_paid AS is_paid,
+// 			COALESCE(h.type, 'FULL') AS leave_timing_type,
+// 			COALESCE(h.timing, 'Full Day') AS leave_timing,
+// 			l.start_date,
+// 			l.end_date,
+// 			l.days,
+// 			COALESCE(l.reason, '') AS reason,
+// 			l.status,
+// 			l.created_at AS applied_at,
+// 			approver.full_name AS approval_name
+// 		FROM Tbl_Leave l
+// 		INNER JOIN Tbl_Employee e ON l.employee_id = e.id
+// 		INNER JOIN Tbl_Leave_Type lt ON lt.id = l.leave_type_id
+// 		LEFT JOIN Tbl_Half h ON l.half_id = h.id
+// 		LEFT JOIN Tbl_Employee approver ON l.approved_by = approver.id
+// 		WHERE l.id = $1
+// 	`
 
-	var result models.LeaveResponse
-	err = h.Query.DB.Get(&result, query, leaveID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			utils.RespondWithError(c, 404, "Leave not found")
-			return
-		}
-		utils.RespondWithError(c, 500, "Failed to fetch leave details: "+err.Error())
-		return
-	}
+// 	var result models.LeaveResponse
+// 	err = h.Query.DB.Get(&result, query, leaveID)
+// 	if err != nil {
+// 		if err == sql.ErrNoRows {
+// 			utils.RespondWithError(c, 404, "Leave not found")
+// 			return
+// 		}
+// 		utils.RespondWithError(c, 500, "Failed to fetch leave details: "+err.Error())
+// 		return
+// 	}
 
-	// Permission check - employees can only see their own leaves
-	// Get the employee ID for this leave
-	var leaveEmployeeID uuid.UUID
-	err = h.Query.DB.Get(&leaveEmployeeID, "SELECT employee_id FROM Tbl_Leave WHERE id = $1", leaveID)
-	if err != nil {
-		utils.RespondWithError(c, 500, "Failed to verify leave ownership")
-		return
-	}
+// 	// Permission check - employees can only see their own leaves
+// 	// Get the employee ID for this leave
+// 	var leaveEmployeeID uuid.UUID
+// 	err = h.Query.DB.Get(&leaveEmployeeID, "SELECT employee_id FROM Tbl_Leave WHERE id = $1", leaveID)
+// 	if err != nil {
+// 		utils.RespondWithError(c, 500, "Failed to verify leave ownership")
+// 		return
+// 	}
 
-	// Role-based access control
-	switch role {
-	case "EMPLOYEE", "INTERN":
-		if leaveEmployeeID != userID {
-			utils.RespondWithError(c, 403, "You can only view your own leave applications")
-			return
-		}
-	case "MANAGER":
-		// Manager can see their own leaves + their team members' leaves
-		var managerID uuid.UUID
-		err = h.Query.DB.Get(&managerID, "SELECT COALESCE(manager_id, '00000000-0000-0000-0000-000000000000') FROM Tbl_Employee WHERE id = $1", leaveEmployeeID)
-		if err != nil {
-			utils.RespondWithError(c, 500, "Failed to verify manager relationship")
-			return
-		}
-		if leaveEmployeeID != userID && managerID != userID {
-			utils.RespondWithError(c, 403, "You can only view leaves of your team members or your own leaves")
-			return
-		}
-	case "HR", "ADMIN", "SUPERADMIN":
-		// HR, Admin and SuperAdmin can see all leaves - no additional check needed
-	default:
-		utils.RespondWithError(c, 403, "Invalid role")
-		return
-	}
+// 	// Role-based access control
+// 	switch role {
+// 	case "EMPLOYEE", "INTERN":
+// 		if leaveEmployeeID != userID {
+// 			utils.RespondWithError(c, 403, "You can only view your own leave applications")
+// 			return
+// 		}
+// 	case "MANAGER":
+// 		// Manager can see their own leaves + their team members' leaves
+// 		var managerID uuid.UUID
+// 		err = h.Query.DB.Get(&managerID, "SELECT COALESCE(manager_id, '00000000-0000-0000-0000-000000000000') FROM Tbl_Employee WHERE id = $1", leaveEmployeeID)
+// 		if err != nil {
+// 			utils.RespondWithError(c, 500, "Failed to verify manager relationship")
+// 			return
+// 		}
+// 		if leaveEmployeeID != userID && managerID != userID {
+// 			utils.RespondWithError(c, 403, "You can only view leaves of your team members or your own leaves")
+// 			return
+// 		}
+// 	case "HR", "ADMIN", "SUPERADMIN":
+// 		// HR, Admin and SuperAdmin can see all leaves - no additional check needed
+// 	default:
+// 		utils.RespondWithError(c, 403, "Invalid role")
+// 		return
+// 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Leave details fetched successfully",
-		"data":    result,
-	})
-}
+// 	c.JSON(http.StatusOK, gin.H{
+// 		"message": "Leave details fetched successfully",
+// 		"data":    result,
+// 	})
+// }
 
 // GetLeaveTimingByID - GET /api/leave-timing/:id
 

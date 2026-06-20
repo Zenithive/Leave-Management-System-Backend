@@ -2,6 +2,7 @@ package leaveflow
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -25,6 +26,7 @@ type LeaveFlowService interface {
 	GetByID(ctx context.Context, leaveID string) (*models.Leave, error)
 	ActionLeave(ctx context.Context, req models.ActionLeaveReq, leaveID string, empID uuid.UUID, role string) error
 	GetLeaves(ctx context.Context, empID uuid.UUID, role string, month int, year int) (gin.H, error)
+	GetMyLeave(empID uuid.UUID, month int, year int) (gin.H, error)
 }
 
 type leaveFlow struct {
@@ -214,6 +216,29 @@ func (s *leaveFlow) GetLeaves(ctx context.Context, empID uuid.UUID, role string,
 }
 
 //validare _logic
+
+func (s *leaveFlow) GetMyLeave(empID uuid.UUID, month int, year int) (gin.H, error) {
+
+	result, err := s.Repo.GetMyLeavesByMonthYear(empID, month, year)
+
+	if err != nil {
+		fmt.Printf("GetAllMyLeave DB Error: %v\n", err)
+		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "Failed to fetch my leaves: "+err.Error())
+	}
+
+	if result == nil {
+		result = []models.LeaveResponse{}
+	}
+
+	return gin.H{
+		"message": "My leaves fetched successfully",
+		"user_id": empID,
+		"month":   month,
+		"year":    year,
+		"summary": models.BuildLeaveCountSummary(result),
+		"data":    result,
+	}, nil
+}
 
 func (s *leaveFlow) ValidateLeave(ctx context.Context, leave *models.LeaveInput) (*LeaveTypeInfo, time.Time, error) {
 

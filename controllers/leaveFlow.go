@@ -1,14 +1,12 @@
 package controllers
 
 import (
-	"fmt"
 	"net/http"
-	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/common"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/helper"
 )
 
@@ -69,23 +67,34 @@ func (h *HandlerFunc) GetLeaves(c *gin.Context) {
 
 	role := c.GetString("role")
 
-	month, err := strconv.Atoi(
-		c.DefaultQuery("month", fmt.Sprintf("%d", int(time.Now().Month()))),
-	)
+	month, year, err := common.GetMonthYear(c)
 	if err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "invalid month")
-		return
-	}
-
-	year, err := strconv.Atoi(
-		c.DefaultQuery("year", fmt.Sprintf("%d", time.Now().Year())),
-	)
-	if err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "invalid year")
+		utils.RespondWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	res, err := h.LeaveFlowService.GetLeaves(c, empID, role, month, year)
+	if err != nil {
+		utils.Error(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+func (h *HandlerFunc) GetAllMyLeave(c *gin.Context) {
+	empID, ok := helper.ExtractEmployeeID(c)
+	if !ok {
+		utils.RespondWithError(c, http.StatusUnauthorized, "missing EpID")
+		return
+	}
+
+	month, year, err := common.GetMonthYear(c)
+	if err != nil {
+		utils.RespondWithError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	res, err := h.LeaveFlowService.GetMyLeave(empID, month, year)
 	if err != nil {
 		utils.Error(c, err)
 		return
