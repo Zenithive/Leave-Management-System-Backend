@@ -2,13 +2,16 @@ package controllers
 
 import (
 	"github.com/go-playground/validator/v10"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/config"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/repositories"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service/leave/leaveflow"
 )
 
-// HandlerFunc holds dependencies
+// HandlerFunc holds all dependencies injected at startup.
+// Controllers must not create services or providers directly —
+// all external dependencies come through here.
 type HandlerFunc struct {
 	Env                      *config.ENV
 	Query                    *repositories.Repository
@@ -20,10 +23,20 @@ type HandlerFunc struct {
 	LeavePolicyService       service.LeavePolicyService
 	LeaveFlowService         leaveflow.LeaveFlowService
 	LeaveFlowLogService      service.LeaveFlowLog
+	NotificationSvc          notification.Service // async event bus — never nil after NewHandler
 }
 
-// NewHandler initializes and returns a HandlerFunc
-func NewHandler(env *config.ENV, query *repositories.Repository, validator *validator.Validate, leaveApproverFlowService service.LeaveApprovalFlowService, leavePolicyService service.LeavePolicyService, leaveFlowService leaveflow.LeaveFlowService, leaveFlowLogService service.LeaveFlowLog) *HandlerFunc {
+// NewHandler constructs the handler with all required dependencies.
+func NewHandler(
+	env *config.ENV,
+	query *repositories.Repository,
+	validator *validator.Validate,
+	leaveApproverFlowService service.LeaveApprovalFlowService,
+	leavePolicyService service.LeavePolicyService,
+	leaveFlowService leaveflow.LeaveFlowService,
+	leaveFlowLogService service.LeaveFlowLog,
+	notifSvc notification.Service,
+) *HandlerFunc {
 	return &HandlerFunc{
 		Env:                      env,
 		Query:                    query,
@@ -34,6 +47,7 @@ func NewHandler(env *config.ENV, query *repositories.Repository, validator *vali
 		LeavePolicyService:       leavePolicyService,
 		LeaveFlowService:         leaveFlowService,
 		LeaveFlowLogService:      leaveFlowLogService,
+		NotificationSvc:          notifSvc,
 	}
 }
 

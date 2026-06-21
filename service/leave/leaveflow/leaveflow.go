@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification"
+	notifmodels "github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/repositories"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service/leave/leaveprocess"
@@ -40,10 +42,11 @@ type leaveFlow struct {
 	LeaveFlowLogRepo    repositories.LeaveFlowLog
 	LeaveFlowLogService service.LeaveFlowLog
 	LeavePolicyService  service.LeavePolicyService
+	NotificationSvc     notification.Service // nil-safe: notifications skipped if not wired
 	registry            *leaveprocess.ProcessorRegistry
 }
 
-func NewLeaveFlow(db *sqlx.DB, leaveFlowLogService service.LeaveFlowLog, leavePolicyService service.LeavePolicyService, leaveFlowRepo repositories.LeaveFlowRepository, leavePolicyRepo repositories.LeavePolicyRepository, leaveFlowLogRepo repositories.LeaveFlowLog, commRepo *repositories.Repository) LeaveFlowService {
+func NewLeaveFlow(db *sqlx.DB, leaveFlowLogService service.LeaveFlowLog, leavePolicyService service.LeavePolicyService, leaveFlowRepo repositories.LeaveFlowRepository, leavePolicyRepo repositories.LeavePolicyRepository, leaveFlowLogRepo repositories.LeaveFlowLog, commRepo *repositories.Repository, notifSvc notification.Service) LeaveFlowService {
 	return &leaveFlow{
 		DB:                  db,
 		Repo:                leaveFlowRepo,
@@ -53,6 +56,7 @@ func NewLeaveFlow(db *sqlx.DB, leaveFlowLogService service.LeaveFlowLog, leavePo
 		LeaveFlowLogRepo:    leaveFlowLogRepo,
 		LeaveFlowLogService: leaveFlowLogService,
 		LeavePolicyService:  leavePolicyService,
+		NotificationSvc:     notifSvc,
 		registry:            leaveprocess.NewProcessorRegistry(),
 	}
 }
@@ -67,8 +71,8 @@ func (s *leaveFlow) Create(ctx context.Context, leave *models.LeaveInput, role s
 		return err
 	}
 	var Days float64
+	var leaveID uuid.UUID
 	err = common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
-		// Calculate working days with timing consideration
 		leaveDays, err := service.CalculateWorkingDaysWithTiming(s.CommRepo, tx, leave.StartDate, leave.EndDate, LeaveTypeInfo.TimingID, leaveTiming)
 		if err != nil {
 			return utils.CustomErr(nil, http.StatusBadRequest, err.Error())
@@ -79,12 +83,10 @@ func (s *leaveFlow) Create(ctx context.Context, leave *models.LeaveInput, role s
 		leave.Days = &Days
 		Days = leaveDays
 
-		// Validate unpaid leave application: Cannot apply for unpaid leave if paid balance > 0
 		if err := service.ValidateUnpaidLeaveApplication(s.CommRepo, tx, leave.EmployeeID, leave.LeaveTypeID); err != nil {
 			return utils.CustomErr(nil, http.StatusBadRequest, err.Error())
 		}
 
-		// Comprehensive leave validation (balance, early leave limit, overlapping)
 		validationParams := ValidateLeaveApplicationParams{
 			EmployeeID:     leave.EmployeeID,
 			LeaveTypeID:    leave.LeaveTypeID,
@@ -97,8 +99,6 @@ func (s *leaveFlow) Create(ctx context.Context, leave *models.LeaveInput, role s
 			return utils.CustomErr(nil, http.StatusBadRequest, err.Error())
 		}
 
-		// Insert Leave
-		// For IsEarly leave types, pass the leave_timing string
 		var leaveTimingStr *string
 		if LeaveTypeInfo.LeaveType.IsEarly != nil && *LeaveTypeInfo.LeaveType.IsEarly && leave.LeaveTiming != nil {
 			leaveTimingStr = leave.LeaveTiming
@@ -107,12 +107,19 @@ func (s *leaveFlow) Create(ctx context.Context, leave *models.LeaveInput, role s
 		if err != nil {
 			return utils.CustomErr(nil, http.StatusInternalServerError, "Failed to apply leave: "+err.Error())
 		}
+		leaveID = id
 		if err := s.LeaveFlowLogService.Create(ctx, tx, id, leaveTypeRres, role); err != nil {
 			return err
 		}
 		return nil
 	})
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Publish notification asynchronously — after the transaction committed
+	s.publishLeaveApplied(leave, leaveTypeRres.Name, Days, leaveID.String())
+	return nil
 }
 
 func (s *leaveFlow) ActionLeave(ctx context.Context, req models.ActionLeaveReq, leaveID string, empID uuid.UUID, role string) error {
@@ -143,6 +150,9 @@ func (s *leaveFlow) ActionLeave(ctx context.Context, req models.ActionLeaveReq, 
 		return err
 	}
 
+	// Fetch approver name for notification before the transaction
+	approverDetails, _ := s.CommRepo.GetEmployeeDetailsForNotification(empID)
+
 	// Build the context object — single place where all data is assembled
 	lctx := &leaveprocess.LeaveActionContext{
 		ApproverID:    empID,
@@ -156,17 +166,58 @@ func (s *leaveFlow) ActionLeave(ctx context.Context, req models.ActionLeaveReq, 
 		LeaveFlowRepo: s.Repo,
 	}
 
-	return common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
+	if err := common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
 		return processor.Process(ctx, tx, lctx)
-	})
+	}); err != nil {
+		return err
+	}
+
+	// Publish notification after transaction committed — action determines event type
+	action := strings.ToUpper(req.Action)
+	switch action {
+	case "APPROVE":
+		// Re-fetch leave to get final status (APPROVED or still Pending for multi-stage)
+		updated, _ := s.GetByID(ctx, leaveID)
+		if updated != nil && updated.Status == constant.LEAVE_APPLOVED {
+			s.publishLeaveAction(notification.LeaveApproved, leave, approverDetails.FullName, approverDetails.Email, role)
+		}
+	case "REJECT":
+		s.publishLeaveAction(notification.LeaveRejected, leave, approverDetails.FullName, approverDetails.Email, role)
+	case "WITHDRAW":
+		updated, _ := s.GetByID(ctx, leaveID)
+		if updated != nil && updated.Status == constant.LEAVE_WITHDRAWN {
+			s.publishLeaveAction(notification.LeaveWithdrawn, leave, approverDetails.FullName, approverDetails.Email, role)
+		} else {
+			s.publishLeaveAction(notification.LeaveWithdrawalPending, leave, approverDetails.FullName, approverDetails.Email, role)
+		}
+	}
+
+	return nil
 }
 
-func (s *leaveFlow) GetByID(ctx context.Context, leaveID string) (*models.Leave, error) {
-	leave, err := s.Repo.GetByID(ctx, leaveID)
+func (s *leaveFlow) CancleLeave(ctx context.Context, leaveId string) (string, error) {
+	leave, err := s.Repo.GetByID(ctx, leaveId)
 	if err != nil {
-		return nil, utils.CustomErr(nil, http.StatusBadRequest, err.Error())
+		if err == sql.ErrNoRows {
+			return "", utils.CustomErr(nil, http.StatusNotFound, "Leave not found")
+		}
+		return "", utils.CustomErr(nil, http.StatusInternalServerError, "Failed to fetch leave: "+err.Error())
 	}
-	return leave, err
+	switch leave.Status {
+	case constant.LEAVE_APPLOVED:
+		return "", utils.CustomErr(nil, http.StatusBadRequest, "Cannot cancel approved leave. Please contact your manager or admin")
+	case constant.LEAVE_REJECTED:
+		return "", utils.CustomErr(nil, http.StatusBadRequest, "Leave is already rejected")
+	case constant.LEAVE_CANCELLED:
+		return "", utils.CustomErr(nil, http.StatusBadRequest, "Leave is already cancelled")
+	}
+	if err := s.Repo.UpdateLeaveStatus(leaveId, constant.LEAVE_CANCELLED); err != nil {
+		return "", utils.CustomErr(nil, http.StatusInternalServerError, "Failed to cancel leave: "+err.Error())
+	}
+
+	// Publish cancellation notification after successful status update
+	s.publishLeaveAction(notification.LeaveCancelled, leave, "", "", "")
+	return leaveId, nil
 }
 
 func (s *leaveFlow) GetLeaves(ctx context.Context, empID uuid.UUID, role string, month int, year int) (gin.H, error) {
@@ -243,31 +294,80 @@ func (s *leaveFlow) GetMyLeave(empID uuid.UUID, month int, year int) (gin.H, err
 	}, nil
 }
 
-func (s *leaveFlow) CancleLeave(ctx context.Context, leaveId string) (string, error) {
-
-	leave, err := s.Repo.GetByID(ctx, leaveId)
+func (s *leaveFlow) GetByID(ctx context.Context, leaveID string) (*models.Leave, error) {
+	leave, err := s.Repo.GetByID(ctx, leaveID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return "", utils.CustomErr(nil, http.StatusNotFound, "Leave not found")
-		}
-		return "", utils.CustomErr(nil, http.StatusInternalServerError, "Failed to fetch leave: "+err.Error())
+		return nil, utils.CustomErr(nil, http.StatusBadRequest, err.Error())
 	}
-	// Status validation using switch
-	switch leave.Status {
+	return leave, err
+}
 
-	case constant.LEAVE_APPLOVED:
-		return "", utils.CustomErr(nil, http.StatusBadRequest, "Cannot cancel approved leave. Please contact your manager or admin")
+// ─────────────────────────────────────────────────────────────────────────────
+// Notification helpers — all publish calls go through here.
+// Services stay clean: no email logic, no recipient fetching inline.
+// ─────────────────────────────────────────────────────────────────────────────
 
-	case constant.LEAVE_REJECTED:
-		return "", utils.CustomErr(nil, http.StatusBadRequest, "Leave is already rejected")
-
-	case constant.LEAVE_CANCELLED:
-		return "", utils.CustomErr(nil, http.StatusBadRequest, "Leave is already cancelled")
+// publishLeaveApplied fires a LeaveApplied event after Create() commits.
+func (s *leaveFlow) publishLeaveApplied(leave *models.LeaveInput, leaveTypeName string, days float64, leaveID string) {
+	if s.NotificationSvc == nil {
+		return
 	}
-	if err := s.Repo.UpdateLeaveStatus(leaveId, constant.LEAVE_CANCELLED); err != nil {
-		return "", utils.CustomErr(nil, http.StatusInternalServerError, "Failed to cancel leave: "+err.Error())
+	r, err := s.CommRepo.GetLeaveNotificationRecipients(leave.EmployeeID)
+	if err != nil {
+		return // non-critical — DB read for notification; don't fail the request
 	}
-	return leaveId, nil
+	s.NotificationSvc.Publish(notification.Event{
+		Type: notification.LeaveApplied,
+		Data: &notifmodels.LeaveNotificationData{
+			LeaveID:       leaveID,
+			LeaveType:     leaveTypeName,
+			StartDate:     leave.StartDate,
+			EndDate:       leave.EndDate,
+			Days:          days,
+			Reason:        leave.Reason,
+			EmployeeID:    leave.EmployeeID.String(),
+			EmployeeName:  r.EmployeeName,
+			EmployeeEmail: r.EmployeeEmail,
+			AdminEmails:   r.AdminEmails,
+			HREmails:      r.HREmails,
+		},
+	})
+}
+
+// publishLeaveAction fires an event for APPROVE / REJECT / WITHDRAW / CANCEL.
+// leaveTypeName is fetched via the leave's LeaveTypeID already loaded in ActionLeave.
+func (s *leaveFlow) publishLeaveAction(eventType notification.Type,leave *models.Leave,actorName, actorEmail, actorRole string) {
+	if s.NotificationSvc == nil {
+		return
+	}
+	r, err := s.CommRepo.GetLeaveNotificationRecipients(leave.EmployeeID)
+	if err != nil {
+		return
+	}
+	// Fetch leave type name for the notification body
+	leaveTypeName := ""
+	if lt, err := s.LeavePolicyRepo.GetById(context.Background(), strconv.Itoa(leave.LeaveTypeID)); err == nil {
+		leaveTypeName = lt.Name
+	}
+
+	s.NotificationSvc.Publish(notification.Event{
+		Type: eventType,
+		Data: &notifmodels.LeaveNotificationData{
+			LeaveID:       leave.ID.String(),
+			LeaveType:     leaveTypeName,
+			StartDate:     leave.StartDate,
+			EndDate:       leave.EndDate,
+			Days:          leave.Days,
+			EmployeeID:    leave.EmployeeID.String(),
+			EmployeeName:  r.EmployeeName,
+			EmployeeEmail: r.EmployeeEmail,
+			ActorName:     actorName,
+			ActorEmail:    actorEmail,
+			ActorRole:     actorRole,
+			AdminEmails:   r.AdminEmails,
+			HREmails:      r.HREmails,
+		},
+	})
 }
 
 func (s *leaveFlow) ValidateLeave(ctx context.Context, leave *models.LeaveInput) (*LeaveTypeInfo, time.Time, error) {

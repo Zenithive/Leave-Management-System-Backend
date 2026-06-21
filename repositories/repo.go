@@ -79,7 +79,39 @@ func (r *Repository) GetEmployeeDetailsForNotification(id uuid.UUID) (empDetails
 }, err error) {
 	err = r.DB.Get(&empDetails, "SELECT email, full_name FROM Tbl_Employee WHERE id=$1", id)
 	return empDetails, err
+}
 
+// LeaveNotificationRecipients bundles all recipient sets needed for a leave notification.
+type LeaveNotificationRecipients struct {
+	EmployeeName  string
+	EmployeeEmail string
+	AdminEmails   []string
+	HREmails      []string
+}
+
+// GetLeaveNotificationRecipients fetches all data needed to populate a LeaveNotificationData
+// in a single call — employee details, admin/superadmin emails, and HR emails.
+func (r *Repository) GetLeaveNotificationRecipients(employeeID uuid.UUID) (*LeaveNotificationRecipients, error) {
+	empDetails, err := r.GetEmployeeDetailsForNotification(employeeID)
+	if err != nil {
+		return nil, err
+	}
+
+	var adminEmails []string
+	r.DB.Select(&adminEmails, `
+		SELECT e.email FROM Tbl_Employee e
+		JOIN Tbl_Role r ON e.role_id = r.id
+		WHERE r.type IN ('ADMIN', 'SUPERADMIN') AND e.status = 'active'
+	`)
+
+	hrEmails := r.GetHrEamil()
+
+	return &LeaveNotificationRecipients{
+		EmployeeName:  empDetails.FullName,
+		EmployeeEmail: empDetails.Email,
+		AdminEmails:   adminEmails,
+		HREmails:      hrEmails,
+	}, nil
 }
 
 func (r *Repository) DeleteEmployeeStatus(tx *sqlx.Tx, id uuid.UUID) (string, error) {

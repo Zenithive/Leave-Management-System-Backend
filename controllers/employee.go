@@ -11,6 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification"
+	notifmodels "github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/access_role"
@@ -190,16 +192,19 @@ func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 		return
 	}
 
-	// Send welcome email with generated credentials (async to not block response)
-	go func() {
-		if err := utils.SendEmployeeCreationEmail(input.Email, input.FullName, generatedPassword); err != nil {
-			fmt.Printf("Failed to send welcome email to %s: %v\n", input.Email, err)
-		}
-	}()
+	// Publish EmployeeCreated notification — async, non-blocking
+	h.NotificationSvc.Publish(notification.Event{
+		Type: notification.EmployeeCreated,
+		Data: &notifmodels.EmployeeNotificationData{
+			EmployeeName:      input.FullName,
+			EmployeeEmail:     input.Email,
+			GeneratedPassword: generatedPassword,
+		},
+	})
 
 	c.JSON(201, gin.H{
 		"message":  "employee created successfully",
-		"password": generatedPassword, // Return generated password in response
+		"password": generatedPassword,
 	})
 }
 func (h *HandlerFunc) UpdateEmployeeRole(c *gin.Context) {
@@ -667,41 +672,24 @@ func (h *HandlerFunc) UpdateEmployeePassword(c *gin.Context) {
 		return
 	}
 
-	// 8️ Send notification email to employee with new password
-	go func() {
-		var empDetails struct {
-			Email    string `db:"email"`
-			FullName string `db:"full_name"`
-		}
-		err := h.Query.DB.Get(&empDetails, "SELECT email, full_name FROM Tbl_Employee WHERE id=$1", empID)
-		if err != nil {
-			fmt.Printf("Failed to fetch employee details for email notification: %v\n", err)
-			return
-		}
-
-		var updatedByEmail string
-		currentUserID := c.GetString("user_id")
-		err = h.Query.DB.Get(&updatedByEmail, "SELECT email FROM Tbl_Employee WHERE id=$1", currentUserID)
-		if err != nil {
-			fmt.Printf("Failed to fetch updater email for email notification: %v\n", err)
-			updatedByEmail = "admin@" + os.Getenv("COMPANY_EMAIL_DOMAIN") // Fallback email
-		}
-
-		fmt.Printf("Sending password update email to: %s\n", empDetails.Email)
-		err = utils.SendPasswordUpdateEmail(
-			empDetails.Email,
-			empDetails.FullName,
-			input.NewPassword,
-			updatedByEmail,
-			role,
-		)
-		if err != nil {
-			fmt.Printf("Failed to send password update notification: %v\n", err)
-			fmt.Printf("Error details: %+v\n", err)
-		} else {
-			fmt.Printf("Password update email sent successfully to: %s\n", empDetails.Email)
-		}
-	}()
+	// Publish PasswordChanged notification — async, non-blocking.
+	// Fetch actor email for the notification body (non-critical, best effort).
+	actorEmail := ""
+	if uid := c.GetString("user_id"); uid != "" {
+		_ = h.Query.DB.Get(&actorEmail, "SELECT email FROM Tbl_Employee WHERE id=$1", uid)
+	}
+	empDetails, _ := h.Query.GetEmployeeDetailsForNotification(empID)
+	h.NotificationSvc.Publish(notification.Event{
+		Type: notification.PasswordChanged,
+		Data: &notifmodels.EmployeeNotificationData{
+			EmployeeID:    empID.String(),
+			EmployeeName:  empDetails.FullName,
+			EmployeeEmail: empDetails.Email,
+			NewPassword:   input.NewPassword,
+			ActorEmail:    actorEmail,
+			ActorRole:     role,
+		},
+	})
 
 	// 9️ Response
 	c.JSON(200, gin.H{

@@ -22,6 +22,8 @@ type ENV struct {
 	EXTERNAL_API_URL     string
 	CRON_SECRET          string
 	COMPANY_EMAIL_DOMAIN string // e.g. "yourdomain.com" — used for email validation and demo seeder
+	APP_NAME             string // display name used in notification emails
+	APP_URL              string // frontend URL appended to credential emails
 }
 
 var (
@@ -49,6 +51,11 @@ func LoadENV() *ENV {
 			}
 		}
 
+		appName := os.Getenv("APP_NAME")
+		if appName == "" {
+			appName = "Leave Management System"
+		}
+
 		cfg = &ENV{
 			DB_URL:               os.Getenv("DB_URL"),
 			APP_PORT:             os.Getenv("APP_PORT"),
@@ -61,6 +68,8 @@ func LoadENV() *ENV {
 			EXTERNAL_API_URL:     os.Getenv("EXTERNAL_API_URL"),
 			CRON_SECRET:          os.Getenv("CRON_SECRET"),
 			COMPANY_EMAIL_DOMAIN: os.Getenv("COMPANY_EMAIL_DOMAIN"),
+			APP_NAME:             appName,
+			APP_URL:              os.Getenv("APP_URL"),
 		}
 	})
 
