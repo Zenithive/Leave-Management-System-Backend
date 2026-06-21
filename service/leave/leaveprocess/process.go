@@ -33,8 +33,9 @@ type LeaveActionContext struct {
 	LeaveType *models.LeaveType
 
 	// Repos — injected by leaveFlow so processors are DB-agnostic
-	FlowLogRepo repositories.LeaveFlowLog // UpdateApprovalLog
-	CommRepo    *repositories.Repository  // UpdateLeaveStatus / balance
+	FlowLogRepo   repositories.LeaveFlowLog // UpdateApprovalLog
+	CommRepo      *repositories.Repository  // updarte balance
+	LeaveFlowRepo repositories.LeaveFlowRepository
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -84,7 +85,7 @@ func (r *ProcessorRegistry) Resolve(action string) (LeaveActionProcessor, error)
 // findStage returns a pointer to the caller's stage in the approval log, or nil.
 func findStage(flow *models.LeaveFlow, role string) *models.LeaveFlowStage {
 	for i := range flow.ApprovalLog {
-		if string(flow.ApprovalLog[i].ApproverRole) == role{
+		if string(flow.ApprovalLog[i].ApproverRole) == role {
 			return &flow.ApprovalLog[i]
 		}
 	}

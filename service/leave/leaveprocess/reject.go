@@ -32,7 +32,7 @@ func (p *RejectProcessor) Process(ctx context.Context, tx *sqlx.Tx, lctx *LeaveA
 	}
 
 	// 4. Rejection is always final — set leave status immediately
-	if err := lctx.CommRepo.UpdateLeaveStatusWithApprover(tx.Tx, lctx.Leave.ID, constant.LEAVE_REJECTED, lctx.ApproverID); err != nil {
+	if err := lctx.LeaveFlowRepo.UpdateLeaveStatusTx(tx.Tx, lctx.Leave.ID, constant.LEAVE_REJECTED, lctx.ApproverID); err != nil {
 		return utils.CustomErr(nil, http.StatusInternalServerError, "failed to reject leave: "+err.Error())
 	}
 

@@ -102,3 +102,18 @@ func (h *HandlerFunc) GetAllMyLeave(c *gin.Context) {
 
 	c.JSON(http.StatusOK, res)
 }
+
+func (h *HandlerFunc) CancelLeave(c *gin.Context) {
+	// Parse leave ID from URL
+	leaveID := c.Param("id")
+	if leaveID == "" {
+		utils.RespondWithError(c, http.StatusBadRequest, "leave_id is required")
+		return
+	}
+	h.LeaveFlowService.CancleLeave(c, leaveID)
+
+	c.JSON(200, gin.H{
+		"message":  "Leave cancelled successfully",
+		"leave_id": leaveID,
+	})
+}

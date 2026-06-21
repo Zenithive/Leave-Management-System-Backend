@@ -17,6 +17,8 @@ type LeaveFlowRepository interface {
 	GetAllLeaveByMonthYear(month, year int) ([]models.LeaveResponse, error)
 	GetMyLeavesByMonthYear(userID uuid.UUID, month, year int) ([]models.LeaveResponse, error)
 	GetByID(ctx context.Context, leaveID string) (*models.Leave, error)
+	UpdateLeaveStatus(leaveID string, status string) error
+	UpdateLeaveStatusTx(tx *sql.Tx, leaveID uuid.UUID, status string, approverID uuid.UUID) error
 }
 
 type leaveFlow struct {
@@ -341,4 +343,15 @@ func (r *leaveFlow) GetMyLeavesByMonthYear(userID uuid.UUID, month, year int) ([
 	err := r.DB.Select(&result, query, userID, month, year)
 
 	return result, err
+}
+
+func (r *leaveFlow) UpdateLeaveStatusTx(tx *sql.Tx, leaveID uuid.UUID, status string, approverID uuid.UUID) error {
+	query := `UPDATE Tbl_Leave SET status = $1, approved_by = $2, updated_at = NOW() WHERE id = $3`
+	_, err := tx.Exec(query, status, approverID, leaveID)
+	return err
+}
+func (r *leaveFlow) UpdateLeaveStatus(leaveID string, status string) error {
+	query := `UPDATE Tbl_Leave SET status = $1, updated_at = NOW() WHERE id = $2`
+	_, err := r.DB.Exec(query, status, leaveID)
+	return err
 }

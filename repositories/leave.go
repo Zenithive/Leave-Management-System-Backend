@@ -136,11 +136,6 @@ func (r *Repository) UpdateLeaveStatus(tx *sql.Tx, leaveID uuid.UUID, status str
 	_, err := tx.Exec(query, status, leaveID)
 	return err
 }
-func (r *Repository) UpdateLeaveStatusWithApprover(tx *sql.Tx, leaveID uuid.UUID, status string, approverID uuid.UUID) error {
-	query := `UPDATE Tbl_Leave SET status = $1, approved_by = $2, updated_at = NOW() WHERE id = $3`
-	_, err := tx.Exec(query, status, approverID, leaveID)
-	return err
-}
 
 func (r *Repository) GetLeaveById(leaveID uuid.UUID) (models.Leave, error) {
 	var leave models.Leave

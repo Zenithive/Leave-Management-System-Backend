@@ -37,7 +37,7 @@ func (p *ApproveProcessor) Process(ctx context.Context, tx *sqlx.Tx, lctx *Leave
 	}
 
 	// 6. Every stage settled → final approval
-	if err := lctx.CommRepo.UpdateLeaveStatusWithApprover(tx.Tx, lctx.Leave.ID, constant.LEAVE_APPLOVED, lctx.ApproverID); err != nil {
+	if err := lctx.LeaveFlowRepo.UpdateLeaveStatusTx(tx.Tx, lctx.Leave.ID, constant.LEAVE_APPLOVED, lctx.ApproverID); err != nil {
 		return utils.CustomErr(nil, http.StatusInternalServerError, "failed to approve leave: "+err.Error())
 	}
 

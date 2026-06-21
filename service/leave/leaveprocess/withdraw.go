@@ -75,7 +75,7 @@ func (p *WithdrawProcessor) Process(ctx context.Context, tx *sqlx.Tx, lctx *Leav
 
 	// 5. Not all stages settled → higher stages still need to withdraw
 	if !allStagesSettledForWithdraw(lctx.Flow.ApprovalLog) {
-		if err := lctx.CommRepo.UpdateLeaveStatusWithApprover(tx.Tx, lctx.Leave.ID, constant.LEAVE_WITHDRAWAL_PENDING, lctx.ApproverID); err != nil {
+		if err := lctx.LeaveFlowRepo.UpdateLeaveStatusTx(tx.Tx, lctx.Leave.ID, constant.LEAVE_WITHDRAWAL_PENDING, lctx.ApproverID); err != nil {
 			return utils.CustomErr(nil, http.StatusInternalServerError,
 				"failed to set withdrawal pending: "+err.Error())
 		}
@@ -84,7 +84,7 @@ func (p *WithdrawProcessor) Process(ctx context.Context, tx *sqlx.Tx, lctx *Leav
 
 	// 8. All stages settled → this is the FINAL withdrawal
 	//    Set leave status = WITHDRAWN
-	if err := lctx.CommRepo.UpdateLeaveStatusWithApprover(tx.Tx, lctx.Leave.ID, constant.LEAVE_WITHDRAWN, lctx.ApproverID); err != nil {
+	if err := lctx.LeaveFlowRepo.UpdateLeaveStatusTx(tx.Tx, lctx.Leave.ID, constant.LEAVE_WITHDRAWN, lctx.ApproverID); err != nil {
 		return utils.CustomErr(nil, http.StatusInternalServerError,
 			"failed to withdraw leave: "+err.Error())
 	}

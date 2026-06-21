@@ -13,18 +13,14 @@ package controllers
 // | Work From Home | Manager (mgr-permission + direct report, APPROVED only), Admin (APPROVED only), HR (APPROVED only) | WITHDRAWAL_PENDING | SuperAdmin only (APPROVED / WITHDRAWAL_PENDING)       | WITHDRAWN    | Restored at WITHDRAWN |
 
 import (
-	"database/sql"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/common"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
 )
 
@@ -561,66 +557,6 @@ import (
 
 // CancelLeave - DELETE /api/leaves/:id/cancel
 // Allows employees to cancel their own pending leaves
-func (h *HandlerFunc) CancelLeave(c *gin.Context) {
-	// Get user info from middleware
-	userIDRaw, _ := c.Get("user_id")
-	userID, _ := uuid.Parse(userIDRaw.(string))
-
-	roleRaw, _ := c.Get("role")
-	role := roleRaw.(string)
-
-	// Parse leave ID from URL
-	leaveID, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		utils.RespondWithError(c, 400, "Invalid leave ID")
-		return
-	}
-
-	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
-
-		leave, err := h.Query.GetLeaveById(leaveID)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				return utils.CustomErr(c, http.StatusNotFound, "Leave not found")
-			}
-			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to fetch leave: "+err.Error())
-		}
-		// Role validation
-		if (role == constant.ROLE_EMPLOYEE || role == constant.ROLE_INTERN) && leave.EmployeeID != userID {
-			return utils.CustomErr(c, http.StatusForbidden, "You can only cancel your own leave applications")
-		}
-		// Status validation using switch
-		switch leave.Status {
-
-		case constant.LEAVE_APPLOVED:
-			return utils.CustomErr(c, http.StatusBadRequest, "Cannot cancel approved leave. Please contact your manager or admin")
-
-		case constant.LEAVE_REJECTED:
-			return utils.CustomErr(c, http.StatusBadRequest, "Leave is already rejected")
-
-		case constant.LEAVE_CANCELLED:
-			return utils.CustomErr(c, http.StatusBadRequest, "Leave is already cancelled")
-		}
-		if err := h.Query.UpdateLeaveStatus(tx.Tx, leaveID, constant.LEAVE_CANCELLED); err != nil {
-			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to cancel leave: "+err.Error())
-		}
-		return nil
-	})
-
-	if err != nil {
-		if appErr, ok := err.(*utils.AppError); ok {
-			utils.RespondWithError(c, appErr.Code, appErr.Message)
-			return
-		}
-		utils.RespondWithError(c, 500, "Failed to cancel leave: "+err.Error())
-		return
-	}
-
-	c.JSON(200, gin.H{
-		"message":  "Leave cancelled successfully",
-		"leave_id": leaveID,
-	})
-}
 
 // WithdrawLeave - POST /api/leaves/:id/withdraw
 //
@@ -890,85 +826,6 @@ func (h *HandlerFunc) CancelLeave(c *gin.Context) {
 // 		"withdrawal_reason": withdrawalReason,
 // 	})
 // }
-
-// GetManagerLeaveHistory - GET /api/leaves/manager/history
-// Manager gets leave history of their team members
-func (h *HandlerFunc) GetManagerLeaveHistory(c *gin.Context) {
-	// 1️ Get current user info with validation
-	role := c.GetString("role")
-	if role == "" {
-		utils.RespondWithError(c, http.StatusUnauthorized, "Role not found in context")
-		return
-	}
-
-	userIDStr := c.GetString("user_id")
-	if userIDStr == "" {
-		utils.RespondWithError(c, http.StatusUnauthorized, "User ID not found in context")
-		return
-	}
-
-	currentUserID, err := uuid.Parse(userIDStr)
-	if err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "Invalid user ID format: "+err.Error())
-		return
-	}
-
-	// 2️ Permission check - Only MANAGER can use this endpoint
-	if role != "MANAGER" {
-		utils.RespondWithError(c, http.StatusForbidden, "Only managers can access team leave history")
-		return
-	}
-
-	// 3️ Query to get team members' leave history
-	query := `
-		SELECT 
-			l.id,
-			e.full_name AS employee,
-			lt.name AS leave_type,
-			lt.is_paid AS is_paid,
-			COALESCE(h.type, 'FULL') AS leave_timing_type,
-			COALESCE(h.timing, 'Full Day') AS leave_timing,
-			l.start_date,
-			l.end_date,
-			l.days,
-			COALESCE(l.reason, '') AS reason,
-			l.status,
-			l.created_at AS applied_at,
-			approver.full_name AS approval_name
-		FROM Tbl_Leave l
-		INNER JOIN Tbl_Employee e ON l.employee_id = e.id
-		INNER JOIN Tbl_Leave_Type lt ON lt.id = l.leave_type_id
-		LEFT JOIN Tbl_Half h ON l.half_id = h.id
-		LEFT JOIN Tbl_Employee approver ON l.approved_by = approver.id
-		WHERE e.manager_id = $1
-		ORDER BY l.created_at DESC
-	`
-
-	// 4️ Execute query with proper error handling
-	var result []models.LeaveResponse
-	err = h.Query.DB.Select(&result, query, currentUserID)
-	if err != nil {
-		// Log the error for debugging
-		fmt.Printf(" GetManagerLeaveHistory DB Error: %v\n", err)
-		fmt.Printf("Manager ID: %s\n", currentUserID)
-
-		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch team leave history: "+err.Error())
-		return
-	}
-
-	// 5️ Handle empty result
-	if result == nil {
-		result = []models.LeaveResponse{}
-	}
-
-	// 6️ Response with metadata
-	c.JSON(http.StatusOK, gin.H{
-		"message":      "Team leave history fetched successfully",
-		"manager_id":   currentUserID,
-		"total_leaves": len(result),
-		"leaves":       result,
-	})
-}
 
 // GetLeaveByID - GET /api/leaves/:id
 // Get specific leave details by ID

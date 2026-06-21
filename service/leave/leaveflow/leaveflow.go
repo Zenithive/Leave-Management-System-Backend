@@ -2,6 +2,7 @@ package leaveflow
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -27,6 +28,7 @@ type LeaveFlowService interface {
 	ActionLeave(ctx context.Context, req models.ActionLeaveReq, leaveID string, empID uuid.UUID, role string) error
 	GetLeaves(ctx context.Context, empID uuid.UUID, role string, month int, year int) (gin.H, error)
 	GetMyLeave(empID uuid.UUID, month int, year int) (gin.H, error)
+	CancleLeave(c context.Context, leaveId string) (string, error)
 }
 
 type leaveFlow struct {
@@ -143,14 +145,15 @@ func (s *leaveFlow) ActionLeave(ctx context.Context, req models.ActionLeaveReq, 
 
 	// Build the context object — single place where all data is assembled
 	lctx := &leaveprocess.LeaveActionContext{
-		ApproverID:  empID,
-		Role:        role,
-		Remarks:     req.Remarks,
-		Leave:       leave,
-		Flow:        leaveLogFlow,
-		LeaveType:   leavePolicy,
-		FlowLogRepo: s.LeaveFlowLogRepo,
-		CommRepo:    s.CommRepo,
+		ApproverID:    empID,
+		Role:          role,
+		Remarks:       req.Remarks,
+		Leave:         leave,
+		Flow:          leaveLogFlow,
+		LeaveType:     leavePolicy,
+		FlowLogRepo:   s.LeaveFlowLogRepo,
+		CommRepo:      s.CommRepo,
+		LeaveFlowRepo: s.Repo,
 	}
 
 	return common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
@@ -238,6 +241,33 @@ func (s *leaveFlow) GetMyLeave(empID uuid.UUID, month int, year int) (gin.H, err
 		"summary": models.BuildLeaveCountSummary(result),
 		"data":    result,
 	}, nil
+}
+
+func (s *leaveFlow) CancleLeave(ctx context.Context, leaveId string) (string, error) {
+
+	leave, err := s.Repo.GetByID(ctx, leaveId)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", utils.CustomErr(nil, http.StatusNotFound, "Leave not found")
+		}
+		return "", utils.CustomErr(nil, http.StatusInternalServerError, "Failed to fetch leave: "+err.Error())
+	}
+	// Status validation using switch
+	switch leave.Status {
+
+	case constant.LEAVE_APPLOVED:
+		return "", utils.CustomErr(nil, http.StatusBadRequest, "Cannot cancel approved leave. Please contact your manager or admin")
+
+	case constant.LEAVE_REJECTED:
+		return "", utils.CustomErr(nil, http.StatusBadRequest, "Leave is already rejected")
+
+	case constant.LEAVE_CANCELLED:
+		return "", utils.CustomErr(nil, http.StatusBadRequest, "Leave is already cancelled")
+	}
+	if err := s.Repo.UpdateLeaveStatus(leaveId, constant.LEAVE_CANCELLED); err != nil {
+		return "", utils.CustomErr(nil, http.StatusInternalServerError, "Failed to cancel leave: "+err.Error())
+	}
+	return leaveId, nil
 }
 
 func (s *leaveFlow) ValidateLeave(ctx context.Context, leave *models.LeaveInput) (*LeaveTypeInfo, time.Time, error) {
