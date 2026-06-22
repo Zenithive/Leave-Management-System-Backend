@@ -1,120 +1,187 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>{{.Config.HeaderTitle}}</title>
-  <style>
-    body { font-family: Arial, sans-serif; background: #f4f4f7; margin: 0; padding: 0; }
-    .wrapper { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
-    .header  { padding: 24px 32px; }
-    .header h1 { color: #fff; margin: 0; font-size: 20px; }
-    .body    { padding: 32px; color: #374151; font-size: 15px; line-height: 1.6; }
-    .label   { color: #6b7280; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; }
-    .value   { font-weight: 600; color: #111827; }
-    table.details { width: 100%; border-collapse: collapse; margin: 20px 0; }
-    table.details td { padding: 10px 0; border-bottom: 1px solid #e5e7eb; }
-    table.details td:first-child { width: 40%; }
-    .badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; }
-    .footer { background: #f9fafb; padding: 20px 32px; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; }
-    a.btn   { display: inline-block; margin-top: 24px; padding: 12px 24px; color: #fff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 600; }
-  </style>
-</head>
-<body>
-  <div class="wrapper">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{.Config.HeaderTitle}}</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #f4f4f7;
+        margin: 0;
+        padding: 0;
+      }
+      .wrapper {
+        max-width: 600px;
+        margin: 40px auto;
+        background: #fff;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      .header {
+        padding: 24px 32px;
+      }
+      .header h1 {
+        color: #fff;
+        margin: 0;
+        font-size: 20px;
+      }
+      .body {
+        padding: 32px;
+        color: #374151;
+        font-size: 15px;
+        line-height: 1.6;
+      }
+      .label {
+        color: #6b7280;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .value {
+        font-weight: 600;
+        color: #111827;
+      }
+      table.details {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+      }
+      table.details td {
+        padding: 10px 0;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      table.details td:first-child {
+        width: 40%;
+      }
+      .badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 9999px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .footer {
+        background: #f9fafb;
+        padding: 20px 32px;
+        font-size: 12px;
+        color: #9ca3af;
+        border-top: 1px solid #e5e7eb;
+      }
+      a.btn {
+        display: inline-block;
+        margin-top: 24px;
+        padding: 12px 24px;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrapper">
+      <!-- Header — background colour injected via inline style -->
+      <div class="header" style="background:{{.Config.HeaderColor}};">
+        <h1>{{.Config.HeaderEmoji}} {{.Config.HeaderTitle}}</h1>
+      </div>
 
-    <!-- Header — background colour injected via inline style -->
-    <div class="header" style="background:{{.Config.HeaderColor}};">
-      <h1>{{.Config.HeaderEmoji}} {{.Config.HeaderTitle}}</h1>
-    </div>
-
-    <!-- Body -->
-    <div class="body">
-
-      <!-- Greeting -->
-      {{if .Config.IsAdminNotice}}
-        <p>Dear Admin / HR,</p>
-      {{else}}
+      <!-- Body -->
+      <div class="body">
+        <!-- Greeting -->
+        <!-- Greeting -->
+        {{if .Config.IsAdminNotice}}
+        <p>Dear {{.RecipientName}},</p>
+        {{else}}
         <p>Dear {{.EmployeeName}},</p>
-      {{end}}
-
-      <!-- Dynamic intro paragraph (may contain safe HTML like <strong>) -->
-      <p>{{.Config.Intro}}</p>
-
-      <!-- Details table -->
-      <table class="details">
-
-        <!-- Employee info — shown only in admin/HR-facing emails -->
-        {{if .Config.ShowEmployeeInfo}}
-        <tr>
-          <td class="label">Employee</td>
-          <td class="value">{{.EmployeeName}}</td>
-        </tr>
-        <tr>
-          <td class="label">Email</td>
-          <td class="value">{{.EmployeeEmail}}</td>
-        </tr>
         {{end}}
 
-        <tr>
-          <td class="label">Leave Type</td>
-          <td class="value">{{.LeaveType}}</td>
-        </tr>
-        <tr>
-          <td class="label">From</td>
-          <td class="value">{{.StartDate}}</td>
-        </tr>
-        <tr>
-          <td class="label">To</td>
-          <td class="value">{{.EndDate}}</td>
-        </tr>
-        <tr>
-          <td class="label">Duration</td>
-          <td class="value">{{printf "%.1f" .Days}} day(s)</td>
-        </tr>
+        <!-- Dynamic intro paragraph (may contain safe HTML like <strong>) -->
+        <p>{{.Config.Intro}}</p>
 
-        <!-- Reason — only on leave-applied -->
-        {{if and .Config.ShowReason .Reason}}
-        <tr>
-          <td class="label">Reason</td>
-          <td class="value">{{.Reason}}</td>
-        </tr>
-        {{end}}
+        <!-- Details table -->
+        <table class="details">
+          <!-- Employee info — shown only in admin/HR-facing emails -->
+          {{if .Config.ShowEmployeeInfo}}
+          <tr>
+            <td class="label">Employee</td>
+            <td class="value">{{.EmployeeName}}</td>
+          </tr>
+          <tr>
+            <td class="label">Email</td>
+            <td class="value">{{.EmployeeEmail}}</td>
+          </tr>
+          {{end}}
 
-        <!-- Actor row — Approved By / Rejected By / Withdrawn By … -->
-        {{if and .Config.ShowActor .ActorName}}
-        <tr>
-          <td class="label">{{.Config.ActorLabel}}</td>
-          <td class="value">{{.ActorName}} &mdash; {{.ActorRole}}</td>
-        </tr>
-        {{end}}
+          <tr>
+            <td class="label">Leave Type</td>
+            <td class="value">{{.LeaveType}}</td>
+          </tr>
+          <tr>
+            <td class="label">From</td>
+            <td class="value">{{.StartDate}}</td>
+          </tr>
+          <tr>
+            <td class="label">To</td>
+            <td class="value">{{.EndDate}}</td>
+          </tr>
+          <tr>
+            <td class="label">Duration</td>
+            <td class="value">{{printf "%.1f" .Days}} day(s)</td>
+          </tr>
 
-        <!-- Status badge — colours injected via inline style -->
-        <tr>
-          <td class="label">Status</td>
-          <td>
-            <span class="badge" style="background:{{.Config.BadgeBg}};color:{{.Config.BadgeFg}};">
-              {{.Config.BadgeText}}
-            </span>
-          </td>
-        </tr>
-      </table>
+          <!-- Reason — only on leave-applied -->
+          {{if and .Config.ShowReason .Reason}}
+          <tr>
+            <td class="label">Reason</td>
+            <td class="value">{{.Reason}}</td>
+          </tr>
+          {{end}}
 
-      <!-- Optional footer note e.g. "Enjoy your time off!" / "Balance restored." -->
-      {{if .Config.FooterNote}}
+          <!-- Actor row — Approved By / Rejected By / Withdrawn By … -->
+          {{if and .Config.ShowActor .ActorName}}
+          <tr>
+            <td class="label">{{.Config.ActorLabel}}</td>
+            <td class="value">{{.ActorName}} &mdash; {{.ActorRole}}</td>
+          </tr>
+          {{end}}
+
+          <!-- Status badge — colours injected via inline style -->
+          <tr>
+            <td class="label">Status</td>
+            <td>
+              <span
+                class="badge"
+                style="background:{{.Config.BadgeBg}};color:{{.Config.BadgeFg}};"
+              >
+                {{.Config.BadgeText}}
+              </span>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Optional footer note e.g. "Enjoy your time off!" / "Balance restored." -->
+        {{if .Config.FooterNote}}
         <p>{{.Config.FooterNote}}</p>
-      {{end}}
+        {{end}}
 
-      <!-- CTA button — background colour matches header; hidden when CTALabel is empty -->
-      {{if and .AppURL .Config.CTALabel}}
-        <a class="btn" href="{{.AppURL}}" style="background:{{.Config.HeaderColor}};">
+        <!-- CTA button — background colour matches header; hidden when CTALabel is empty -->
+        {{if and .AppURL .Config.CTALabel}}
+        <a
+          class="btn"
+          href="{{.AppURL}}"
+          style="background:{{.Config.HeaderColor}};"
+        >
           {{.Config.CTALabel}}
         </a>
-      {{end}}
+        {{end}}
+      </div>
 
+      <div class="footer">
+        {{.AppName}} &mdash; This is an automated notification.
+      </div>
     </div>
-
-    <div class="footer">{{.AppName}} &mdash; This is an automated notification.</div>
-  </div>
-</body>
+  </body>
 </html>

@@ -1,12 +1,14 @@
 package repositories
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 )
 
@@ -79,39 +81,6 @@ func (r *Repository) GetEmployeeDetailsForNotification(id uuid.UUID) (empDetails
 }, err error) {
 	err = r.DB.Get(&empDetails, "SELECT email, full_name FROM Tbl_Employee WHERE id=$1", id)
 	return empDetails, err
-}
-
-// LeaveNotificationRecipients bundles all recipient sets needed for a leave notification.
-type LeaveNotificationRecipients struct {
-	EmployeeName  string
-	EmployeeEmail string
-	AdminEmails   []string
-	HREmails      []string
-}
-
-// GetLeaveNotificationRecipients fetches all data needed to populate a LeaveNotificationData
-// in a single call — employee details, admin/superadmin emails, and HR emails.
-func (r *Repository) GetLeaveNotificationRecipients(employeeID uuid.UUID) (*LeaveNotificationRecipients, error) {
-	empDetails, err := r.GetEmployeeDetailsForNotification(employeeID)
-	if err != nil {
-		return nil, err
-	}
-
-	var adminEmails []string
-	r.DB.Select(&adminEmails, `
-		SELECT e.email FROM Tbl_Employee e
-		JOIN Tbl_Role r ON e.role_id = r.id
-		WHERE r.type IN ('ADMIN', 'SUPERADMIN') AND e.status = 'active'
-	`)
-
-	hrEmails := r.GetHrEamil()
-
-	return &LeaveNotificationRecipients{
-		EmployeeName:  empDetails.FullName,
-		EmployeeEmail: empDetails.Email,
-		AdminEmails:   adminEmails,
-		HREmails:      hrEmails,
-	}, nil
 }
 
 func (r *Repository) DeleteEmployeeStatus(tx *sqlx.Tx, id uuid.UUID) (string, error) {
@@ -483,4 +452,55 @@ func (r *Repository) GetEmployeesByManagerID(managerID uuid.UUID, params models.
 		employees = append(employees, emp)
 	}
 	return employees, nil
+}
+
+func (r *Repository) GetRecipientsByRoles(ctx context.Context, employeeID uuid.UUID, roles []string) ([]models.Recipient, error) {
+
+	query := `
+	WITH manager_recipient AS (
+		SELECT
+			m.id,
+			m.full_name,
+			m.email,
+			'MANAGER' AS role
+		FROM Tbl_Employee e
+		JOIN Tbl_Employee m
+			ON e.manager_id = m.id
+		WHERE e.id = $1
+	),
+
+	role_recipients AS (
+		SELECT
+			e.id,
+			e.full_name,
+			e.email,
+			r.type AS role
+		FROM Tbl_Employee e
+		JOIN Tbl_Role r
+			ON e.role_id = r.id
+		WHERE r.type = ANY($2)
+		  AND r.type <> 'MANAGER'
+		  AND e.status = 'active'
+		  AND e.deleted_at IS NULL
+	)
+
+	SELECT * FROM manager_recipient
+	WHERE 'MANAGER' = ANY($2)
+
+	UNION ALL
+
+	SELECT * FROM role_recipients
+	`
+
+	var recipients []models.Recipient
+
+	err := r.DB.SelectContext(
+		ctx,
+		&recipients,
+		query,
+		employeeID,
+		pq.Array(roles),
+	)
+
+	return recipients, err
 }

@@ -52,19 +52,19 @@ type LeaveVM struct {
 	AppMeta
 	Config LeaveEmailConfig
 
-	// Domain fields — all pre-formatted
 	EmployeeName  string
 	EmployeeEmail string
-	LeaveType     string
-	StartDate     string // "2006-01-02"
-	EndDate       string
-	Days          float64
-	Reason        string
-	ActorName     string
-	ActorEmail    string
-	ActorRole     string
-}
 
+	RecipientName string 
+	LeaveType  string
+	StartDate  string
+	EndDate    string
+	Days       float64
+	Reason     string
+	ActorName  string
+	ActorEmail string
+	ActorRole  string
+}
 // newLeaveVM is the internal constructor used by every preset builder below.
 func newLeaveVM(
 	appName, appURL string,

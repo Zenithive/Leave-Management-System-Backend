@@ -1,6 +1,9 @@
 package handlers
 
-import "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/config"
+import (
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/config"
+)
 
 // appName returns the application name from config.
 // Falls back to a default if not set.
@@ -17,4 +20,16 @@ func loginURL(cfg *config.ENV) string {
 		return "\nLogin: " + cfg.APP_URL
 	}
 	return ""
+}
+
+func recipientEmails(recipients []models.Recipient) []string {
+	emails := make([]string, 0, len(recipients))
+
+	for _, r := range recipients {
+		if r.Email != "" {
+			emails = append(emails, r.Email)
+		}
+	}
+
+	return emails
 }

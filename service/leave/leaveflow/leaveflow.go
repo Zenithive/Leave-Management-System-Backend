@@ -119,7 +119,7 @@ func (s *leaveFlow) Create(ctx context.Context, leave *models.LeaveInput, role s
 	}
 
 	// Publish notification asynchronously — after the transaction committed
-	s.publishLeaveApplied(leave, leaveTypeRres.Name, Days, leaveID.String())
+	s.publishLeaveApplied(ctx, leave, leaveTypeRres.Name, Days, leaveID.String())
 	return nil
 }
 
@@ -180,16 +180,16 @@ func (s *leaveFlow) ActionLeave(ctx context.Context, req models.ActionLeaveReq, 
 		// Re-fetch leave to get final status (APPROVED or still Pending for multi-stage)
 		updated, _ := s.GetByID(ctx, leaveID)
 		if updated != nil && updated.Status == constant.LEAVE_APPLOVED {
-			s.publishLeaveAction(notification.LeaveApproved, leave, approverDetails.FullName, approverDetails.Email, role)
+			s.publishLeaveAction(ctx, notification.LeaveApproved, leave, approverDetails.FullName, approverDetails.Email, role, leaveID)
 		}
 	case "REJECT":
-		s.publishLeaveAction(notification.LeaveRejected, leave, approverDetails.FullName, approverDetails.Email, role)
+		s.publishLeaveAction(ctx, notification.LeaveRejected, leave, approverDetails.FullName, approverDetails.Email, role, leaveID)
 	case "WITHDRAW":
 		updated, _ := s.GetByID(ctx, leaveID)
 		if updated != nil && updated.Status == constant.LEAVE_WITHDRAWN {
-			s.publishLeaveAction(notification.LeaveWithdrawn, leave, approverDetails.FullName, approverDetails.Email, role)
+			s.publishLeaveAction(ctx, notification.LeaveWithdrawn, leave, approverDetails.FullName, approverDetails.Email, role, leaveID)
 		} else {
-			s.publishLeaveAction(notification.LeaveWithdrawalPending, leave, approverDetails.FullName, approverDetails.Email, role)
+			s.publishLeaveAction(ctx, notification.LeaveWithdrawalPending, leave, approverDetails.FullName, approverDetails.Email, role, leaveID)
 		}
 	}
 
@@ -217,7 +217,7 @@ func (s *leaveFlow) CancleLeave(ctx context.Context, leaveId string) (string, er
 	}
 
 	// Publish cancellation notification after successful status update
-	s.publishLeaveAction(notification.LeaveCancelled, leave, "", "", "")
+	s.publishLeaveAction(ctx, notification.LeaveCancelled, leave, "", "", "", leaveId)
 	return leaveId, nil
 }
 
@@ -361,6 +361,7 @@ func (s *leaveFlow) UpdateLeave(ctx context.Context, empID uuid.UUID, leaveId st
 	}
 
 	s.publishLeaveApplied(
+		ctx,
 		leave,
 		leaveTypeRes.Name,
 		Days,
@@ -375,14 +376,22 @@ func (s *leaveFlow) UpdateLeave(ctx context.Context, empID uuid.UUID, leaveId st
 // ─────────────────────────────────────────────────────────────────────────────
 
 // publishLeaveApplied fires a LeaveApplied event after Create() commits.
-func (s *leaveFlow) publishLeaveApplied(leave *models.LeaveInput, leaveTypeName string, days float64, leaveID string) {
+func (s *leaveFlow) publishLeaveApplied(ctx context.Context, leave *models.LeaveInput, leaveTypeName string, days float64, leaveID string) {
 	if s.NotificationSvc == nil {
 		return
 	}
-	r, err := s.CommRepo.GetLeaveNotificationRecipients(leave.EmployeeID)
+	employee, err := s.CommRepo.GetEmployeeDetailsForNotification(leave.EmployeeID)
+	if err != nil {
+		return
+	}
 	if err != nil {
 		return // non-critical — DB read for notification; don't fail the request
 	}
+	recipients, err := s.getRecipientsWaiting(ctx, leave.EmployeeID, leaveID)
+	if err != nil {
+		return
+	}
+
 	s.NotificationSvc.Publish(notification.Event{
 		Type: notification.LeaveApplied,
 		Data: &notifmodels.LeaveNotificationData{
@@ -393,48 +402,86 @@ func (s *leaveFlow) publishLeaveApplied(leave *models.LeaveInput, leaveTypeName 
 			Days:          days,
 			Reason:        leave.Reason,
 			EmployeeID:    leave.EmployeeID.String(),
-			EmployeeName:  r.EmployeeName,
-			EmployeeEmail: r.EmployeeEmail,
-			AdminEmails:   r.AdminEmails,
-			HREmails:      r.HREmails,
+			EmployeeName:  employee.FullName,
+			EmployeeEmail: employee.Email,
+			Recipients:    recipients,
 		},
 	})
 }
 
 // publishLeaveAction fires an event for APPROVE / REJECT / WITHDRAW / CANCEL.
 // leaveTypeName is fetched via the leave's LeaveTypeID already loaded in ActionLeave.
-func (s *leaveFlow) publishLeaveAction(eventType notification.Type, leave *models.Leave, actorName, actorEmail, actorRole string) {
+func (s *leaveFlow) publishLeaveAction(ctx context.Context, eventType notification.Type, leave *models.Leave, actorName, actorEmail, actorRole string, leaveID string) {
 	if s.NotificationSvc == nil {
 		return
 	}
-	r, err := s.CommRepo.GetLeaveNotificationRecipients(leave.EmployeeID)
+
+	employee, err := s.CommRepo.GetEmployeeDetailsForNotification(leave.EmployeeID)
 	if err != nil {
+		fmt.Println("=============1", err.Error())
 		return
 	}
-	// Fetch leave type name for the notification body
+
+	recipients, err := s.getRecipientsWaiting(ctx, leave.EmployeeID, leaveID)
+	if err != nil {
+		fmt.Println("=============2", err.Error())
+		return
+	}
+
 	leaveTypeName := ""
-	if lt, err := s.LeavePolicyRepo.GetById(context.Background(), strconv.Itoa(leave.LeaveTypeID)); err == nil {
+	if lt, err := s.LeavePolicyRepo.GetById(ctx, strconv.Itoa(leave.LeaveTypeID)); err == nil {
 		leaveTypeName = lt.Name
 	}
+	fmt.Println("============================3")
 
 	s.NotificationSvc.Publish(notification.Event{
 		Type: eventType,
 		Data: &notifmodels.LeaveNotificationData{
-			LeaveID:       leave.ID.String(),
-			LeaveType:     leaveTypeName,
-			StartDate:     leave.StartDate,
-			EndDate:       leave.EndDate,
-			Days:          leave.Days,
+			LeaveID:   leave.ID.String(),
+			LeaveType: leaveTypeName,
+			StartDate: leave.StartDate,
+			EndDate:   leave.EndDate,
+			Days:      leave.Days,
+
 			EmployeeID:    leave.EmployeeID.String(),
-			EmployeeName:  r.EmployeeName,
-			EmployeeEmail: r.EmployeeEmail,
-			ActorName:     actorName,
-			ActorEmail:    actorEmail,
-			ActorRole:     actorRole,
-			AdminEmails:   r.AdminEmails,
-			HREmails:      r.HREmails,
+			EmployeeName:  employee.FullName,
+			EmployeeEmail: employee.Email,
+
+			ActorName:  actorName,
+			ActorEmail: actorEmail,
+			ActorRole:  actorRole,
+
+			Recipients: recipients,
 		},
 	})
+}
+
+func (s *leaveFlow) getRecipientsWaiting(ctx context.Context, employeeID uuid.UUID, leaveID string) ([]models.Recipient, error) {
+
+	flow, err := s.LeaveFlowLogService.GetByLeaveID(ctx, uuid.MustParse(leaveID))
+	if err != nil {
+		return nil, err
+	}
+
+	roleMap := make(map[string]struct{})
+
+	for _, stage := range flow.ApprovalLog {
+
+		if stage.State == models.WAITING {
+			roleMap[string(stage.ApproverRole)] = struct{}{}
+		}
+	}
+
+	roles := make([]string, 0, len(roleMap))
+
+	for role := range roleMap {
+		roles = append(roles, role)
+	}
+
+	if len(roles) == 0 {
+		return nil, nil
+	}
+	return s.CommRepo.GetRecipientsByRoles(ctx, employeeID, roles)
 }
 
 func (s *leaveFlow) ValidateLeave(ctx context.Context, leave *models.LeaveInput) (*LeaveTypeInfo, time.Time, error) {

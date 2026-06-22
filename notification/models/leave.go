@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
+)
 
 // LeaveNotificationData carries all fields needed for any leave-related notification.
 // A single struct covers apply, approve, reject, withdraw, cancel —
@@ -20,12 +24,10 @@ type LeaveNotificationData struct {
 	EmployeeEmail string
 
 	// Actor (who triggered the action — approver, rejecter, withdrawer)
-	// Empty for LeaveApplied.
 	ActorName  string
 	ActorEmail string
 	ActorRole  string
 
-	// Notification recipients
-	AdminEmails []string // admin + superadmin emails
-	HREmails    []string // HR emails
+	// Unified recipients (replaces AdminEmails + HREmails)
+	Recipients []models.Recipient
 }
