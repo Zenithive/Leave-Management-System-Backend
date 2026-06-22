@@ -74,12 +74,12 @@ func (p *ResendEmailProvider) send(to []string, subject, body string) error {
 		From    string   `json:"from"`
 		To      []string `json:"to"`
 		Subject string   `json:"subject"`
-		Text    string   `json:"text"`
+		HTML    string   `json:"html"`
 	}{
 		From:    p.from,
 		To:      to,
 		Subject: subject,
-		Text:    body,
+		HTML:    body,
 	}
 
 	raw, err := json.Marshal(payload)
@@ -105,7 +105,10 @@ func (p *ResendEmailProvider) send(to []string, subject, body string) error {
 		return fmt.Errorf("email: resend api status %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	p.logger.Info("email sent", "to", to, "subject", subject)
+	// Log the Resend email ID so you can trace delivery in the Resend dashboard.
+	// A 200/201 from Resend means the API accepted the request, NOT that delivery succeeded.
+	// On the free plan only your verified address receives mail — all others are silently dropped.
+	p.logger.Info("email accepted by resend", "to", to, "subject", subject, "resend_response", string(respBody))
 	return nil
 }
 

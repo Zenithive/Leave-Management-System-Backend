@@ -1,11 +1,11 @@
 package handlers
 
 import (
-	"fmt"
 	"log/slog"
 
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/providers"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/templates"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/config"
 )
 
@@ -23,25 +23,18 @@ func NewEmployeeNotificationHandler(email providers.EmailProvider, logger *slog.
 // OnEmployeeCreated sends the welcome email with auto-generated credentials.
 func (h *EmployeeNotificationHandler) OnEmployeeCreated(d *models.EmployeeNotificationData) {
 	name := appName(h.cfg)
-	subject := fmt.Sprintf("Welcome to %s — Your Account Has Been Created", name)
-	body := fmt.Sprintf(`Dear %s,
-
-Welcome to %s!
-
-Your employee account has been created. Below are your login credentials:
-
-Email   : %s
-Password: %s
-
-Please log in and change your password immediately.
-%s
-If you have questions, contact your HR department.
-
-%s HR Team`,
-		d.EmployeeName, name,
-		d.EmployeeEmail, d.GeneratedPassword,
-		loginURL(h.cfg), name,
-	)
+	vm := templates.EmployeeCreatedVM{
+		AppMeta:           templates.AppMeta{AppName: name, AppURL: h.cfg.APP_URL},
+		EmployeeName:      d.EmployeeName,
+		EmployeeEmail:     d.EmployeeEmail,
+		GeneratedPassword: d.GeneratedPassword,
+	}
+	body, err := templates.Render("employee_created.html", vm)
+	if err != nil {
+		h.logger.Error("employee_created template render failed", "err", err)
+		return
+	}
+	subject := "Welcome to " + name + " — Your Account Has Been Created"
 	if err := h.email.Send(d.EmployeeEmail, subject, body); err != nil {
 		h.logger.Error("employee created notification failed", "email", d.EmployeeEmail, "err", err)
 	}
@@ -49,24 +42,20 @@ If you have questions, contact your HR department.
 
 // OnPasswordChanged sends the new credentials to the employee.
 func (h *EmployeeNotificationHandler) OnPasswordChanged(d *models.EmployeeNotificationData) {
-	name := appName(h.cfg)
-	subject := "Your Password Has Been Updated"
-	body := fmt.Sprintf(`Dear %s,
-
-Your account password has been updated by %s (%s).
-
-New credentials:
-Email   : %s
-Password: %s
-
-If you did not request this change, contact HR immediately.
-%s
-%s HR Team`,
-		d.EmployeeName, d.ActorEmail, d.ActorRole,
-		d.EmployeeEmail, d.NewPassword,
-		loginURL(h.cfg), name,
-	)
-	if err := h.email.Send(d.EmployeeEmail, subject, body); err != nil {
+	vm := templates.PasswordChangedVM{
+		AppMeta:       templates.AppMeta{AppName: appName(h.cfg), AppURL: h.cfg.APP_URL},
+		EmployeeName:  d.EmployeeName,
+		EmployeeEmail: d.EmployeeEmail,
+		NewPassword:   d.NewPassword,
+		ActorEmail:    d.ActorEmail,
+		ActorRole:     d.ActorRole,
+	}
+	body, err := templates.Render("password_changed.html", vm)
+	if err != nil {
+		h.logger.Error("password_changed template render failed", "err", err)
+		return
+	}
+	if err := h.email.Send(d.EmployeeEmail, "Your Password Has Been Updated", body); err != nil {
 		h.logger.Error("password changed notification failed", "email", d.EmployeeEmail, "err", err)
 	}
 }

@@ -9,23 +9,25 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/providers"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/config"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/repositories"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
 )
 
 // BirthdayCronService holds dependencies for the birthday cron job.
 type BirthdayCronService struct {
-	repo *repositories.Repository
-	env  *config.ENV
-	cron *cron.Cron
+	repo  *repositories.Repository
+	env   *config.ENV
+	Email providers.EmailProvider
+	cron  *cron.Cron
 }
 
 // NewBirthdayCronService creates and returns a new BirthdayCronService.
-func NewBirthdayCronService(repo *repositories.Repository, env *config.ENV) *BirthdayCronService {
+func NewBirthdayCronService(repo *repositories.Repository, env *config.ENV, email providers.EmailProvider) *BirthdayCronService {
 	return &BirthdayCronService{
-		repo: repo,
-		env:  env,
+		repo:  repo,
+		env:   env,
+		Email: email,
 		// Use seconds-level precision so "0 1 0 * * *" = 00:01:00 every day
 		cron: cron.New(cron.WithSeconds()),
 	}
@@ -93,7 +95,7 @@ func (s *BirthdayCronService) notify(name, email, message string) {
 	subject := fmt.Sprintf("🎂 Happy Birthday, %s!", name)
 
 	// --- Email ---
-	if err := utils.SendEmail(email, subject, message); err != nil {
+	if err := s.Email.Send(email, subject, message); err != nil {
 		log.Printf("[BirthdayCron] Email failed for %s (%s): %v\n", name, email, err)
 	} else {
 		log.Printf("[BirthdayCron] Email sent to %s (%s)\n", name, email)

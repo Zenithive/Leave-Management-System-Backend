@@ -6,6 +6,7 @@ import (
 
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/providers"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/templates"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/config"
 )
 
@@ -23,226 +24,123 @@ func NewLeaveNotificationHandler(email providers.EmailProvider, logger *slog.Log
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Public event handlers — one per notification type
+// Public event handlers
 // ─────────────────────────────────────────────────────────────────────────────
 
-// OnLeaveApplied notifies admins/HR that a new leave application is pending.
 func (h *LeaveNotificationHandler) OnLeaveApplied(d *models.LeaveNotificationData) {
-	app := appName(h.cfg)
-	subject := fmt.Sprintf("Leave Application - %s", d.EmployeeName)
-	body := fmt.Sprintf(`Dear Manager/Admin,
-
-A new leave application has been submitted and requires your review.
-
-Employee  : %s
-Email     : %s
-Leave Type: %s
-From      : %s
-To        : %s
-Duration  : %.1f day(s)
-Reason    : %s
-Status    : Pending Approval
-
-Please log in to review this request.
-
-%s`,
+	vm := templates.LeaveAppliedVM(
+		appName(h.cfg), h.cfg.APP_URL,
 		d.EmployeeName, d.EmployeeEmail, d.LeaveType,
-		d.StartDate.Format("2006-01-02"), d.EndDate.Format("2006-01-02"),
-		d.Days, d.Reason, app,
+		d.StartDate, d.EndDate, d.Days, d.Reason,
 	)
-	h.sendBulk(append(d.AdminEmails, d.HREmails...), subject, body)
+	h.renderAndSendBulk(vm, fmt.Sprintf("Leave Application - %s", d.EmployeeName),
+		append(d.AdminEmails, d.HREmails...))
 }
 
-// OnLeaveApproved notifies the employee and HR that the leave is fully approved.
 func (h *LeaveNotificationHandler) OnLeaveApproved(d *models.LeaveNotificationData) {
-	app := appName(h.cfg)
-	subject := "Your Leave Has Been Approved"
-
-	empBody := fmt.Sprintf(`Dear %s,
-
-Your leave application has been APPROVED by %s (%s).
-
-Leave Type: %s
-From      : %s
-To        : %s
-Duration  : %.1f day(s)
-Status    : APPROVED
-
-Enjoy your time off!
-
-%s`,
-		d.EmployeeName, d.ActorName, d.ActorRole,
-		d.LeaveType, d.StartDate.Format("2006-01-02"), d.EndDate.Format("2006-01-02"),
-		d.Days, app,
-	)
-	h.send(d.EmployeeEmail, subject, empBody)
-
-	hrBody := fmt.Sprintf(`[HR Record] Leave Approved
-
-Employee  : %s (%s)
-Leave Type: %s
-From      : %s
-To        : %s
-Duration  : %.1f day(s)
-Approved By: %s (%s)
-Status    : APPROVED
-
-%s`,
+	// Employee
+	empVM := templates.LeaveApprovedEmployeeVM(
+		appName(h.cfg), h.cfg.APP_URL,
 		d.EmployeeName, d.EmployeeEmail, d.LeaveType,
-		d.StartDate.Format("2006-01-02"), d.EndDate.Format("2006-01-02"),
-		d.Days, d.ActorName, d.ActorRole, app,
+		d.StartDate, d.EndDate, d.Days,
+		d.ActorName, d.ActorEmail, d.ActorRole,
 	)
-	h.sendBulk(d.HREmails, "[HR] "+subject, hrBody)
+	h.renderAndSend(empVM, "Your Leave Has Been Approved", d.EmployeeEmail)
+
+	// HR copy
+	hrVM := templates.LeaveApprovedHRVM(
+		appName(h.cfg), h.cfg.APP_URL,
+		d.EmployeeName, d.EmployeeEmail, d.LeaveType,
+		d.StartDate, d.EndDate, d.Days,
+		d.ActorName, d.ActorEmail, d.ActorRole,
+	)
+	h.renderAndSendBulk(hrVM, "[HR] Leave Approved - "+d.EmployeeName, d.HREmails)
 }
 
-// OnLeaveRejected notifies the employee and HR that the leave is rejected.
 func (h *LeaveNotificationHandler) OnLeaveRejected(d *models.LeaveNotificationData) {
-	app := appName(h.cfg)
-	subject := "Your Leave Request Has Been Rejected"
-
-	empBody := fmt.Sprintf(`Dear %s,
-
-Your leave request has been REJECTED by %s (%s).
-
-Leave Type: %s
-From      : %s
-To        : %s
-Duration  : %.1f day(s)
-Status    : REJECTED
-
-Please contact your manager if you have questions.
-
-%s`,
-		d.EmployeeName, d.ActorName, d.ActorRole,
-		d.LeaveType, d.StartDate.Format("2006-01-02"), d.EndDate.Format("2006-01-02"),
-		d.Days, app,
-	)
-	h.send(d.EmployeeEmail, subject, empBody)
-
-	hrBody := fmt.Sprintf(`[HR Record] Leave Rejected
-
-Employee  : %s (%s)
-Leave Type: %s
-From      : %s
-To        : %s
-Duration  : %.1f day(s)
-Rejected By: %s (%s)
-Status    : REJECTED
-
-%s`,
+	// Employee
+	empVM := templates.LeaveRejectedEmployeeVM(
+		appName(h.cfg), h.cfg.APP_URL,
 		d.EmployeeName, d.EmployeeEmail, d.LeaveType,
-		d.StartDate.Format("2006-01-02"), d.EndDate.Format("2006-01-02"),
-		d.Days, d.ActorName, d.ActorRole, app,
+		d.StartDate, d.EndDate, d.Days,
+		d.ActorName, d.ActorEmail, d.ActorRole,
 	)
-	h.sendBulk(d.HREmails, "[HR] Leave Rejected - "+d.EmployeeName, hrBody)
+	h.renderAndSend(empVM, "Your Leave Request Has Been Rejected", d.EmployeeEmail)
+
+	// HR copy
+	hrVM := templates.LeaveRejectedHRVM(
+		appName(h.cfg), h.cfg.APP_URL,
+		d.EmployeeName, d.EmployeeEmail, d.LeaveType,
+		d.StartDate, d.EndDate, d.Days,
+		d.ActorName, d.ActorEmail, d.ActorRole,
+	)
+	h.renderAndSendBulk(hrVM, "[HR] Leave Rejected - "+d.EmployeeName, d.HREmails)
 }
 
-// OnLeaveWithdrawalPending notifies admins that a withdrawal has been initiated
-// and is awaiting higher-stage confirmation.
 func (h *LeaveNotificationHandler) OnLeaveWithdrawalPending(d *models.LeaveNotificationData) {
-	app := appName(h.cfg)
-	subject := fmt.Sprintf("Leave Withdrawal Pending - %s", d.EmployeeName)
-	body := fmt.Sprintf(`Dear Admin,
-
-A leave withdrawal has been initiated by %s (%s) and is awaiting further confirmation.
-
-Employee  : %s
-Leave Type: %s
-From      : %s
-To        : %s
-Duration  : %.1f day(s)
-Status    : WITHDRAWAL_PENDING
-
-Please log in to review.
-
-%s`,
-		d.ActorName, d.ActorRole,
-		d.EmployeeName, d.LeaveType,
-		d.StartDate.Format("2006-01-02"), d.EndDate.Format("2006-01-02"),
-		d.Days, app,
-	)
-	h.sendBulk(append(d.AdminEmails, d.HREmails...), subject, body)
-}
-
-// OnLeaveWithdrawn notifies the employee and HR that the leave is fully withdrawn
-// and the balance has been restored.
-func (h *LeaveNotificationHandler) OnLeaveWithdrawn(d *models.LeaveNotificationData) {
-	app := appName(h.cfg)
-	subject := "Your Leave Has Been Withdrawn"
-
-	empBody := fmt.Sprintf(`Dear %s,
-
-Your approved leave has been WITHDRAWN by %s (%s).
-
-Leave Type: %s
-From      : %s
-To        : %s
-Duration  : %.1f day(s)
-Status    : WITHDRAWN
-
-Your leave balance has been restored.
-
-%s`,
-		d.EmployeeName, d.ActorName, d.ActorRole,
-		d.LeaveType, d.StartDate.Format("2006-01-02"), d.EndDate.Format("2006-01-02"),
-		d.Days, app,
-	)
-	h.send(d.EmployeeEmail, subject, empBody)
-
-	hrBody := fmt.Sprintf(`[HR Record] Leave Withdrawn
-
-Employee  : %s (%s)
-Leave Type: %s
-From      : %s
-To        : %s
-Duration  : %.1f day(s)
-Withdrawn By: %s (%s)
-Status    : WITHDRAWN
-
-Balance has been restored.
-
-%s`,
+	vm := templates.LeaveWithdrawalPendingVM(
+		appName(h.cfg), h.cfg.APP_URL,
 		d.EmployeeName, d.EmployeeEmail, d.LeaveType,
-		d.StartDate.Format("2006-01-02"), d.EndDate.Format("2006-01-02"),
-		d.Days, d.ActorName, d.ActorRole, app,
+		d.StartDate, d.EndDate, d.Days,
+		d.ActorName, d.ActorEmail, d.ActorRole,
 	)
-	h.sendBulk(d.HREmails, "[HR] Leave Withdrawn - "+d.EmployeeName, hrBody)
+	h.renderAndSendBulk(vm, fmt.Sprintf("Leave Withdrawal Pending - %s", d.EmployeeName),
+		append(d.AdminEmails, d.HREmails...))
 }
 
-// OnLeaveCancelled notifies the employee that their leave is cancelled.
-func (h *LeaveNotificationHandler) OnLeaveCancelled(d *models.LeaveNotificationData) {
-	app := appName(h.cfg)
-	subject := "Leave Request Cancelled"
-	body := fmt.Sprintf(`Dear %s,
-
-Your leave request has been CANCELLED.
-
-Leave Type: %s
-From      : %s
-To        : %s
-Duration  : %.1f day(s)
-Status    : CANCELLED
-
-%s`,
-		d.EmployeeName, d.LeaveType,
-		d.StartDate.Format("2006-01-02"), d.EndDate.Format("2006-01-02"),
-		d.Days, app,
+func (h *LeaveNotificationHandler) OnLeaveWithdrawn(d *models.LeaveNotificationData) {
+	// Employee
+	empVM := templates.LeaveWithdrawnEmployeeVM(
+		appName(h.cfg), h.cfg.APP_URL,
+		d.EmployeeName, d.EmployeeEmail, d.LeaveType,
+		d.StartDate, d.EndDate, d.Days,
+		d.ActorName, d.ActorEmail, d.ActorRole,
 	)
-	h.send(d.EmployeeEmail, subject, body)
+	h.renderAndSend(empVM, "Your Leave Has Been Withdrawn", d.EmployeeEmail)
+
+	// HR copy
+	hrVM := templates.LeaveWithdrawnHRVM(
+		appName(h.cfg), h.cfg.APP_URL,
+		d.EmployeeName, d.EmployeeEmail, d.LeaveType,
+		d.StartDate, d.EndDate, d.Days,
+		d.ActorName, d.ActorEmail, d.ActorRole,
+	)
+	h.renderAndSendBulk(hrVM, "[HR] Leave Withdrawn - "+d.EmployeeName, d.HREmails)
+}
+
+func (h *LeaveNotificationHandler) OnLeaveCancelled(d *models.LeaveNotificationData) {
+	vm := templates.LeaveCancelledVM(
+		appName(h.cfg), h.cfg.APP_URL,
+		d.EmployeeName, d.EmployeeEmail, d.LeaveType,
+		d.StartDate, d.EndDate, d.Days,
+	)
+	h.renderAndSend(vm, "Leave Request Cancelled", d.EmployeeEmail)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-func (h *LeaveNotificationHandler) send(to, subject, body string) {
+// renderAndSend renders leave.html with vm and sends to a single recipient.
+func (h *LeaveNotificationHandler) renderAndSend(vm templates.LeaveVM, subject, to string) {
+	body, err := templates.Render("leave.html", vm)
+	if err != nil {
+		h.logger.Error("leave template render failed", "template", "leave.html", "subject", subject, "err", err)
+		return
+	}
 	if err := h.email.Send(to, subject, body); err != nil {
 		h.logger.Error("leave notification send failed", "to", to, "subject", subject, "err", err)
 	}
 }
 
-func (h *LeaveNotificationHandler) sendBulk(recipients []string, subject, body string) {
+// renderAndSendBulk renders leave.html with vm and sends to multiple recipients.
+func (h *LeaveNotificationHandler) renderAndSendBulk(vm templates.LeaveVM, subject string, recipients []string) {
 	if len(recipients) == 0 {
+		return
+	}
+	body, err := templates.Render("leave.html", vm)
+	if err != nil {
+		h.logger.Error("leave template render failed", "template", "leave.html", "subject", subject, "err", err)
 		return
 	}
 	if err := h.email.SendBulk(recipients, subject, body); err != nil {

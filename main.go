@@ -86,7 +86,7 @@ func main() {
 	)
 
 	// ── Cron jobs ────────────────────────────────────────────────────────────
-	birthdayCron := service.NewBirthdayCronService(repo, env)
+	birthdayCron := service.NewBirthdayCronService(repo, env, emailProvider)
 	birthdayCron.Start()
 	defer birthdayCron.Stop()
 
