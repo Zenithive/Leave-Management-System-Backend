@@ -1,6 +1,9 @@
 package templates
 
-import "time"
+import (
+	"html/template"
+	"time"
+)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared base
@@ -24,8 +27,8 @@ type LeaveEmailConfig struct {
 	HeaderEmoji string // leading emoji in the <h1>
 	HeaderTitle string // text after the emoji
 
-	// Intro paragraph below the greeting
-	Intro string
+	// Intro paragraph below the greeting (may contain safe HTML like <strong>)
+	Intro template.HTML
 
 	// Table row visibility
 	ShowEmployeeInfo bool // show Employee / Email rows (HR/admin-facing emails)
@@ -95,7 +98,7 @@ func LeaveAppliedVM(appName, appURL string, employeeName, employeeEmail, leaveTy
 		HeaderColor:      "#4f46e5",
 		HeaderEmoji:      "📋",
 		HeaderTitle:      "New Leave Application",
-		Intro:            "A new leave application has been submitted and requires your review.",
+		Intro:            template.HTML("A new leave application has been submitted and requires your review."),
 		ShowEmployeeInfo: true,
 		ShowReason:       true,
 		ShowActor:        false,
@@ -113,7 +116,7 @@ func LeaveApprovedEmployeeVM(appName, appURL string, employeeName, employeeEmail
 		HeaderColor: "#059669",
 		HeaderEmoji: "✅",
 		HeaderTitle: "Leave Approved",
-		Intro:       "Your leave application has been <strong>approved</strong>.",
+		Intro:       template.HTML("Your leave application has been <strong>approved</strong>."),
 		ShowActor:   true,
 		ActorLabel:  "Approved By",
 		BadgeText:   "APPROVED",
@@ -129,7 +132,7 @@ func LeaveApprovedHRVM(appName, appURL string, employeeName, employeeEmail, leav
 		HeaderColor:      "#0284c7",
 		HeaderEmoji:      "📂",
 		HeaderTitle:      "[HR Record] Leave Approved",
-		Intro:            "This is an HR record notification.",
+		Intro:            template.HTML("This is an HR record notification."),
 		ShowEmployeeInfo: true,
 		ShowActor:        true,
 		ActorLabel:       "Approved By",
@@ -146,7 +149,7 @@ func LeaveRejectedEmployeeVM(appName, appURL string, employeeName, employeeEmail
 		HeaderColor: "#dc2626",
 		HeaderEmoji: "❌",
 		HeaderTitle: "Leave Request Rejected",
-		Intro:       "Your leave request has been <strong>rejected</strong>.",
+		Intro:       template.HTML("Your leave request has been <strong>rejected</strong>."),
 		ShowActor:   true,
 		ActorLabel:  "Rejected By",
 		BadgeText:   "REJECTED",
@@ -162,7 +165,7 @@ func LeaveRejectedHRVM(appName, appURL string, employeeName, employeeEmail, leav
 		HeaderColor:      "#0284c7",
 		HeaderEmoji:      "📂",
 		HeaderTitle:      "[HR Record] Leave Rejected",
-		Intro:            "This is an HR record notification.",
+		Intro:            template.HTML("This is an HR record notification."),
 		ShowEmployeeInfo: true,
 		ShowActor:        true,
 		ActorLabel:       "Rejected By",
@@ -179,7 +182,7 @@ func LeaveWithdrawalPendingVM(appName, appURL string, employeeName, employeeEmai
 		HeaderColor:      "#d97706",
 		HeaderEmoji:      "⏳",
 		HeaderTitle:      "Leave Withdrawal Pending",
-		Intro:            "A leave withdrawal has been initiated and is awaiting further confirmation.",
+		Intro:            template.HTML("A leave withdrawal has been initiated and is awaiting further confirmation."),
 		ShowEmployeeInfo: true,
 		ShowActor:        true,
 		ActorLabel:       "Initiated By",
@@ -197,7 +200,7 @@ func LeaveWithdrawnEmployeeVM(appName, appURL string, employeeName, employeeEmai
 		HeaderColor: "#7c3aed",
 		HeaderEmoji: "↩️",
 		HeaderTitle: "Leave Withdrawn",
-		Intro:       "Your approved leave has been <strong>withdrawn</strong>.",
+		Intro:       template.HTML("Your approved leave has been <strong>withdrawn</strong>."),
 		ShowActor:   true,
 		ActorLabel:  "Withdrawn By",
 		BadgeText:   "WITHDRAWN",
@@ -213,7 +216,7 @@ func LeaveWithdrawnHRVM(appName, appURL string, employeeName, employeeEmail, lea
 		HeaderColor:      "#0284c7",
 		HeaderEmoji:      "📂",
 		HeaderTitle:      "[HR Record] Leave Withdrawn",
-		Intro:            "This is an HR record notification.",
+		Intro:            template.HTML("This is an HR record notification."),
 		ShowEmployeeInfo: true,
 		ShowActor:        true,
 		ActorLabel:       "Withdrawn By",
@@ -231,7 +234,7 @@ func LeaveCancelledVM(appName, appURL string, employeeName, employeeEmail, leave
 		HeaderColor: "#6b7280",
 		HeaderEmoji: "🚫",
 		HeaderTitle: "Leave Request Cancelled",
-		Intro:       "Your leave request has been <strong>cancelled</strong>.",
+		Intro:       template.HTML("Your leave request has been <strong>cancelled</strong>."),
 		BadgeText:   "CANCELLED",
 		BadgeBg:     "#f3f4f6",
 		BadgeFg:     "#374151",

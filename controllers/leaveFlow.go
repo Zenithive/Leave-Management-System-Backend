@@ -43,7 +43,7 @@ func (h *HandlerFunc) LeaveAction(c *gin.Context) {
 	role := c.GetString("role")
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.RespondWithError(c, 400, "Invalid payload: "+err.Error())
+		utils.RespondWithError(c, http.StatusBadRequest, "Invalid payload: "+err.Error())
 		return
 	}
 	leaveID := c.Param("id")
@@ -115,5 +115,31 @@ func (h *HandlerFunc) CancelLeave(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"message":  "Leave cancelled successfully",
 		"leave_id": leaveID,
+	})
+}
+
+func (h *HandlerFunc) EditLeave(c *gin.Context) {
+	empID, ok := helper.ExtractEmployeeID(c)
+	if !ok {
+		utils.RespondWithError(c, http.StatusUnauthorized, "missing EpID")
+		return
+	}
+	leaveID := c.Param("id")
+	if leaveID == "" {
+		utils.RespondWithError(c, http.StatusBadRequest, "leave_id is required")
+		return
+	}
+	// 3. Bind Input (JSON)
+	var input models.LeaveInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.RespondWithError(c, http.StatusBadRequest, "Invalid input data: "+err.Error())
+		return
+	}
+	if err := h.LeaveFlowService.UpdateLeave(c, empID, leaveID, &input); err != nil {
+		utils.Error(c, err)
+		return
+	}
+	c.JSON(200, gin.H{
+		"message":  "Leave update successfully",
 	})
 }

@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"database/sql"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -48,14 +47,18 @@ func (q *Repository) GetLeaveTypeByLeaveID(leaveID uuid.UUID) (int, error) {
 }
 
 // 3. Get leave balance (inside TX)
+// Returns 0 (not an error) when no balance row exists for the employee/type/year.
 func (r *Repository) GetLeaveBalance(tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int) (float64, error) {
 	var balance float64
 	err := tx.Get(&balance, `
-		SELECT closing 
+		SELECT COALESCE(closing, 0)
 		FROM Tbl_Leave_balance 
 		WHERE employee_id=$1 AND leave_type_id=$2 
 		AND year = EXTRACT(YEAR FROM CURRENT_DATE)
 	`, employeeID, leaveTypeID)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
 	return balance, err
 }
 
@@ -102,6 +105,7 @@ func (r *Repository) GetOverlappingLeaves(
 	tx *sqlx.Tx,
 	employeeID uuid.UUID,
 	startDate, endDate time.Time,
+	excludeLeaveID *uuid.UUID,
 ) ([]struct {
 	ID        uuid.UUID `db:"id"`
 	LeaveType string    `db:"leave_type"`
@@ -118,7 +122,7 @@ func (r *Repository) GetOverlappingLeaves(
 		Status    string    `db:"status"`
 	}
 
-	err := tx.Select(&result, `
+	query := `
 		SELECT l.id, lt.name as leave_type, l.start_date, l.end_date, l.status
 		FROM Tbl_Leave l
 		JOIN Tbl_Leave_type lt ON l.leave_type_id = lt.id
@@ -126,7 +130,15 @@ func (r *Repository) GetOverlappingLeaves(
 		AND l.status IN ('Pending','APPROVED')
 		AND l.start_date <= $2 
 		AND l.end_date >= $3
-	`, employeeID, endDate, startDate)
+	`
+
+	var err error
+	if excludeLeaveID != nil {
+		query += ` AND l.id != $4`
+		err = tx.Select(&result, query, employeeID, endDate, startDate, *excludeLeaveID)
+	} else {
+		err = tx.Select(&result, query, employeeID, endDate, startDate)
+	}
 
 	return result, err
 }
@@ -144,6 +156,17 @@ func (r *Repository) GetLeaveById(leaveID uuid.UUID) (models.Leave, error) {
 	return leave, err
 }
 
+// GetLeaveDaysByID returns the days value of a specific leave inside a transaction.
+// Used during edit validation to add back the original leave's days to available balance.
+func (r *Repository) GetLeaveDaysByID(tx *sqlx.Tx, leaveID uuid.UUID) (float64, error) {
+	var days float64
+	err := tx.Get(&days, `SELECT days FROM Tbl_Leave WHERE id = $1`, leaveID)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return days, err
+}
+
 func (r *Repository) GetLeaveApprovalNameByEmployeeID(approvalId uuid.UUID) (string, error) {
 	var approvalName string
 	query := `SELECT full_name FROM Tbl_Employee WHERE id=$1`
@@ -153,48 +176,6 @@ func (r *Repository) GetLeaveApprovalNameByEmployeeID(approvalId uuid.UUID) (str
 
 // GetMyLeavesByMonthYear - Get current user's leaves from given month/year onward (current + future).
 // When month/year is sent as base, returns leaves where start_date >= first day of that month.
-
-func (r *Repository) UpdatePendingLeave(tx *sqlx.Tx, leaveID uuid.UUID, empID uuid.UUID, input models.LeaveUpdateInput, NewDays float64) error {
-
-	// 2. RE-CALCULATE DAYS using your existing service
-	// Ensure you pass the correct timingID (1, 2, or 3)
-
-	query := `
-        UPDATE Tbl_Leave
-        SET 
-            start_date = $1, 
-            end_date = $2, 
-            leave_type_id = $3, 
-            reason = $4,
-			days = $5,           
-            half_id = $6,
-            updated_at = NOW()
-        WHERE id = $7 
-          AND employee_id = $8 
-          AND status = 'Pending'`
-
-	result, err := tx.Exec(query,
-		input.StartDate,
-		input.EndDate,
-		input.LeaveTypeID,
-		input.Reason,
-		NewDays,
-		input.LeaveTimingID,
-		leaveID,
-		empID,
-	)
-	if err != nil {
-		return err
-	}
-
-	// Check if any row was actually updated
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
-		return fmt.Errorf("leave cannot be edited: either it does not exist, you don't own it, or it is already processed")
-	}
-
-	return nil
-}
 
 func (r *Repository) UpdateLeaveStatusWithResion(tx *sqlx.Tx, withdrawalReason string, currentUserID uuid.UUID, leaveID uuid.UUID, status string) error {
 	_, err := tx.Exec(`
@@ -224,8 +205,9 @@ func (r *Repository) GetEarlyLeaveThisMonth(
 		WHERE l.employee_id = $1
 		  AND l.leave_type_id = $2
 		  AND lt.is_early = TRUE
-		  AND l.status IN ('Pending', 'APPROVED', 'MANAGER_APPROVED')
-		  AND $3::date BETWEEN l.start_date::date AND l.end_date::date
+		  AND l.status IN ('Pending', 'APPROVED')
+		  AND EXTRACT(YEAR  FROM l.start_date) = EXTRACT(YEAR  FROM $3::date)
+		  AND EXTRACT(MONTH FROM l.start_date) = EXTRACT(MONTH FROM $3::date)
 		LIMIT 1
 	`, employeeID, leaveTypeID, refDate)
 

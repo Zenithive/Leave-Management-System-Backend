@@ -58,20 +58,19 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc, env *config.ENV) {
 		leaves.POST("/apply", h.ApplyLeave) // Employee applies for leave
 
 		//leaves.PUT("/edit/:id", h.EditMyLeave)                                                                         // New Route
-		leaves.POST("/admin-add/policy", h.LeavePolicy)                // Admin creates leave policy
-		leaves.PUT("/admin-update/policy/:id", h.UpdateLeavePolicy)    // Admin, SuperAdmin, HR update leave policy
-		leaves.DELETE("/admin-delete/policy/:id", h.DeleteLeavePolicy) // Admin, SuperAdmin, HR delete leave policy
-		leaves.GET("/Get-All-Leave-Policy", h.GetAllLeavePolicies)     // Get all leave policies
-		// leaves.GET("/manager/history", h.GetManagerLeaveHistory)                                                       // Manager gets team leave history
+		leaves.POST("/admin-add/policy", h.LeavePolicy)                                                                // Admin creates leave policy
+		leaves.PUT("/admin-update/policy/:id", h.UpdateLeavePolicy)                                                    // Admin, SuperAdmin, HR update leave policy
+		leaves.DELETE("/admin-delete/policy/:id", h.DeleteLeavePolicy)                                                 // Admin, SuperAdmin, HR delete leave policy
+		leaves.GET("/Get-All-Leave-Policy", h.GetAllLeavePolicies)                                                     // Get all leave policies                                                  // Manager gets team leave history
 		leaves.GET("/all", h.GetLeaves)                                                                                // Get all leaves (filtered by role)
 		leaves.GET("/monthly-report", h.GetLeaveReport)                                                                // Leave report: monthly / yearly / range (HR, ADMIN, SUPERADMIN)
 		leaves.GET("/Get-Leave-Report", access_role.RoleMiddleware(access_role.AdminAccessRoles...), h.GetLeaveReport) // Alias for monthly-report
 		leaves.GET("/my-leaves", h.GetAllMyLeave)                                                                      // Get current user's own leaves with month/year filtering
 		leaves.GET("/timming", h.GetLeaveTiming)                                                                       // Get all Leave Timing
 		leaves.PUT("/timming", h.UpdateLeaveTiming)                                                                    // Update leave timing by super admin and admin
-
-		leaves.POST("/:id/action", h.LeaveAction)   // Approve/Reject leave
-		leaves.DELETE("/:id/cancel", h.CancelLeave) // Cancel pending leave (Employee/Admin)
+		leaves.POST("/:id/action", h.LeaveAction)                                                                      // Approve/Reject leave
+		leaves.DELETE("/:id/cancel", h.CancelLeave)
+		leaves.PUT("edit/:id", h.EditLeave) // Cancel pending leave (Employee/Admin)
 	}
 	leaveLog := leaves.Group("/log")
 	leaveLog.GET("/", h.GetLeaveLog)

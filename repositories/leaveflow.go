@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -19,6 +20,7 @@ type LeaveFlowRepository interface {
 	GetByID(ctx context.Context, leaveID string) (*models.Leave, error)
 	UpdateLeaveStatus(leaveID string, status string) error
 	UpdateLeaveStatusTx(tx *sql.Tx, leaveID uuid.UUID, status string, approverID uuid.UUID) error
+	UpdateLeave(tx *sqlx.Tx, leaveID uuid.UUID, empID uuid.UUID, input *models.LeaveInput, NewDays float64) error
 }
 
 type leaveFlow struct {
@@ -354,4 +356,46 @@ func (r *leaveFlow) UpdateLeaveStatus(leaveID string, status string) error {
 	query := `UPDATE Tbl_Leave SET status = $1, updated_at = NOW() WHERE id = $2`
 	_, err := r.DB.Exec(query, status, leaveID)
 	return err
+}
+
+func (r *leaveFlow) UpdateLeave(tx *sqlx.Tx, leaveID uuid.UUID, empID uuid.UUID, input *models.LeaveInput, NewDays float64) error {
+
+	// 2. RE-CALCULATE DAYS using your existing service
+	// Ensure you pass the correct timingID (1, 2, or 3)
+
+	query := `
+        UPDATE Tbl_Leave
+        SET 
+            start_date = $1, 
+            end_date = $2, 
+            leave_type_id = $3, 
+            reason = $4,
+			days = $5,           
+            half_id = $6,
+            updated_at = NOW()
+        WHERE id = $7 
+          AND employee_id = $8 
+          AND status = 'Pending'`
+
+	result, err := tx.Exec(query,
+		input.StartDate,
+		input.EndDate,
+		input.LeaveTypeID,
+		input.Reason,
+		NewDays,
+		input.LeaveTimingID,
+		leaveID,
+		empID,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Check if any row was actually updated
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("leave cannot be edited: either it does not exist, you don't own it, or it is already processed")
+	}
+
+	return nil
 }

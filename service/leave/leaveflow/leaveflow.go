@@ -31,6 +31,7 @@ type LeaveFlowService interface {
 	GetLeaves(ctx context.Context, empID uuid.UUID, role string, month int, year int) (gin.H, error)
 	GetMyLeave(empID uuid.UUID, month int, year int) (gin.H, error)
 	CancleLeave(c context.Context, leaveId string) (string, error)
+	UpdateLeave(ctx context.Context, empID uuid.UUID, leaveId string, leave *models.LeaveInput) error
 }
 
 type leaveFlow struct {
@@ -302,6 +303,170 @@ func (s *leaveFlow) GetByID(ctx context.Context, leaveID string) (*models.Leave,
 	return leave, err
 }
 
+func (s *leaveFlow) UpdateLeave(ctx context.Context, empID uuid.UUID, leaveId string, leave *models.LeaveInput) error {
+	// Parse leave UUID from the URL param
+	leaveUUID, err := uuid.Parse(leaveId)
+	if err != nil {
+		return utils.CustomErr(nil, http.StatusBadRequest, "invalid leave ID")
+	}
+
+	LeaveTypeInfo, leaveTiming, err := s.ValidateLeave(ctx, leave)
+	if err != nil {
+		return err
+	}
+
+	var Days float64
+	err = common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
+		leaveDays, err := service.CalculateWorkingDaysWithTiming(s.CommRepo, tx, leave.StartDate, leave.EndDate, LeaveTypeInfo.TimingID, leaveTiming)
+		if err != nil {
+			return utils.CustomErr(nil, http.StatusBadRequest, err.Error())
+		}
+		if leaveDays <= 0 {
+			return utils.CustomErr(nil, http.StatusBadRequest, "Calculated leave days must be greater than zero. Please check the dates and timing")
+		}
+		leave.Days = &leaveDays
+		Days = leaveDays
+
+		if err := service.ValidateUnpaidLeaveApplication(s.CommRepo, tx, leave.EmployeeID, leave.LeaveTypeID); err != nil {
+			return utils.CustomErr(nil, http.StatusBadRequest, err.Error())
+		}
+
+		validationParams := ValidateLeaveApplicationParams{
+			EmployeeID:     leave.EmployeeID,
+			LeaveTypeID:    leave.LeaveTypeID,
+			StartDate:      leave.StartDate,
+			EndDate:        leave.EndDate,
+			LeaveDays:      leaveDays,
+			ExcludeLeaveID: &leaveUUID, // exclude current leave from balance & overlap checks
+		}
+		if err := s.LeaveValidationSvc.ValidateLeaveApplication(tx, validationParams, LeaveTypeInfo.LeaveType); err != nil {
+			return utils.CustomErr(nil, http.StatusBadRequest, err.Error())
+		}
+
+		if err = s.Repo.UpdateLeave(tx, leaveUUID, empID, leave, leaveDays); err != nil {
+			return utils.CustomErr(nil, http.StatusInternalServerError, "failed to update leave: "+err.Error())
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	_ = Days
+	return nil
+}
+
+// func (h *HandlerFunc) EditMyLeave(c *gin.Context) {
+// 	// 1. Get Leave ID from URL
+// 	leaveID, err := uuid.Parse(c.Param("id"))
+// 	if err != nil {
+// 		utils.RespondWithError(c, 400, "Invalid Leave ID")
+// 		return
+// 	}
+
+// 	// 2. Get Current Employee ID from Context
+// 	empIDRaw, _ := c.Get("user_id")
+// 	empID, _ := uuid.Parse(empIDRaw.(string))
+
+// 	// Initialize validation service
+// 	leaveValidationSvc := service.NewLeaveValidationService(h.Query)
+
+// }
+
+// 	var leaveTiming time.Time = time.Time{} // Zero value indicates not provided
+
+// 	// If LeaveTiming string is provided, validate it
+// 	if input.LeaveTiming != nil {
+// 		leaveTiming, err = service.ValidateLeaveTiming(*input.LeaveTiming)
+// 		if err != nil {
+// 			utils.RespondWithError(c, 400, err.Error())
+// 			return
+// 		}
+// 	}
+
+// 	// Validate timing ID
+// 	if err := leaveValidationSvc.ValidateLeaveTimingID(input.LeaveTimingID); err != nil {
+// 		utils.RespondWithError(c, 400, err.Error())
+// 		return
+// 	}
+
+// 	// Validate Reason
+// 	if err := leaveValidationSvc.ValidateLeaveReason(input.Reason); err != nil {
+// 		utils.RespondWithError(c, 400, err.Error())
+// 		return
+// 	}
+
+// 	// Validate Dates
+// 	if err := leaveValidationSvc.ValidateLeaveDates(input.StartDate, input.EndDate); err != nil {
+// 		utils.RespondWithError(c, 400, err.Error())
+// 		return
+// 	}
+
+// 	// 4. Execute Transaction
+// 	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+// 		// Fetch Leave Type and resolve timing ID
+// 		leaveTypeInfo, err := leaveValidationSvc.GetLeaveTypeAndResolveTimingID(input.LeaveTypeID, input.LeaveTimingID)
+// 		if err != nil {
+// 			return utils.CustomErr(c, 400, err.Error())
+// 		}
+
+// 		// Calculate new working days with timing consideration
+// 		newDays, err := service.CalculateWorkingDaysWithTiming(h.Query, tx, input.StartDate, input.EndDate, leaveTypeInfo.TimingID, leaveTiming)
+// 		if err != nil {
+// 			return utils.CustomErr(c, 400, err.Error())
+// 		}
+// 		if newDays <= 0 {
+// 			return utils.CustomErr(c, 400, "Calculated leave days must be greater than zero. Please check the dates and timing")
+// 		}
+
+// 		// Validate unpaid leave application: Cannot edit to unpaid leave if paid balance > 0
+// 		if err := service.ValidateUnpaidLeaveApplication(h.Query, tx, empID, input.LeaveTypeID); err != nil {
+// 			return utils.CustomErr(c, 400, err.Error())
+// 		}
+
+// 		// Comprehensive leave validation (balance, early leave limit, overlapping)
+// 		// Pass leaveID to exclude it from overlap checks
+// 		validationParams := service.ValidateLeaveApplicationParams{
+// 			EmployeeID:     empID,
+// 			LeaveTypeID:    input.LeaveTypeID,
+// 			StartDate:      input.StartDate,
+// 			EndDate:        input.EndDate,
+// 			LeaveDays:      newDays,
+// 			ExcludeLeaveID: &leaveID,
+// 		}
+// 		if err := leaveValidationSvc.ValidateLeaveApplication(tx, validationParams, leaveTypeInfo.LeaveType); err != nil {
+// 			return utils.CustomErr(c, 400, err.Error())
+// 		}
+
+// 		// Update the leave
+// 		err = h.Query.UpdatePendingLeave(tx, leaveID, empID, input, newDays)
+// 		if err != nil {
+// 			return utils.CustomErr(c, 500, "Failed to update leave: "+err.Error())
+// 		}
+
+// 		// Log Entry
+// 		data := &models.Common{
+// 			Component:  constant.ComponentLeave,
+// 			Action:     constant.ActionUpdate,
+// 			FromUserID: empID,
+// 		}
+// 		if err := h.Query.AddLog(data, tx); err != nil {
+// 			return utils.CustomErr(c, 500, "Failed to create leave log: "+err.Error())
+// 		}
+
+// 		return nil
+// 	})
+
+// 	if err != nil {
+// 		utils.RespondWithError(c, 500, "Failed to update settings: "+err.Error())
+// 		return
+// 	}
+
+// 	c.JSON(200, gin.H{
+// 		"message":  "Leave updated successfully",
+// 		"leave_id": leaveID,
+// 	})
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Notification helpers — all publish calls go through here.
 // Services stay clean: no email logic, no recipient fetching inline.
@@ -336,7 +501,7 @@ func (s *leaveFlow) publishLeaveApplied(leave *models.LeaveInput, leaveTypeName 
 
 // publishLeaveAction fires an event for APPROVE / REJECT / WITHDRAW / CANCEL.
 // leaveTypeName is fetched via the leave's LeaveTypeID already loaded in ActionLeave.
-func (s *leaveFlow) publishLeaveAction(eventType notification.Type,leave *models.Leave,actorName, actorEmail, actorRole string) {
+func (s *leaveFlow) publishLeaveAction(eventType notification.Type, leave *models.Leave, actorName, actorEmail, actorRole string) {
 	if s.NotificationSvc == nil {
 		return
 	}
