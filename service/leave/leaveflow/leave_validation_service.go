@@ -106,7 +106,6 @@ func (s *LeaveValidationService) ValidateLeaveBalance(tx *sqlx.Tx, employeeID uu
 			return fmt.Errorf("failed to fetch original leave days: %w", err)
 		}
 	}
-
 	effectiveBalance := balance - pendingDays + originalDays
 
 	// Check balance

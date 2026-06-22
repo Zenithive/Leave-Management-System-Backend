@@ -14,6 +14,7 @@ type LeaveFlowLog interface {
 	Create(ctx context.Context, tx *sqlx.Tx, leaveID uuid.UUID, leaveTypeRes *models.LeaveTypeResponse, role string) error
 	GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*models.LeaveFlow, error)
 	UpdateApprovalLog(ctx context.Context, tx *sqlx.Tx, leaveID uuid.UUID, log []models.LeaveFlowStage) error
+	RegenerateApprovalLog(ctx context.Context, tx *sqlx.Tx, leaveID uuid.UUID, leaveTypeRes *models.LeaveTypeResponse, role string) error
 }
 type leaveFlowLog struct {
 	DB                 *sqlx.DB
@@ -41,29 +42,10 @@ var roleLevels = map[string]int{
 func getRoleLevel(role string) int {
 	return roleLevels[role]
 }
-
 func (s *leaveFlowLog) Create(ctx context.Context, tx *sqlx.Tx, leaveID uuid.UUID, leaveTypeRes *models.LeaveTypeResponse, role string) error {
 
-	if leaveTypeRes == nil || leaveTypeRes.ApprovalFlow == nil {
-		return nil
-	}
-	applicantLevel := getRoleLevel(role)
+	approvalLog := s.generateApprovalLog(leaveTypeRes, role)
 
-	approvalLog := make([]models.LeaveFlowStage, 0, len(leaveTypeRes.ApprovalFlow.Flow))
-
-	for _, stage := range leaveTypeRes.ApprovalFlow.Flow {
-		if getRoleLevel(string(stage.ApproverRole)) <= applicantLevel {
-			continue
-		}
-
-		approvalLog = append(approvalLog, models.LeaveFlowStage{
-			StageNo:      stage.StageNo,
-			ApproverRole: stage.ApproverRole,
-			State:        models.WAITING,
-		})
-	}
-
-	// No approvers required
 	if len(approvalLog) == 0 {
 		return nil
 	}
@@ -73,7 +55,6 @@ func (s *leaveFlowLog) Create(ctx context.Context, tx *sqlx.Tx, leaveID uuid.UUI
 		ApprovalLog: approvalLog,
 	})
 }
-
 func (s *leaveFlowLog) GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*models.LeaveFlow, error) {
 
 	dbFlow, err := s.Repo.GetByLeaveID(ctx, leaveID)
@@ -124,4 +105,40 @@ func (s *leaveFlowLog) GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*mo
 // UpdateApprovalLog delegates to the repository to persist the mutated stage slice.
 func (s *leaveFlowLog) UpdateApprovalLog(ctx context.Context, tx *sqlx.Tx, leaveID uuid.UUID, log []models.LeaveFlowStage) error {
 	return s.Repo.UpdateApprovalLog(ctx, tx, leaveID, log)
+}
+
+func (s *leaveFlowLog) RegenerateApprovalLog(ctx context.Context, tx *sqlx.Tx, leaveID uuid.UUID, leaveTypeRes *models.LeaveTypeResponse, role string) error {
+
+	approvalLog := s.generateApprovalLog(leaveTypeRes, role)
+
+	if len(approvalLog) == 0 {
+		return nil
+	}
+	return s.Repo.UpdateApprovalLog(ctx, tx, leaveID, approvalLog)
+}
+
+func (s *leaveFlowLog) generateApprovalLog(leaveTypeRes *models.LeaveTypeResponse, role string) []models.LeaveFlowStage {
+
+	if leaveTypeRes == nil || leaveTypeRes.ApprovalFlow == nil {
+		return nil
+	}
+
+	applicantLevel := getRoleLevel(role)
+
+	approvalLog := make([]models.LeaveFlowStage, 0, len(leaveTypeRes.ApprovalFlow.Flow))
+
+	for _, stage := range leaveTypeRes.ApprovalFlow.Flow {
+
+		if getRoleLevel(string(stage.ApproverRole)) <= applicantLevel {
+			continue
+		}
+
+		approvalLog = append(approvalLog, models.LeaveFlowStage{
+			StageNo:      stage.StageNo,
+			ApproverRole: stage.ApproverRole,
+			State:        models.WAITING,
+		})
+	}
+
+	return approvalLog
 }

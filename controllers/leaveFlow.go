@@ -135,11 +135,12 @@ func (h *HandlerFunc) EditLeave(c *gin.Context) {
 		utils.RespondWithError(c, http.StatusBadRequest, "Invalid input data: "+err.Error())
 		return
 	}
+	input.EmployeeID = empID
 	if err := h.LeaveFlowService.UpdateLeave(c, empID, leaveID, &input); err != nil {
 		utils.Error(c, err)
 		return
 	}
 	c.JSON(200, gin.H{
-		"message":  "Leave update successfully",
+		"message": "Leave update successfully",
 	})
 }

@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -50,8 +51,11 @@ func (q *Repository) GetLeaveTypeByLeaveID(leaveID uuid.UUID) (int, error) {
 // Returns 0 (not an error) when no balance row exists for the employee/type/year.
 func (r *Repository) GetLeaveBalance(tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int) (float64, error) {
 	var balance float64
+
+	fmt.Println("empId", employeeID)
+	fmt.Println("leaveTypeId", leaveTypeID)
 	err := tx.Get(&balance, `
-		SELECT COALESCE(closing, 0)
+		SELECT closing
 		FROM Tbl_Leave_balance 
 		WHERE employee_id=$1 AND leave_type_id=$2 
 		AND year = EXTRACT(YEAR FROM CURRENT_DATE)
@@ -62,7 +66,7 @@ func (r *Repository) GetLeaveBalance(tx *sqlx.Tx, employeeID uuid.UUID, leaveTyp
 	return balance, err
 }
 
-// GetPendingLeaveDays returns the total days of Pending and MANAGER_APPROVED leaves
+// GetPendingLeaveDays returns the total days of Pending  leaves
 // for the current year for a given employee and leave type.
 // These leaves are not yet deducted from the closing balance, so they must be
 // accounted for when checking if a new leave application has sufficient balance.
@@ -74,10 +78,9 @@ func (r *Repository) GetPendingLeaveDays(tx *sqlx.Tx, employeeID uuid.UUID, leav
 		FROM Tbl_Leave
 		WHERE employee_id = $1
 		  AND leave_type_id = $2
-		  AND status IN ('Pending', 'MANAGER_APPROVED')
+		  AND status IN ('Pending')
 		  AND EXTRACT(YEAR FROM start_date) = EXTRACT(YEAR FROM CURRENT_DATE)
 	`
-
 	var err error
 	if excludeLeaveID != nil {
 		// When editing an existing leave, exclude it from the pending sum
@@ -86,7 +89,6 @@ func (r *Repository) GetPendingLeaveDays(tx *sqlx.Tx, employeeID uuid.UUID, leav
 	} else {
 		err = tx.Get(&pendingDays, query, employeeID, leaveTypeID)
 	}
-
 	return pendingDays, err
 }
 
