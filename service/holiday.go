@@ -3,12 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/repositories"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/common"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
 )
 
 type HolidayService interface {
@@ -57,11 +58,8 @@ func (s *holidayService) GetAllHolidays(ctx context.Context) ([]models.Holiday, 
 
 func (s *holidayService) DeleteHoliday(ctx context.Context, id string) error {
 
-	return common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
-
-		if err := s.Repo.DeleteHoliday(ctx, id); err != nil {
-			return err
-		}
-		return nil
-	})
+	if err := s.Repo.DeleteHoliday(ctx, id); err != nil {
+		return utils.CustomErr(nil, http.StatusInternalServerError, err.Error())
+	}
+	return nil
 }
