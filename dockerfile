@@ -17,8 +17,11 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates
 
 COPY --from=builder /app/ums-backend .
-COPY .env .
 COPY pkg/migration ./pkg/migration
+
+# .env is NOT copied into the image — inject secrets at runtime via:
+#   docker run --env-file .env ...
+# or via your orchestrator's secret management.
 
 EXPOSE 8082
 

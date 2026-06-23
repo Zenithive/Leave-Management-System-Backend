@@ -1,4 +1,4 @@
-package service
+package leaveflow
 
 import (
 	"fmt"
@@ -18,18 +18,6 @@ type LeaveValidationService struct {
 
 func NewLeaveValidationService(repo *repositories.Repository) *LeaveValidationService {
 	return &LeaveValidationService{repo: repo}
-}
-
-// ValidateEmployeeStatus checks if employee account is active
-func (s *LeaveValidationService) ValidateEmployeeStatus(employeeID uuid.UUID) error {
-	empStatus, err := s.repo.GetEmployeeStatus(employeeID)
-	if err != nil {
-		return fmt.Errorf("failed to verify employee status: %w", err)
-	}
-	if empStatus == "deactive" {
-		return fmt.Errorf("your account is deactivated. You cannot apply or edit leave")
-	}
-	return nil
 }
 
 // ValidateLeaveTimingID validates timing ID is 1, 2, or 3
@@ -68,8 +56,8 @@ type LeaveTypeInfo struct {
 
 // GetLeaveTypeAndResolveTimingID fetches leave type and resolves timing ID
 // For IsEarly leave types, timing ID is forced to 3 (Full Day)
-func (s *LeaveValidationService) GetLeaveTypeAndResolveTimingID(tx *sqlx.Tx, leaveTypeID int, requestedTimingID *int) (*LeaveTypeInfo, error) {
-	leaveType, err := s.repo.GetLeaveTypeByIdTx(tx, leaveTypeID)
+func (s *LeaveValidationService) GetLeaveTypeAndResolveTimingID(leaveTypeID int, requestedTimingID *int) (*LeaveTypeInfo, error) {
+	leaveType, err := s.repo.GetLeaveTypeById(leaveTypeID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid leave type: %w", err)
 	}
@@ -90,26 +78,41 @@ func (s *LeaveValidationService) GetLeaveTypeAndResolveTimingID(tx *sqlx.Tx, lea
 	}, nil
 }
 
-// ValidateLeaveBalance checks if employee has sufficient leave balance
-// For non-early leave types only. Returns effective balance and error if insufficient.
+// ValidateLeaveBalance checks if employee has sufficient leave balance.
+// For non-early leave types only.
+//
+// When excludeLeaveID is set (edit flow), the original leave's days are added back
+// to the effective balance — because editing replaces that leave, not adds to it.
 func (s *LeaveValidationService) ValidateLeaveBalance(tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int, requiredDays float64, excludeLeaveID *uuid.UUID) error {
 	balance, err := s.repo.GetLeaveBalance(tx, employeeID, leaveTypeID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch leave balance: %w", err)
 	}
 
-	// Subtract already-pending (not yet deducted) leaves from available balance
+	// Subtract already-pending (not yet deducted) leaves from available balance.
+	// GetPendingLeaveDays already excludes the leave being edited (excludeLeaveID),
+	// so those days are not double-counted in pendingDays.
 	pendingDays, err := s.repo.GetPendingLeaveDays(tx, employeeID, leaveTypeID, excludeLeaveID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch pending leave days: %w", err)
 	}
-	effectiveBalance := balance - pendingDays
+
+	// For edit: add back the original leave's days so the balance reflects the
+	// days that will be freed when this leave is replaced.
+	var originalDays float64
+	if excludeLeaveID != nil {
+		originalDays, err = s.repo.GetLeaveDaysByID(tx, *excludeLeaveID)
+		if err != nil {
+			return fmt.Errorf("failed to fetch original leave days: %w", err)
+		}
+	}
+	effectiveBalance := balance - pendingDays + originalDays
 
 	// Check balance
 	if effectiveBalance < requiredDays {
 		return fmt.Errorf(
-			"insufficient leave balance. Available: %.1f days (%.1f closing - %.1f pending/manager-approved), Required: %.1f days",
-			effectiveBalance, balance, pendingDays, requiredDays,
+			"insufficient leave balance. Available: %.1f days (%.1f closing - %.1f pending + %.1f original), Required: %.1f days",
+			effectiveBalance, balance, pendingDays, originalDays, requiredDays,
 		)
 	}
 
@@ -136,7 +139,7 @@ func (s *LeaveValidationService) ValidateEarlyLeaveLimit(tx *sqlx.Tx, employeeID
 
 // ValidateOverlappingLeaves checks if there are overlapping leave applications
 func (s *LeaveValidationService) ValidateOverlappingLeaves(tx *sqlx.Tx, employeeID uuid.UUID, startDate, endDate time.Time, excludeLeaveID *uuid.UUID) error {
-	overlaps, err := s.repo.GetOverlappingLeaves(tx, employeeID, startDate, endDate)
+	overlaps, err := s.repo.GetOverlappingLeaves(tx, employeeID, startDate, endDate, excludeLeaveID)
 	if err != nil {
 		return fmt.Errorf("failed to check overlapping leave: %w", err)
 	}
@@ -159,12 +162,12 @@ func (s *LeaveValidationService) ValidateOverlappingLeaves(tx *sqlx.Tx, employee
 
 // ValidateLeaveApplicationParams contains all parameters needed for comprehensive validation
 type ValidateLeaveApplicationParams struct {
-	EmployeeID      uuid.UUID
-	LeaveTypeID     int
-	StartDate       time.Time
-	EndDate         time.Time
-	LeaveDays       float64
-	ExcludeLeaveID  *uuid.UUID // For edit operations, exclude this leave from overlap/pending checks
+	EmployeeID     uuid.UUID
+	LeaveTypeID    int
+	StartDate      time.Time
+	EndDate        time.Time
+	LeaveDays      float64
+	ExcludeLeaveID *uuid.UUID // For edit operations, exclude this leave from overlap/pending checks
 }
 
 // ValidateLeaveApplication performs comprehensive validation for leave application/edit

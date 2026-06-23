@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -56,4 +58,22 @@ func GetEmployeeId(c *gin.Context) (uuid.UUID, error) {
 	}
 
 	return empID, nil
+}
+
+func GetMonthYear(c *gin.Context) (int, int, error) {
+	month, err := strconv.Atoi(
+		c.DefaultQuery("month", fmt.Sprintf("%d", int(time.Now().Month()))),
+	)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid month")
+	}
+
+	year, err := strconv.Atoi(
+		c.DefaultQuery("year", fmt.Sprintf("%d", time.Now().Year())),
+	)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid year")
+	}
+
+	return month, year, nil
 }

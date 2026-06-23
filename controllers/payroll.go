@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -508,7 +509,11 @@ func (h *HandlerFunc) GetPayslipPDF(c *gin.Context) {
 
 	// If no settings found or name is the generic "Company", override it
 	if err != nil || settings.CompanyName == "" || strings.EqualFold(settings.CompanyName, "Company") {
-		settings.CompanyName = "ZENITHIVE"
+		if envName := os.Getenv("APP_NAME"); envName != "" {
+			settings.CompanyName = envName
+		} else {
+			settings.CompanyName = "Company"
+		}
 	}
 
 	r, g, b := HexToRGB(settings.PrimaryColor)
@@ -607,7 +612,11 @@ func (h *HandlerFunc) PreviewPayslipPDF(c *gin.Context) {
 	var settings models.CompanySettings
 	err := h.Query.DB.Get(&settings, `SELECT company_name, logo_path, primary_color FROM Tbl_Company_Settings LIMIT 1`)
 	if err != nil || settings.CompanyName == "" || strings.EqualFold(settings.CompanyName, "Company") {
-		settings.CompanyName = "ZENITHIVE"
+		if envName := os.Getenv("APP_NAME"); envName != "" {
+			settings.CompanyName = envName
+		} else {
+			settings.CompanyName = "Company"
+		}
 	}
 
 	r, g, b := HexToRGB(settings.PrimaryColor)
@@ -732,7 +741,7 @@ func (h *HandlerFunc) GetPayslipPDF(c *gin.Context) {
 	pdf.SetTextColor(255, 255, 255) // White text
 	pdf.SetFont("Arial", "B", 26)
 	pdf.SetY(12)
-	pdf.CellFormat(0, 10, "ZENITHIVE", "", 1, "C", false, 0, "")
+	pdf.CellFormat(0, 10, os.Getenv("APP_NAME"), "", 1, "C", false, 0, "")
 
 	pdf.SetFont("Arial", "", 12)
 	pdf.SetY(25)

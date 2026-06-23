@@ -12,8 +12,9 @@ import (
 
 // ValidateUnpaidLeaveApplication checks if an employee can apply for unpaid leave.
 // Business Rule: Employees cannot apply for unpaid leave if they have:
-//   1. Any paid leave balance > 0, OR
-//   2. Any pending/manager-approved paid leaves
+//  1. Any paid leave balance > 0, OR
+//  2. Any pending/manager-approved paid leaves
+//
 // Returns an error if validation fails, nil if validation passes.
 func ValidateUnpaidLeaveApplication(repo *repositories.Repository, tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int) error {
 	// First, check if the leave type being applied is unpaid or early leave
@@ -50,6 +51,7 @@ func ValidateUnpaidLeaveApplication(repo *repositories.Repository, tx *sqlx.Tx, 
 
 	// Validation logic with detailed error messages
 	if totalPaidBalance > 0 && totalPendingPaidDays > 0 {
+
 		return fmt.Errorf("cannot apply for unpaid leave. You have %.1f days of paid leave balance remaining and %.1f days of pending paid leaves. Please use paid leave first", totalPaidBalance, totalPendingPaidDays)
 	}
 
@@ -60,7 +62,6 @@ func ValidateUnpaidLeaveApplication(repo *repositories.Repository, tx *sqlx.Tx, 
 	if totalPendingPaidDays > 0 {
 		return fmt.Errorf("cannot apply for unpaid leave. You have %.1f days of pending paid leave applications. Please wait for approval or use those paid leaves first", totalPendingPaidDays)
 	}
-
 	return nil
 }
 
@@ -74,14 +75,11 @@ func CalculateWorkingDays(Query *repositories.Repository, tx *sqlx.Tx, start, en
 	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC)
 	end = time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, time.UTC)
 
-	fmt.Println("1s")
-
 	// 2️ Fetch holidays within range
-	holidays, err := Query.GetByFilterHolidayBetwweenTwoDates(tx, start, end)
+	holidays, err := Query.GetByFilterHolidayBetweenTwoDates(tx, start, end)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch holidays: %v", err)
 	}
-	fmt.Println("2s")
 
 	// Convert slice to a map for O(1) lookup
 	holidayMap := make(map[string]bool)
@@ -121,6 +119,7 @@ func CalculateWorkingDays(Query *repositories.Repository, tx *sqlx.Tx, start, en
 // base working-day count. Extracted so it can be unit-tested without a DB.
 // timingID: 1 = First Half (×0.5), 2 = Second Half (×0.5), 3 = Full Day (×1.0)
 func applyTimingMultiplier(baseDays float64, timingID int) (float64, error) {
+	fmt.Println("===============", timingID)
 	switch timingID {
 	case 1, 2:
 		return baseDays * 0.5, nil
@@ -136,7 +135,6 @@ func applyTimingMultiplier(baseDays float64, timingID int) (float64, error) {
 func CalculateWorkingDaysWithTiming(Query *repositories.Repository, tx *sqlx.Tx, start, end time.Time, timingID int, leaveTiming time.Time) (float64, error) {
 	// First calculate the base working days
 	baseDays, err := CalculateWorkingDays(Query, tx, start, end, leaveTiming)
-	fmt.Println("Base Days:", baseDays)
 	if err != nil {
 		return 0, err
 	}
@@ -310,6 +308,22 @@ func CalculateLeaveBalances(leaveTypes []LeaveTypeData, balanceRecords []LeaveBa
 }
 
 // validateLeaveTiming
+
+func CalculateProratedLeave(yearlyLeave int, joinMonth int) int {
+	if joinMonth < 1 || joinMonth > 12 {
+		return 0
+	}
+
+	// Remaining months including joining month
+	remainingMonths := 12 - joinMonth + 1
+
+	// Prorated calculation
+	prorated := (float64(yearlyLeave) * float64(remainingMonths)) / 12
+
+	// Round down
+	return int(math.Floor(prorated))
+}
+
 func ValidateLeaveTiming(leaveTiming string) (time.Time, error) {
 
 	// Expected format: "18:02"
@@ -332,19 +346,4 @@ func ValidateLeaveTiming(leaveTiming string) (time.Time, error) {
 	}
 
 	return t, nil
-}
-
-func CalculateProratedLeave(yearlyLeave int, joinMonth int) int {
-	if joinMonth < 1 || joinMonth > 12 {
-		return 0
-	}
-
-	// Remaining months including joining month
-	remainingMonths := 12 - joinMonth + 1
-
-	// Prorated calculation
-	prorated := (float64(yearlyLeave) * float64(remainingMonths)) / 12
-
-	// Round down
-	return int(math.Floor(prorated))
 }

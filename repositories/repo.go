@@ -1,12 +1,14 @@
 package repositories
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 )
 
@@ -79,7 +81,6 @@ func (r *Repository) GetEmployeeDetailsForNotification(id uuid.UUID) (empDetails
 }, err error) {
 	err = r.DB.Get(&empDetails, "SELECT email, full_name FROM Tbl_Employee WHERE id=$1", id)
 	return empDetails, err
-
 }
 
 func (r *Repository) DeleteEmployeeStatus(tx *sqlx.Tx, id uuid.UUID) (string, error) {
@@ -166,6 +167,13 @@ func (r *Repository) GetRoleID(role string) (string, error) {
 	var id string
 	err := r.DB.QueryRow(`SELECT id FROM Tbl_Role WHERE type=$1`, role).Scan(&id)
 	return id, err
+}
+
+// ------------------ GET ALL ROLES ------------------
+func (r *Repository) GetAllRoles() ([]models.Role, error) {
+	var roles []models.Role
+	err := r.DB.Select(&roles, `SELECT id, type FROM Tbl_Role ORDER BY id`)
+	return roles, err
 }
 
 // ------------------ CREATE EMPLOYEE ------------------
@@ -444,4 +452,83 @@ func (r *Repository) GetEmployeesByManagerID(managerID uuid.UUID, params models.
 		employees = append(employees, emp)
 	}
 	return employees, nil
+}
+
+func (r *Repository) GetRecipientsByRoles(ctx context.Context, employeeID uuid.UUID, roles []string) ([]models.Recipient, error) {
+
+	query := `
+	WITH manager_recipient AS (
+		SELECT
+			m.id,
+			m.full_name,
+			m.email,
+			'MANAGER' AS role
+		FROM Tbl_Employee e
+		JOIN Tbl_Employee m
+			ON e.manager_id = m.id
+		WHERE e.id = $1
+	),
+
+	role_recipients AS (
+		SELECT
+			e.id,
+			e.full_name,
+			e.email,
+			r.type AS role
+		FROM Tbl_Employee e
+		JOIN Tbl_Role r
+			ON e.role_id = r.id
+		WHERE r.type = ANY($2)
+		  AND r.type <> 'MANAGER'
+		  AND e.status = 'active'
+		  AND e.deleted_at IS NULL
+	)
+
+	SELECT * FROM manager_recipient
+	WHERE 'MANAGER' = ANY($2)
+
+	UNION ALL
+
+	SELECT * FROM role_recipients
+	`
+
+	var recipients []models.Recipient
+
+	err := r.DB.SelectContext(
+		ctx,
+		&recipients,
+		query,
+		employeeID,
+		pq.Array(roles),
+	)
+
+	return recipients, err
+}
+
+func (r *Repository) IsHolidayDate(date time.Time) (bool, error) {
+	var count int
+
+	err := r.DB.QueryRow(`
+		SELECT COUNT(*)
+		FROM Tbl_Holiday
+		WHERE date::date = $1::date
+	`, date).Scan(&count)
+
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+func (r *Repository) GetByFilterHolidayBetweenTwoDates(tx *sqlx.Tx, start, end time.Time) ([]time.Time, error) {
+	var holidays []time.Time
+
+	query := `
+		SELECT date
+		FROM Tbl_Holiday
+		WHERE date BETWEEN $1 AND $2
+	`
+
+	err := tx.Select(&holidays, query, start, end)
+	return holidays, err
 }

@@ -62,15 +62,38 @@ CREATE TABLE IF NOT EXISTS Tbl_Employee (
 -- =====================================================
 -- 4. TBL_LEAVE_TYPE - Leave Type Master
 -- =====================================================
-CREATE TABLE IF NOT EXISTS Tbl_Leave_type (
+CREATE TABLE IF NOT EXISTS Tbl_Leave_Type (
     id SERIAL PRIMARY KEY,
+
+    -- Leave Type Information
     name TEXT NOT NULL,
-    is_paid BOOLEAN,
-    default_entitlement INT,
-    intern_entitlement INT DEFAULT NULL,  -- Override entitlement for INTERN role
-    is_early BOOLEAN DEFAULT FALSE,  -- Allows early leave (partial day)
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+    -- Whether leave is paid or unpaid
+    is_paid BOOLEAN NOT NULL DEFAULT TRUE,
+
+    -- Default yearly entitlement
+    default_entitlement INT NOT NULL DEFAULT 0,
+
+    -- Override entitlement for interns
+    intern_entitlement INT DEFAULT NULL,
+
+    -- Allows early leave (partial day)
+    is_early BOOLEAN NOT NULL DEFAULT FALSE,
+
+    -- Indicates this leave type is Work From Home
+    is_work_from_home BOOLEAN NOT NULL DEFAULT FALSE,
+
+    -- Approval workflow assigned to this leave type
+    approval_flow_id UUID NULL,
+
+    -- Audit fields
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_leave_type_approval_flow
+        FOREIGN KEY (approval_flow_id)
+        REFERENCES leave_approval_flow(id)
+        ON DELETE SET NULL
 );
 
 -- =====================================================
@@ -315,8 +338,54 @@ CREATE TABLE IF NOT EXISTS Tbl_Audit (
 );
 
 -- =====================================================
+-- 19. TBL_LEAVE_APPROVAL_FLOW - Approval Workflow Engine
+-- =====================================================
+CREATE TABLE leave_approval_flow (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    name TEXT NOT NULL,
+
+    is_system BOOLEAN DEFAULT false,
+
+    flow JSONB NOT NULL,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO leave_approval_flow (
+    name,
+    is_system,
+    flow
+)
+VALUES (
+    'Default Flows',
+    true,
+    '[
+        {"stage_no": 1, "approver_role": "MANAGER"},
+        {"stage_no": 2, "approver_role": "ADMIN"},
+        {"stage_no": 3, "approver_role": "HR"},
+        {"stage_no": 4, "approver_role": "SUPERADMIN"}
+    ]'::jsonb
+);
+-- =====================================================
+-- 20. TBL_LEAVE_FFLOW - Approval Workflow log Engine
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS Tbl_Leave_Flow (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    leave_id UUID NOT NULL,
+    approval_log JSONB NOT NULL DEFAULT '[]'::jsonb,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL
+);
+
+-- =====================================================
 -- INDEXES FOR PERFORMANCE
 -- =====================================================
+
 
 -- Employee indexes
 CREATE INDEX IF NOT EXISTS idx_employee_email ON Tbl_Employee(email);
