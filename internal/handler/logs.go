@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/access_role"
+	utils "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
 )
 
 // GetLogs - only for super_admin to get logs filtered by days

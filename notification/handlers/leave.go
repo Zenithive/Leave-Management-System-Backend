@@ -5,7 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
-	models2 "github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
+	models2 "github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/providers"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/templates"

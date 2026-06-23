@@ -8,7 +8,7 @@ import (
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/handler"
 	middleware "github.com/sanjayk-eng/UserMenagmentSystem_Backend/middlewere"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/access_role"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
 )
 
 func SetupRoutes(r *gin.Engine, h *handler.HandlerFunc, env *config.ENV) {

@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
+	utils "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 )
 
 // DailyLeaveSlackNotification — cron endpoint that sends the daily leave summary to Slack.

@@ -8,9 +8,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
+	utils "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 )
 
 // GetLeaveBalances - GET /api/employees/:id/leave-balances

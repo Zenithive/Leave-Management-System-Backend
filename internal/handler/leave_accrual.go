@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
+	utils "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 )
 
 // TriggerLeaveAccrual - POST /api/admin/leave-accrual/run

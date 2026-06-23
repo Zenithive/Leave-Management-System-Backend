@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/handler"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
+	utils "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 )
 
 // AuthMiddleware verifies Bearer JWT Token

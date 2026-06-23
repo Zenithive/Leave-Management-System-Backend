@@ -8,12 +8,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/access_role"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/common"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
+	utils "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
 )
 
 // GetCompanySettings - GET /api/settings/company

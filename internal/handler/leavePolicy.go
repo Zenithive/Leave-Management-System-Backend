@@ -17,9 +17,9 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
 )
 
 func (h *HandlerFunc) LeavePolicy(c *gin.Context) {

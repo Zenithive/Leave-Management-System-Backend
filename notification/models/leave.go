@@ -3,7 +3,7 @@ package models
 import (
 	"time"
 
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 )
 
 // LeaveNotificationData carries all fields needed for any leave-related notification.

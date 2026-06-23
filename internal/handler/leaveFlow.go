@@ -4,10 +4,10 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/helper"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/common"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/helper"
 )
 
 func (h *HandlerFunc) ApplyLeave(c *gin.Context) {

@@ -1,111 +1,107 @@
+<div align="center">
+
 # Leave Management System — Backend
 
-[![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev)
+**A role-based leave management API with multi-stage approvals, configurable leave policies, and automated notifications.**
+
+[![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-The backend service for the **Leave Management System** — handles authentication, leave requests/approvals, email notifications, and Slack integrations (birthday announcements + daily leave summaries).
+[Features](#features) • [Architecture](#architecture) • [Getting Started](#getting-started) • [Docker](#docker-setup) • [Contributing](#contributing)
 
-> This README covers the **backend** only.
-
----
-
-## Table of Contents
-
-- [Features](#features)
-- [Technology Stack](#technology-stack)
-- [Backend Setup](#backend-setup)
-  - [1. Clone & Install](#1-clone--install)
-  - [2. Environment Variables](#2-environment-variables)
-  - [3. Database](#3-database)
-  - [4. Resend (Email)](#4-resend-email)
-  - [5. Slack Integration](#5-slack-integration)
-  - [6. Daily Leave Cron Job](#6-daily-leave-cron-job)
-- [Docker Setup](#docker-setup)
-- [Running Locally](#running-locally)
-- [Troubleshooting](#troubleshooting)
+</div>
 
 ---
+
+> This repository contains the **backend** only. The React frontend lives in a [separate repository].
+
+## Overview
+
+This is the backend service for a **Leave Management System (LMS)** built for organizations with multiple roles and structured approval hierarchies. It handles the full lifecycle of a leave request — from policy configuration and submission, through multi-level approval, to reporting and notifications — on top of a Go REST API.
+
+**Why this exists:** leave tracking in spreadsheets or chat threads breaks down once an organization has more than a handful of people or more than one layer of approval. Requests get lost, approvers forget to act, and leave balances drift out of sync with reality. This system makes leave management a single source of truth: every request has a defined approval chain, every policy (paid, unpaid, WFH, early leave) follows its own configured rules, and every status change is tracked end-to-end — with email and Slack notifications removing the need to check the system manually.
 
 ## Features
 
-- 🔐 **Authentication** — signup/login restricted to a company email domain
-- 📝 **Leave requests** — pending, approve, reject, and track leave history
-- 📧 **Email notifications** — transactional emails via Resend (verification, approvals, rejections)
-- 💬 **Slack integration** — daily "who's on leave today" summary + automated birthday announcements
-- ⏰ **Secure cron endpoint** — token-protected endpoint for an external scheduler to trigger daily jobs
-- 🐳 **Containerized** — Dockerfile + docker-compose setup
+**Roles & Access**
+- Role-based permissions across SuperAdmin, Admin, HR, Employee, and Intern
+- Manager assignment, role updates, password changes, manual leave balance adjustments
 
-## Technology Stack
+**Leave Management**
+- Apply, edit, cancel, and withdraw leave requests
+- Multi-stage approval workflow with configurable approver chains per policy
+- Full status timeline per request — applied, pending, approved, rejected, withdrawn
+- Configurable leave policies: paid, unpaid, early leave, WFH, with yearly/basic entitlement rules
 
-| Layer | Technology |
+**Calendar & Holidays**
+- Org-wide holiday calendar, managed by admins
+- Weekly and monthly leave calendar views
+
+**Asset Management**
+- Asset assignment to employees, with quantity and slot tracking
+
+**Reporting**
+- Monthly and yearly leave reports generated from leave history
+
+**Notifications**
+- Email on leave application and on approval/rejection
+- Slack: daily "who's on leave today" summary and automated birthday announcements
+- Token-protected cron endpoint for an external scheduler to trigger the daily Slack summary
+
+**Infrastructure**
+- Multi-stage Dockerfile and Docker Compose setup, backend + optional local Postgres
+
+## Architecture
+
+> _Diagram to be added._
+
+The frontend (separate repository) communicates with this API over REST. The backend persists leave, user, policy, and asset data in PostgreSQL, sends transactional email on leave events, and posts to Slack via Incoming Webhooks for birthdays and the daily leave summary. Since the hosting platform doesn't run scheduled jobs itself, an external scheduler (e.g. cron-job.org) triggers the daily summary through a token-protected endpoint.
+
+## Tech Stack
+
+| | |
 |---|---|
-| Backend language | **Go 1.25** |
-| Database | **PostgreSQL** (Railway / Supabase / local via Docker) |
-| Email | **Resend** |
-| Notifications | **Slack** (Incoming Webhooks) |
-| Containerization | **Docker** + **Docker Compose** |
-| Scheduling | External cron (e.g. **cron-job.org**) hitting a secured backend endpoint |
+| **Language** | Go 1.25 |
+| **Web framework** | [Gin](https://github.com/gin-gonic/gin) |
+| **Frontend** | React _(separate repository)_ |
+| **Database** | PostgreSQL via `sqlx` + `lib/pq` |
+| **Migrations** | [Goose](https://github.com/pressly/goose) |
+| **Auth** | JWT (`golang-jwt/jwt`), `golang.org/x/crypto` |
+| **Validation** | `go-playground/validator` |
+| **Reports (PDF)** | `jung-kurt/gofpdf` |
+| **Containerization** | Docker, Docker Compose |
+| **Scheduling** | External cron (e.g. cron-job.org) calling a secured endpoint |
 
----
+## Getting Started
 
-## Backend Setup
+### Prerequisites
+- Go 1.25+
+- PostgreSQL (local, Dockerized, or hosted — Railway/Supabase)
+- Docker & Docker Compose (optional, for containerized setup)
 
-### 1. Clone & Install
+### 1. Clone & install
 
 ```bash
-git clone https://github.com/your-username/your-project.git
-cd your-project/backend
+git clone https://github.com/sanjayk-eng/UserMenagmentSystem_Backend.git
+cd UserMenagmentSystem_Backend
 go mod tidy
 ```
 
-### 2. Environment Variables
-
-Create a `.env` file in the project root:
-
-```env
-# Database
-DB_URL=postgresql://user:password@host:port/dbname?sslmode=disable
-
-# Server
-APP_PORT=8082
-APP_URL=http://localhost:8089
-APP_NAME=Leave Management System
-
-# Email (Resend)
-RESEND_API_KEY=your_resend_api_key_here
-RESEND_FROM=leave@yourdomain.com
-
-# CORS
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8089
-
-# Slack
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
-EXTERNAL_API_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
-
-# Cron security — endpoint: GET /api/cron/daily-leave-slack?token=CRON_SECRET
-CRON_SECRET=your-random-cron-secret-min-32-chars-here
-
-# Company rules — restricts signup/login to this email domain
-COMPANY_EMAIL_DOMAIN=yourdomain.com
-
-# Seed / demo account password
-DEMO_SEED_PASSWORD=Demo@1234
-```
-
-Generate a secure `CRON_SECRET` instead of hand-typing one:
+### 2. Configure environment
 
 ```bash
-openssl rand -hex 32
+cp .env.example .env
 ```
+
+Fill in your values — see [`.env.example`](./.env.example) for the full list (database, server config, Resend, Slack webhooks, cron secret, company email domain).
 
 ### 3. Database
 
-**Option A — IN for production**
+**Hosted (recommended for production)** — provision Postgres on [Railway](https://railway.app) or [Supabase](https://supabase.com), copy the connection string into `DB_URL`.
 
- exampler Copy the connection string from [Railway](https://railway.app) or [Supabase](https://supabase.com) into `DB_URL`. Use `?sslmode=require` in production.
-
-**Option B — Local Postgres for development**
+**Local (development)**
 
 ```bash
 docker run --name leave-db \
@@ -117,61 +113,33 @@ docker run --name leave-db \
   -d postgres
 ```
 
-Then in `.env`:
 ```env
 DB_URL=postgresql://user:password@localhost:5432/dbname?sslmode=disable
 ```
 
-> **If using the bundled `docker-compose.yml` instead** (see [Docker Setup](#docker-setup)), Postgres is handled for you — don't run the command above separately, and don't use `localhost` as the host. Use the Postgres **service name** (e.g. `ums-postgres`) instead, since `localhost` inside a container refers to the container itself, not your host machine or sibling containers.
+Run migrations:
 
-### 4. Resend (Email)
-
-1. Create an account at [resend.com](https://resend.com).
-2. Verify a sending domain (or use Resend's test domain while developing).
-3. Generate an API key → `RESEND_API_KEY`.
-4. Set `RESEND_FROM` to an address on your verified domain.
-
-### 5. Slack Integration
-
-1. [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**.
-2. Choose workspace and app name.
-3. Under **Incoming Webhooks**, toggle on → **Add New Webhook to Workspace**.
-4. Pick the channel for notifications (e.g. `#leave-updates`).
-5. Copy the webhook URL into both `SLACK_WEBHOOK_URL` and `EXTERNAL_API_URL`.
-
-### 6. Daily Leave Cron Job
-
-Railway/Supabase don't run scheduled jobs — you need an external scheduler hitting your endpoint:
-
-```
-GET https://your-backend-url/api/cron/daily-leave-slack?token=CRON_SECRET
-```
-
-**Using cron-job.org (free):**
-1. Create an account → **Create cronjob**
-2. URL: `https://your-backend-url/api/cron/daily-leave-slack?token=YOUR_CRON_SECRET`
-3. Schedule: daily at your preferred time
-4. Method: `GET` → Save and enable
-
-Test manually:
 ```bash
-curl "https://your-backend-url/api/cron/daily-leave-slack?token=YOUR_CRON_SECRET"
+goose -dir pkg/migration postgres "$DB_URL" up
 ```
-`200 OK` = Slack message sent successfully.
 
-> ⚠️ Treat `CRON_SECRET` like a password — anyone with it can trigger the endpoint. Never commit `.env`.
+### 4. Run
 
----
+```bash
+go run main.go
+```
+
+The server starts on `APP_PORT` (default `8082`).
+
+### 5. Frontend
+
+The React frontend is maintained in its own repository — see that repo's README for setup. Set `ALLOWED_ORIGINS` in `.env` to the frontend's URL so CORS allows the connection.
 
 ## Docker Setup
 
-**Files:**
-- `Dockerfile` — multi-stage build: compiles the Go binary in a `golang:1.25-alpine` build stage, copies only the binary + `pkg/migration` into a minimal `alpine:latest` runtime image
-- `docker-compose.yaml` — runs the backend; Postgres can be added as a second service if not using Railway/Supabase
+Two ways to run, depending on where your database lives.
 
-Pick the configuration that matches where your database lives.
-
-### Option A — `DB_URL` points to Railway / Supabase (no local DB container needed)
+**A — External database (Railway / Supabase)**
 
 ```yaml
 services:
@@ -185,11 +153,7 @@ services:
     restart: unless-stopped
 ```
 
-```bash
-docker compose up -d --build
-```
-
-### Option B — Local Postgres in Docker
+**B — Local Postgres in Docker**
 
 ```yaml
 services:
@@ -226,9 +190,8 @@ volumes:
   pgdata:
 ```
 
-`depends_on: condition: service_healthy` makes `backend` wait until Postgres is actually accepting connections — not just "container started" — before it tries to connect. This avoids the race condition where the backend crashes because Postgres hasn't finished initializing yet.
+With option B, point `.env` at the service name, not `localhost`:
 
-Update `.env` to match this service, using the **service name** (`ums-postgres`) as the host — not `localhost`:
 ```env
 DB_URL=postgresql://postgres:yourpassword@ums-postgres:5432/dbname?sslmode=disable
 ```
@@ -237,56 +200,33 @@ DB_URL=postgresql://postgres:yourpassword@ums-postgres:5432/dbname?sslmode=disab
 docker compose up -d --build
 ```
 
-**Stop everything:**
+| Command | Action |
+|---|---|
+| `docker compose up -d --build` | Build and start in the background |
+| `docker compose down` | Stop services |
+| `docker compose down -v` | Stop and remove the local DB volume |
+| `docker logs -f ums-backend` | Follow logs live |
+| `docker exec -it ums-backend sh` | Shell into the running container |
+
+## Testing
+
 ```bash
-docker compose down
+go test ./...
+go test ./... -cover
 ```
 
-**Stop and delete the local DB volume too:**
-```bash
-docker compose down -v
-```
+Test suite is a work in progress. Conventions going forward: unit tests alongside source files, integration tests for DB-touching code behind a build tag or test database, and external services (Resend, Slack) mocked rather than called live.
 
-**View logs (live):**
-```bash
-docker logs -f ums-backend
-```
+## Contributing
 
-**Open a shell inside the running container:**
-```bash
-docker exec -it ums-backend sh
-```
+1. Fork the repository
+2. Create a branch: `git checkout -b feature/your-feature-name`
+3. Commit your changes with clear, focused messages
+4. Run `go mod tidy && go vet ./...` before pushing
+5. Open a Pull Request describing what changed and why
 
----
+For larger changes, please open an issue first to discuss the approach.
 
-## Running Locally
+## License
 
-**Without Docker** (requires Go installed + a reachable Postgres):
-```bash
-go mod tidy
-go run main.go
-```
-Server starts on `APP_PORT` (default `8082`).
-
-**With Docker:**
-```bash
-docker compose up -d --build
-```
-
----
-
-## Troubleshooting
-
-**Container keeps restarting / `Failed to connect to database`**
-- `docker logs ums-backend` to see the actual error
-- Confirm `DB_URL` is present inside the container: `docker exec -it ums-backend sh -c "env | grep DB_URL"`
-- If the host in `DB_URL` is `localhost`, fix it — that resolves to the container itself, not your real database
-
-**`dial tcp [::1]:5432: connect: connection refused`**
-- The app is resolving `localhost` to IPv6 (`::1`), where nothing is listening inside the container. Update `DB_URL` to the correct host (external hostname, or the Postgres service name if running locally in Docker).
-
-**`Conflict. The container name "/ums-backend" is already in use`**
-- An old container with that name still exists. Remove it: `docker rm ums-backend`
-
-**Container runs `sh` instead of the app**
-- Happens only if `sh` was explicitly passed as an override (e.g. `docker run ... ums-backend sh`). The Dockerfile's `CMD ["./ums-backend"]` runs automatically when no command override is given.
+MIT — see [LICENSE](./LICENSE).

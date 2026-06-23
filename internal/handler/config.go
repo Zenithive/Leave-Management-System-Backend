@@ -3,10 +3,10 @@ package handler
 import (
 	"github.com/go-playground/validator/v10"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service/leave/leaveflow"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/repositories"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/service/leave/leaveflow"
 )
 
 // HandlerFunc holds all dependencies injected at startup.

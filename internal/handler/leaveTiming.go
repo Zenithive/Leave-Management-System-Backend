@@ -7,10 +7,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/common"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/constant"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
+	utils "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
 )
 
 func (h *HandlerFunc) GetLeaveTiming(c *gin.Context) {
