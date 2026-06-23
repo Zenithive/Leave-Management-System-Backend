@@ -1,592 +1,292 @@
-# Zenithive - User Management System Backend
+# Leave Management System — Backend
 
-<div align="center">
+[![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 
-![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=for-the-badge&logo=go)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-316192?style=for-the-badge&logo=postgresql)
-![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
-![Status](https://img.shields.io/badge/Status-Production%20Ready-success?style=for-the-badge)
+The backend service for the **Leave Management System** — handles authentication, leave requests/approvals, email notifications, and Slack integrations (birthday announcements + daily leave summaries).
 
-**A comprehensive employee management system with leave tracking, payroll processing, and role-based access control**
-
-[Features](#-features) • [Quick Start](#-quick-start) • [API Documentation](#-api-documentation) • [Architecture](#-architecture) • [Contributing](#-contributing)
-
-</div>
+> This README covers the **backend** only.
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
-- [Overview](#-overview)
-- [Features](#-features)
-- [Tech Stack](#-tech-stack)
-- [System Architecture](#-system-architecture)
-- [Getting Started](#-getting-started)
-- [API Documentation](#-api-documentation)
-- [Database Schema](#-database-schema)
-- [Security](#-security)
-- [Testing](#-testing)
-- [Deployment](#-deployment)
-- [Contributing](#-contributing)
-- [License](#-license)
-
----
-
-## 🌟 Overview
-
-Zenithive is a modern, enterprise-grade user management system designed for organizations with 25-100 employees. It provides comprehensive employee lifecycle management, automated leave tracking, intelligent payroll processing, and robust role-based access control.
-
-### Key Highlights
-
-- 🔐 **Secure Authentication** - JWT-based authentication with bcrypt password hashing
-- 👥 **Employee Management** - Complete CRUD operations with hierarchy management
-- 🏖️ **Leave Management** - Automated leave tracking with approval workflows
-- 💰 **Payroll Processing** - Intelligent salary calculation with deduction management
-- 📊 **Role-Based Access** - Granular permissions across 5 user roles
-- 📧 **Email Notifications** - Automated notifications for all critical events
-- 📄 **PDF Generation** - Professional payslip generation
-- 🔄 **RESTful API** - Clean, well-documented REST API
+- [Features](#features)
+- [Technology Stack](#technology-stack)
+- [Backend Setup](#backend-setup)
+  - [1. Clone & Install](#1-clone--install)
+  - [2. Environment Variables](#2-environment-variables)
+  - [3. Database](#3-database)
+  - [4. Resend (Email)](#4-resend-email)
+  - [5. Slack Integration](#5-slack-integration)
+  - [6. Daily Leave Cron Job](#6-daily-leave-cron-job)
+- [Docker Setup](#docker-setup)
+- [Running Locally](#running-locally)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
-## ✨ Features
+## Features
 
-### Employee Management
-- ✅ Create, read, update, and deactivate employees
-- ✅ Manager hierarchy with team management
-- ✅ Role assignment and management
-- ✅ Password management with secure hashing
-- ✅ Employee profile with joining date, salary, and status
-- ✅ Email domain validation (@zenithive.com)
+- 🔐 **Authentication** — signup/login restricted to a company email domain
+- 📝 **Leave requests** — pending, approve, reject, and track leave history
+- 📧 **Email notifications** — transactional emails via Resend (verification, approvals, rejections)
+- 💬 **Slack integration** — daily "who's on leave today" summary + automated birthday announcements
+- ⏰ **Secure cron endpoint** — token-protected endpoint for an external scheduler to trigger daily jobs
+- 🐳 **Containerized** — Dockerfile + docker-compose setup
 
-### Leave Management
-- ✅ Leave application with reason validation
-- ✅ Multi-level approval workflow
-- ✅ Working days calculation (excludes weekends & holidays)
-- ✅ Leave balance tracking per employee
-- ✅ Leave cancellation (pending leaves)
-- ✅ Leave withdrawal (approved leaves)
-- ✅ Admin can add leave on behalf of employees
-- ✅ Multiple leave types (Annual, Sick, etc.)
-- ✅ Leave policy management
+## Technology Stack
 
-### Payroll Management
-- ✅ Monthly payroll processing
-- ✅ Automatic deduction calculation based on leaves
-- ✅ Payroll preview before finalization
-- ✅ Professional PDF payslip generation
-- ✅ Payslip download for employees
-- ✅ SUPERADMIN-only finalization for security
-
-### Access Control
-- ✅ 5 distinct roles: SUPERADMIN, ADMIN, HR, MANAGER, EMPLOYEE
-- ✅ Granular permissions per endpoint
-- ✅ Self-modification restrictions
-- ✅ Manager hierarchy validation
-- ✅ JWT token-based authentication
-
-### Notifications
-- ✅ Email notifications for 8+ events
-- ✅ Welcome emails for new employees
-- ✅ Leave status notifications
-- ✅ Password change alerts
-- ✅ Async email processing
-
-### Company Settings
-- ✅ Configurable working days per month
-- ✅ Manager leave addition toggle
-- ✅ Holiday management
-- ✅ Company-wide settings
+| Layer | Technology |
+|---|---|
+| Backend language | **Go 1.25** |
+| Database | **PostgreSQL** (Railway / Supabase / local via Docker) |
+| Email | **Resend** |
+| Notifications | **Slack** (Incoming Webhooks) |
+| Containerization | **Docker** + **Docker Compose** |
+| Scheduling | External cron (e.g. **cron-job.org**) hitting a secured backend endpoint |
 
 ---
 
-## 🛠️ Tech Stack
+## Backend Setup
 
-### Backend
-- **Language**: Go 1.21+
-- **Framework**: Gin (HTTP web framework)
-- **Database**: PostgreSQL 14+
-- **ORM**: sqlx (SQL extensions)
-- **Authentication**: JWT (golang-jwt)
-- **Password Hashing**: bcrypt
-- **PDF Generation**: gofpdf
-- **Validation**: go-playground/validator
+### 1. Clone & Install
 
-### Tools & Libraries
-- **CORS**: gin-contrib/cors
-- **UUID**: google/uuid
-- **Environment**: godotenv
-
----
-
-## 🏗️ System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        Client Layer                          │
-│                    (React Frontend)                          │
-└────────────────────────┬────────────────────────────────────┘
-                         │ HTTP/REST API
-                         │ JWT Authentication
-┌────────────────────────▼────────────────────────────────────┐
-│                     API Gateway Layer                        │
-│                    (Gin Router + CORS)                       │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────────┐
-│                   Middleware Layer                           │
-│              (Auth, Validation, Logging)                     │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────────┐
-│                   Controller Layer                           │
-│   ┌──────────┬──────────┬──────────┬──────────┬─────────┐  │
-│   │ Employee │  Leave   │ Payroll  │ Settings │  Auth   │  │
-│   └──────────┴──────────┴──────────┴──────────┴─────────┘  │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────────┐
-│                  Repository Layer                            │
-│              (Database Queries & Logic)                      │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────────┐
-│                   Database Layer                             │
-│                   (PostgreSQL)                               │
-│   ┌──────────────────────────────────────────────────┐     │
-│   │  Tables: Employee, Leave, Payroll, Settings      │     │
-│   └──────────────────────────────────────────────────┘     │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Project Structure
-```
-UserMenagmentSystem_Backend/
-├── controllers/          # Request handlers
-│   ├── auth.go          # Authentication
-│   ├── employee.go      # Employee management
-│   ├── leave.go         # Leave management
-│   ├── leave_balance.go # Leave balance operations
-│   ├── payroll.go       # Payroll processing
-│   └── settings.go      # Company settings
-├── middlewere/          # Middleware functions
-│   └── middlewere.go    # Auth middleware
-├── models/              # Data models
-│   └── models.go        # All data structures
-├── repositories/        # Database layer
-│   └── repo.go          # Database queries
-├── routes/              # Route definitions
-│   └── router.go        # API routes
-├── utils/               # Utility functions
-│   ├── auth.go          # JWT & password utils
-│   ├── errors.go        # Error handling
-│   └── notification.go  # Email notifications
-├── pkg/                 # Packages
-│   ├── config/          # Configuration
-│   ├── database/        # Database connection
-│   └── migration/       # SQL migrations
-├── tmp/                 # Temporary files (PDFs)
-├── .env                 # Environment variables
-├── main.go              # Application entry point
-├── go.mod               # Go dependencies
-└── README.md            # This file
-```
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Go 1.21 or higher
-- PostgreSQL 14 or higher
-- Git
-
-### Installation
-
-1. **Clone the repository**
 ```bash
-git clone https://github.com/sanjayk-eng/UserMenagmentSystem_Backend.git
-cd UserMenagmentSystem_Backend
+git clone https://github.com/your-username/your-project.git
+cd your-project/backend
+go mod tidy
 ```
 
-2. **Install dependencies**
-```bash
-go mod download
-```
+### 2. Environment Variables
 
-3. **Setup PostgreSQL database**
-```bash
-# Create database
-createdb user_management_db
+Create a `.env` file in the project root:
 
-# Run migrations
-psql -d user_management_db -f pkg/migration/20251120110206_allschima.sql
-psql -d user_management_db -f pkg/migration/20251120134716_tblrole.sql
-psql -d user_management_db -f pkg/migration/20251123045525_tbl_holiday.sql
-psql -d user_management_db -f pkg/migration/20251124053315_tbl_leave_adj_add_col.sql
-psql -d user_management_db -f pkg/migration/20251124103513_tbl_setting_info.sql
-psql -d user_management_db -f pkg/migration/20251124104539_tbl_setting_add.sql
-```
-
-4. **Configure environment variables**
-```bash
-# Create .env file
-cp .env.example .env
-
-# Edit .env with your settings
-nano .env
-```
-
-**.env Configuration:**
 ```env
-# Server Configuration
-APP_PORT=8080
-FRONTEND_SERVER=http://localhost:3000
+# Database
+DB_URL=postgresql://user:password@host:port/dbname?sslmode=disable
 
-# Security
-SERACT_KEY=your_jwt_secret_key_here
+# Server
+APP_PORT=8082
+APP_URL=http://localhost:8089
+APP_NAME=Leave Management System
 
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=your_password
-DB_NAME=user_management_db
+# Email (Resend)
+RESEND_API_KEY=your_resend_api_key_here
+RESEND_FROM=leave@yourdomain.com
 
-# SMTP Email Configuration
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-SMTP_FROM=your-email@gmail.com
+# CORS
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8089
+
+# Slack
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+EXTERNAL_API_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+
+# Cron security — endpoint: GET /api/cron/daily-leave-slack?token=CRON_SECRET
+CRON_SECRET=your-random-cron-secret-min-32-chars-here
+
+# Company rules — restricts signup/login to this email domain
+COMPANY_EMAIL_DOMAIN=yourdomain.com
+
+# Seed / demo account password
+DEMO_SEED_PASSWORD=Demo@1234
 ```
 
-5. **Run the application**
+Generate a secure `CRON_SECRET` instead of hand-typing one:
+
 ```bash
-go run main.go
+openssl rand -hex 32
 ```
 
-The server will start on `http://localhost:8080`
+### 3. Database
 
-### Quick Test
+**Option A — IN for production**
+
+ exampler Copy the connection string from [Railway](https://railway.app) or [Supabase](https://supabase.com) into `DB_URL`. Use `?sslmode=require` in production.
+
+**Option B — Local Postgres for development**
 
 ```bash
-# Test the API
-curl http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "admin@zenithive.com",
-    "password": "admin123"
-  }'
+docker run --name leave-db \
+  -e POSTGRES_USER=user \
+  -e POSTGRES_PASSWORD=password \
+  -e POSTGRES_DB=dbname \
+  -p 5432:5432 \
+  -v leave-db-data:/var/lib/postgresql/data \
+  -d postgres
 ```
+
+Then in `.env`:
+```env
+DB_URL=postgresql://user:password@localhost:5432/dbname?sslmode=disable
+```
+
+> **If using the bundled `docker-compose.yml` instead** (see [Docker Setup](#docker-setup)), Postgres is handled for you — don't run the command above separately, and don't use `localhost` as the host. Use the Postgres **service name** (e.g. `ums-postgres`) instead, since `localhost` inside a container refers to the container itself, not your host machine or sibling containers.
+
+### 4. Resend (Email)
+
+1. Create an account at [resend.com](https://resend.com).
+2. Verify a sending domain (or use Resend's test domain while developing).
+3. Generate an API key → `RESEND_API_KEY`.
+4. Set `RESEND_FROM` to an address on your verified domain.
+
+### 5. Slack Integration
+
+1. [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**.
+2. Choose workspace and app name.
+3. Under **Incoming Webhooks**, toggle on → **Add New Webhook to Workspace**.
+4. Pick the channel for notifications (e.g. `#leave-updates`).
+5. Copy the webhook URL into both `SLACK_WEBHOOK_URL` and `EXTERNAL_API_URL`.
+
+### 6. Daily Leave Cron Job
+
+Railway/Supabase don't run scheduled jobs — you need an external scheduler hitting your endpoint:
+
+```
+GET https://your-backend-url/api/cron/daily-leave-slack?token=CRON_SECRET
+```
+
+**Using cron-job.org (free):**
+1. Create an account → **Create cronjob**
+2. URL: `https://your-backend-url/api/cron/daily-leave-slack?token=YOUR_CRON_SECRET`
+3. Schedule: daily at your preferred time
+4. Method: `GET` → Save and enable
+
+Test manually:
+```bash
+curl "https://your-backend-url/api/cron/daily-leave-slack?token=YOUR_CRON_SECRET"
+```
+`200 OK` = Slack message sent successfully.
+
+> ⚠️ Treat `CRON_SECRET` like a password — anyone with it can trigger the endpoint. Never commit `.env`.
 
 ---
 
-## 📚 API Documentation
+## Docker Setup
 
-### Base URL
-```
-http://localhost:8080/api
-```
+**Files:**
+- `Dockerfile` — multi-stage build: compiles the Go binary in a `golang:1.25-alpine` build stage, copies only the binary + `pkg/migration` into a minimal `alpine:latest` runtime image
+- `docker-compose.yaml` — runs the backend; Postgres can be added as a second service if not using Railway/Supabase
 
-### Authentication
-All endpoints (except `/auth/login`) require JWT authentication:
-```
-Authorization: Bearer <your_jwt_token>
-```
+Pick the configuration that matches where your database lives.
 
-### Endpoint Summary
-
-| Module | Endpoints | Description |
-|--------|-----------|-------------|
-| **Authentication** | 1 | Login and token generation |
-| **Employee Management** | 10 | CRUD operations, role management |
-| **Leave Management** | 9 | Apply, approve, cancel, withdraw leaves |
-| **Leave Balances** | 2 | View and adjust leave balances |
-| **Payroll** | 4 | Run, finalize, and download payslips |
-| **Settings** | 3 | Company settings and holidays |
-| **Total** | **32** | Complete API coverage |
-
-### Quick Examples
-
-**Login:**
-```bash
-POST /api/auth/login
-{
-  "email": "user@zenithive.com",
-  "password": "password123"
-}
-```
-
-**Create Employee:**
-```bash
-POST /api/employee/
-Authorization: Bearer <token>
-{
-  "full_name": "John Doe",
-  "email": "john@zenithive.com",
-  "role": "EMPLOYEE",
-  "password": "temp123",
-  "salary": 50000,
-  "joining_date": "2024-12-01T00:00:00Z"
-}
-```
-
-**Apply Leave:**
-```bash
-POST /api/leaves/apply
-Authorization: Bearer <token>
-{
-  "leave_type_id": 1,
-  "start_date": "2024-12-10T00:00:00Z",
-  "end_date": "2024-12-12T00:00:00Z",
-  "reason": "Family vacation"
-}
-```
-
-**Run Payroll:**
-```bash
-POST /api/payroll/run
-Authorization: Bearer <token>
-{
-  "month": 11,
-  "year": 2024
-}
-```
-
-### Complete Documentation
-
-For detailed API documentation, see:
-- 📖 [Complete API Documentation](./COMPLETE_API_DOCUMENTATION.md)
-- 🚀 [Quick Reference Guide](./QUICK_REFERENCE_GUIDE.md)
-
----
-
-## 🗄️ Database Schema
-
-### Core Tables
-
-- **Tbl_Employee** - Employee information and hierarchy
-- **Tbl_Role** - User roles (SUPERADMIN, ADMIN, HR, MANAGER, EMPLOYEE)
-- **Tbl_Leave** - Leave requests and status
-- **Tbl_Leave_Type** - Leave policies (Annual, Sick, etc.)
-- **Tbl_Leave_Balance** - Employee leave balances
-- **Tbl_Leave_Adjustment** - Manual balance adjustments
-- **Tbl_Payroll_Run** - Payroll processing records
-- **Tbl_Payslip** - Generated payslips
-- **Tbl_Holiday** - Company holidays
-- **Tbl_Company_Settings** - System configuration
-
-### Entity Relationships
-
-```
-Employee ──┬── manages ──> Employee (Manager)
-           ├── has ──> Leave
-           ├── has ──> Leave_Balance
-           └── has ──> Payslip
-
-Leave ──┬── belongs to ──> Employee
-        └── has type ──> Leave_Type
-
-Payslip ──┬── belongs to ──> Employee
-          └── part of ──> Payroll_Run
-```
-
-For detailed schema, see [SCHEMA.md](./SCHEMA.md)
-
----
-
-## 🔒 Security
-
-### Authentication & Authorization
-- ✅ JWT token-based authentication
-- ✅ Token expiration and refresh
-- ✅ Password hashing with bcrypt (cost factor: 10)
-- ✅ Role-based access control (RBAC)
-- ✅ Route-level middleware protection
-
-### Data Protection
-- ✅ SQL injection prevention (parameterized queries)
-- ✅ Email domain validation
-- ✅ Password strength requirements (min 6 chars)
-- ✅ Sensitive data never exposed in responses
-- ✅ CORS configuration for frontend
-
-### Access Control Rules
-- ✅ ADMIN/HR cannot change their own role
-- ✅ ADMIN/HR cannot modify SUPERADMIN users
-- ✅ Only SUPERADMIN can finalize payroll
-- ✅ Employees can only view/modify their own data
-- ✅ Managers can only manage their team members
-
-### Audit Trail
-- ✅ All modifications tracked with timestamps
-- ✅ Leave adjustments logged
-- ✅ Payroll finalization tracked
-- ✅ Email notifications for critical actions
-
----
-
-## 🧪 Testing
-
-### Manual Testing
-
-```bash
-# Set token variable
-TOKEN="your_jwt_token_here"
-
-# Test employee endpoints
-curl -X GET http://localhost:8080/api/employee/ \
-  -H "Authorization: Bearer $TOKEN"
-
-# Test leave endpoints
-curl -X GET http://localhost:8080/api/leaves/all \
-  -H "Authorization: Bearer $TOKEN"
-
-# Test payroll endpoints
-curl -X GET http://localhost:8080/api/payroll/payslip \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-### Test Data
-
-Default users (after migration):
-- **SUPERADMIN**: superadmin@zenithive.com / superadmin123
-- **ADMIN**: admin@zenithive.com / admin123
-- **MANAGER**: manager@zenithive.com / manager123
-- **EMPLOYEE**: employee@zenithive.com / employee123
-
----
-
-## 🚢 Deployment
-
-### Docker Deployment
-
-```dockerfile
-# Dockerfile
-FROM golang:1.21-alpine AS builder
-WORKDIR /app
-COPY . .
-RUN go mod download
-RUN go build -o main .
-
-FROM alpine:latest
-WORKDIR /root/
-COPY --from=builder /app/main .
-COPY --from=builder /app/.env .
-EXPOSE 8080
-CMD ["./main"]
-```
-
-```bash
-# Build and run
-docker build -t zenithive-backend .
-docker run -p 8080:8080 zenithive-backend
-```
-
-### Docker Compose
+### Option A — `DB_URL` points to Railway / Supabase (no local DB container needed)
 
 ```yaml
-version: '3.8'
 services:
-  db:
-    image: postgres:14
+  backend:
+    build: .
+    container_name: ums-backend
+    ports:
+      - "8082:8082"
+    env_file:
+      - .env
+    restart: unless-stopped
+```
+
+```bash
+docker compose up -d --build
+```
+
+### Option B — Local Postgres in Docker
+
+```yaml
+services:
+  backend:
+    build: .
+    container_name: ums-backend
+    ports:
+      - "8082:8082"
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ums-postgres
     environment:
-      POSTGRES_DB: user_management_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: yourpassword
+      POSTGRES_DB: dbname
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  backend:
-    build: .
-    ports:
-      - "8080:8080"
-    depends_on:
-      - db
-    environment:
-      DB_HOST: db
-      DB_PORT: 5432
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  postgres_data:
+  pgdata:
 ```
 
-### Production Checklist
+`depends_on: condition: service_healthy` makes `backend` wait until Postgres is actually accepting connections — not just "container started" — before it tries to connect. This avoids the race condition where the backend crashes because Postgres hasn't finished initializing yet.
 
-- [ ] Set strong JWT secret key
-- [ ] Configure HTTPS/TLS
-- [ ] Set up database backups
-- [ ] Configure email service
-- [ ] Set up monitoring and logging
-- [ ] Configure CORS for production domain
-- [ ] Set up rate limiting
-- [ ] Enable database connection pooling
-- [ ] Configure environment-specific settings
+Update `.env` to match this service, using the **service name** (`ums-postgres`) as the host — not `localhost`:
+```env
+DB_URL=postgresql://postgres:yourpassword@ums-postgres:5432/dbname?sslmode=disable
+```
 
----
+```bash
+docker compose up -d --build
+```
 
-## 🤝 Contributing
+**Stop everything:**
+```bash
+docker compose down
+```
 
-We welcome contributions! Please follow these steps:
+**Stop and delete the local DB volume too:**
+```bash
+docker compose down -v
+```
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+**View logs (live):**
+```bash
+docker logs -f ums-backend
+```
 
-### Coding Standards
-
-- Follow Go best practices and conventions
-- Write clear, descriptive commit messages
-- Add comments for complex logic
-- Update documentation for API changes
-- Test your changes thoroughly
-
----
-
-## 📞 Support
-
-For issues, questions, or feature requests:
-
-- 📧 Email: support@zenithive.com
-- 🐛 Issues: [GitHub Issues](https://github.com/sanjayk-eng/UserMenagmentSystem_Backend/issues)
-- 📖 Documentation: [Complete API Docs](./COMPLETE_API_DOCUMENTATION.md)
+**Open a shell inside the running container:**
+```bash
+docker exec -it ums-backend sh
+```
 
 ---
 
-## 📄 License
+## Running Locally
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+**Without Docker** (requires Go installed + a reachable Postgres):
+```bash
+go mod tidy
+go run main.go
+```
+Server starts on `APP_PORT` (default `8082`).
 
----
-
-## 🙏 Acknowledgments
-
-- Gin Web Framework
-- PostgreSQL Database
-- Go Community
-- All Contributors
-
----
-
-## 📊 Project Status
-
-- ✅ **Version**: 1.0
-- ✅ **Status**: Production Ready
-- ✅ **Last Updated**: November 2024
-- ✅ **Maintained**: Yes
+**With Docker:**
+```bash
+docker compose up -d --build
+```
 
 ---
 
-<div align="center">
+## Troubleshooting
 
-**Built with ❤️ by the Zenithive Team**
+**Container keeps restarting / `Failed to connect to database`**
+- `docker logs ums-backend` to see the actual error
+- Confirm `DB_URL` is present inside the container: `docker exec -it ums-backend sh -c "env | grep DB_URL"`
+- If the host in `DB_URL` is `localhost`, fix it — that resolves to the container itself, not your real database
 
-[⬆ Back to Top](#zenithive---user-management-system-backend)
+**`dial tcp [::1]:5432: connect: connection refused`**
+- The app is resolving `localhost` to IPv6 (`::1`), where nothing is listening inside the container. Update `DB_URL` to the correct host (external hostname, or the Postgres service name if running locally in Docker).
 
-</div>
+**`Conflict. The container name "/ums-backend" is already in use`**
+- An old container with that name still exists. Remove it: `docker rm ums-backend`
+
+**Container runs `sh` instead of the app**
+- Happens only if `sh` was explicitly passed as an override (e.g. `docker run ... ums-backend sh`). The Dockerfile's `CMD ["./ums-backend"]` runs automatically when no command override is given.

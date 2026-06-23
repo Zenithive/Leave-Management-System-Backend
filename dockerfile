@@ -1,5 +1,5 @@
 # Step 1: Build Go binary
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
@@ -19,9 +19,7 @@ RUN apk add --no-cache ca-certificates
 COPY --from=builder /app/ums-backend .
 COPY pkg/migration ./pkg/migration
 
-# .env is NOT copied into the image — inject secrets at runtime via:
-#   docker run --env-file .env ...
-# or via your orchestrator's secret management.
+
 
 EXPOSE 8082
 

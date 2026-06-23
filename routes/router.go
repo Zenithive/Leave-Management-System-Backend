@@ -5,13 +5,13 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/controllers"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/handler"
 	middleware "github.com/sanjayk-eng/UserMenagmentSystem_Backend/middlewere"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/config"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils/access_role"
 )
 
-func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc, env *config.ENV) {
+func SetupRoutes(r *gin.Engine, h *handler.HandlerFunc, env *config.ENV) {
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     env.ALLOWED_ORIGINS,

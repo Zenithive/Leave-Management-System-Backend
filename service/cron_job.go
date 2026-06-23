@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/providers"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/config"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/repositories"
 )
 

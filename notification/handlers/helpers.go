@@ -1,8 +1,8 @@
 package handlers
 
 import (
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/config"
 )
 
 // appName returns the application name from config.

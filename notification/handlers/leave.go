@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
 	models2 "github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/providers"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/templates"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/config"
 )
 
 // LeaveNotificationHandler handles all leave-related notification events.

@@ -7,7 +7,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/config"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
 )
 
 var (

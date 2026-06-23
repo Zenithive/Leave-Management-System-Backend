@@ -8,12 +8,12 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/controllers"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/handler"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/handlers"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/providers"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/config"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/database"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/repositories"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/routes"
@@ -80,7 +80,7 @@ func main() {
 	holidayservice := service.NewHolidayService(holidayRepo)
 
 	// ── HTTP handler ─────────────────────────────────────────────────────────
-	handlerFunc := controllers.NewHandler(
+	handlerFunc := handler.NewHandler(
 		env, repo, validator,
 		leaveApporverService, leavePolicyService,
 		leaveFlowService, leaveFlowLogService,

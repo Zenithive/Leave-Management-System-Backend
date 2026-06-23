@@ -3,10 +3,10 @@ package handlers
 import (
 	"log/slog"
 
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/providers"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/templates"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/config"
 )
 
 // EmployeeNotificationHandler handles employee lifecycle notification events.

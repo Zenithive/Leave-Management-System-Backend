@@ -5,12 +5,12 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/controllers"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/handler"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
 )
 
 // AuthMiddleware verifies Bearer JWT Token
-func AuthMiddleware(h *controllers.HandlerFunc) gin.HandlerFunc {
+func AuthMiddleware(h *handler.HandlerFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
 
 		// 1. Read Authorization header
