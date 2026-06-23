@@ -418,13 +418,11 @@ func (s *leaveFlow) publishLeaveAction(ctx context.Context, eventType notificati
 
 	employee, err := s.CommRepo.GetEmployeeDetailsForNotification(leave.EmployeeID)
 	if err != nil {
-		fmt.Println("=============1", err.Error())
 		return
 	}
 
 	recipients, err := s.getRecipientsWaiting(ctx, leave.EmployeeID, leaveID)
 	if err != nil {
-		fmt.Println("=============2", err.Error())
 		return
 	}
 
@@ -432,7 +430,6 @@ func (s *leaveFlow) publishLeaveAction(ctx context.Context, eventType notificati
 	if lt, err := s.LeavePolicyRepo.GetById(ctx, strconv.Itoa(leave.LeaveTypeID)); err == nil {
 		leaveTypeName = lt.Name
 	}
-	fmt.Println("============================3")
 
 	s.NotificationSvc.Publish(notification.Event{
 		Type: eventType,

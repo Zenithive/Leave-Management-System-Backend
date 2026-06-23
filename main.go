@@ -76,13 +76,15 @@ func main() {
 		repo,
 		notifSvc, // injected — leaveflow publishes events, never touches email directly
 	)
+	holidayRepo := repositories.NewHolidayRepository(db)
+	holidayservice := service.NewHolidayService(holidayRepo)
 
 	// ── HTTP handler ─────────────────────────────────────────────────────────
 	handlerFunc := controllers.NewHandler(
 		env, repo, validator,
 		leaveApporverService, leavePolicyService,
 		leaveFlowService, leaveFlowLogService,
-		notifSvc, // controllers/employee.go uses this for EmployeeCreated / PasswordChanged
+		notifSvc, holidayservice,
 	)
 
 	// ── Cron jobs ────────────────────────────────────────────────────────────

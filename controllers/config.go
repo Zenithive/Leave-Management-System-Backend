@@ -24,6 +24,7 @@ type HandlerFunc struct {
 	LeaveFlowService         leaveflow.LeaveFlowService
 	LeaveFlowLogService      service.LeaveFlowLog
 	NotificationSvc          notification.Service // async event bus — never nil after NewHandler
+	Holidayservice           service.HolidayService
 }
 
 // NewHandler constructs the handler with all required dependencies.
@@ -36,6 +37,7 @@ func NewHandler(
 	leaveFlowService leaveflow.LeaveFlowService,
 	leaveFlowLogService service.LeaveFlowLog,
 	notifSvc notification.Service,
+	holidayservice service.HolidayService,
 ) *HandlerFunc {
 	return &HandlerFunc{
 		Env:                      env,
@@ -48,6 +50,7 @@ func NewHandler(
 		LeaveFlowService:         leaveFlowService,
 		LeaveFlowLogService:      leaveFlowLogService,
 		NotificationSvc:          notifSvc,
+		Holidayservice:           holidayservice,
 	}
 }
 

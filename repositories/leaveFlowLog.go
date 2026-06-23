@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 
 	"github.com/google/uuid"
@@ -57,6 +58,9 @@ func (r *leaveFlowLog) GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*mo
 
 	err := r.DB.GetContext(ctx, &flow, query, leaveID)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
 

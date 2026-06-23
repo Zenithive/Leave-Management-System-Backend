@@ -76,7 +76,7 @@ func CalculateWorkingDays(Query *repositories.Repository, tx *sqlx.Tx, start, en
 	end = time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, time.UTC)
 
 	// 2️ Fetch holidays within range
-	holidays, err := Query.GetByFilterHolidayBetwweenTwoDates(tx, start, end)
+	holidays, err := Query.GetByFilterHolidayBetweenTwoDates(tx, start, end)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch holidays: %v", err)
 	}

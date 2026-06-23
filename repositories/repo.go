@@ -504,3 +504,31 @@ func (r *Repository) GetRecipientsByRoles(ctx context.Context, employeeID uuid.U
 
 	return recipients, err
 }
+
+func (r *Repository) IsHolidayDate(date time.Time) (bool, error) {
+	var count int
+
+	err := r.DB.QueryRow(`
+		SELECT COUNT(*)
+		FROM Tbl_Holiday
+		WHERE date::date = $1::date
+	`, date).Scan(&count)
+
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+func (r *Repository) GetByFilterHolidayBetweenTwoDates(tx *sqlx.Tx, start, end time.Time) ([]time.Time, error) {
+	var holidays []time.Time
+
+	query := `
+		SELECT date
+		FROM Tbl_Holiday
+		WHERE date BETWEEN $1 AND $2
+	`
+
+	err := tx.Select(&holidays, query, start, end)
+	return holidays, err
+}

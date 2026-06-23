@@ -62,6 +62,11 @@ func (s *leaveFlowLog) GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*mo
 		return nil, err
 	}
 
+	//  IMPORTANT FIX: handle nil safely
+	if dbFlow == nil {
+		return nil, nil
+	}
+
 	var approvalLog []models.LeaveFlowStage
 
 	if len(dbFlow.ApprovalLog) > 0 {
@@ -70,7 +75,7 @@ func (s *leaveFlowLog) GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*mo
 		}
 	}
 
-	// Collect all approver UUIDs that have acted (non-nil approved_by)
+	// Collect approver IDs
 	var approverIDs []uuid.UUID
 	for _, stage := range approvalLog {
 		if stage.ApprovedBy != nil {
@@ -78,10 +83,10 @@ func (s *leaveFlowLog) GetByLeaveID(ctx context.Context, leaveID uuid.UUID) (*mo
 		}
 	}
 
-	// Fetch names in one JOIN query and map back to each stage
+	// Enrich names
 	if len(approverIDs) > 0 {
 		nameMap, err := s.Repo.GetApproverNames(ctx, approverIDs)
-		if err == nil { // non-critical — enrich when possible
+		if err == nil {
 			for i := range approvalLog {
 				if approvalLog[i].ApprovedBy != nil {
 					if name, ok := nameMap[*approvalLog[i].ApprovedBy]; ok {
