@@ -6,8 +6,8 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
 )
 
 type ApproveProcessor struct{}
@@ -17,7 +17,7 @@ func (p *ApproveProcessor) Process(ctx context.Context, tx *sqlx.Tx, lctx *Leave
 	// 1. get caller's stage
 	stage := findStage(lctx.Flow, lctx.Role)
 	if stage == nil {
-		return utils.CustomErr(nil, http.StatusForbidden, "leave alredy process")
+		return pkg.CustomErr(nil, http.StatusForbidden, "leave alredy process")
 	}
 
 	// 2. Stamp this role's stage → APPROVED
@@ -28,7 +28,7 @@ func (p *ApproveProcessor) Process(ctx context.Context, tx *sqlx.Tx, lctx *Leave
 
 	// 4. Persist the updated approval log
 	if err := lctx.FlowLogRepo.UpdateApprovalLog(ctx, tx, lctx.Leave.ID, lctx.Flow.ApprovalLog); err != nil {
-		return utils.CustomErr(nil, http.StatusInternalServerError, "failed to update approval log: "+err.Error())
+		return pkg.CustomErr(nil, http.StatusInternalServerError, "failed to update approval log: "+err.Error())
 	}
 
 	// 5. If any stage is still WAITING → more approvers needed, leave stays Pending
@@ -38,13 +38,13 @@ func (p *ApproveProcessor) Process(ctx context.Context, tx *sqlx.Tx, lctx *Leave
 
 	// 6. Every stage settled → final approval
 	if err := lctx.LeaveFlowRepo.UpdateLeaveStatusTx(tx.Tx, lctx.Leave.ID, constant.LEAVE_APPLOVED, lctx.ApproverID); err != nil {
-		return utils.CustomErr(nil, http.StatusInternalServerError, "failed to approve leave: "+err.Error())
+		return pkg.CustomErr(nil, http.StatusInternalServerError, "failed to approve leave: "+err.Error())
 	}
 
 	// 7. Deduct balance — skip for IsEarly (no balance bucket)
 	if !isEarlyLeave(lctx.LeaveType) {
 		if err := lctx.CommRepo.UpdateLeaveBalanceByEmployeeId(tx, lctx.Leave.EmployeeID, lctx.Leave.LeaveTypeID, lctx.Leave.Days); err != nil {
-			return utils.CustomErr(nil, http.StatusInternalServerError, "failed to deduct leave balance: "+err.Error())
+			return pkg.CustomErr(nil, http.StatusInternalServerError, "failed to deduct leave balance: "+err.Error())
 		}
 	}
 

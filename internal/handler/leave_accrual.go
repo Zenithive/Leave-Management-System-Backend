@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	utils "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
+	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 )
 
 // TriggerLeaveAccrual - POST /api/admin/leave-accrual/run
@@ -28,12 +28,12 @@ func (h *HandlerFunc) TriggerLeaveAccrual(c *gin.Context) {
 	// Only SUPERADMIN can trigger this
 	role := c.GetString("role")
 	if role != "SUPERADMIN" {
-		utils.RespondWithError(c, http.StatusForbidden, "only SUPERADMIN can trigger leave accrual")
+		pkg.RespondWithError(c, http.StatusForbidden, "only SUPERADMIN can trigger leave accrual")
 		return
 	}
 
 	if h.LeaveAccrual == nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "leave accrual service not initialized")
+		pkg.RespondWithError(c, http.StatusInternalServerError, "leave accrual service not initialized")
 		return
 	}
 
@@ -45,7 +45,7 @@ func (h *HandlerFunc) TriggerLeaveAccrual(c *gin.Context) {
 	if m := c.Query("month"); m != "" {
 		v, err := strconv.Atoi(m)
 		if err != nil || v < 1 || v > 12 {
-			utils.RespondWithError(c, http.StatusBadRequest, "invalid month: must be 1-12")
+			pkg.RespondWithError(c, http.StatusBadRequest, "invalid month: must be 1-12")
 			return
 		}
 		monthInt = v
@@ -53,7 +53,7 @@ func (h *HandlerFunc) TriggerLeaveAccrual(c *gin.Context) {
 	if y := c.Query("year"); y != "" {
 		v, err := strconv.Atoi(y)
 		if err != nil || v < 2000 || v > 2100 {
-			utils.RespondWithError(c, http.StatusBadRequest, "invalid year: must be 2000-2100")
+			pkg.RespondWithError(c, http.StatusBadRequest, "invalid year: must be 2000-2100")
 			return
 		}
 		yearInt = v

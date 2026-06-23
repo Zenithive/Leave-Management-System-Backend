@@ -9,7 +9,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 )
 
 // =====================================================
@@ -48,7 +48,7 @@ func (s *leaveApprovalFlowService) CreateLeaveApproverFlow(ctx context.Context, 
 		return err
 	}
 	if err := s.Repo.InsertFlow(ctx, req); err != nil {
-		return utils.CustomErr(nil, http.StatusInternalServerError, "failed to insert approval flow")
+		return pkg.CustomErr(nil, http.StatusInternalServerError, "failed to insert approval flow")
 	}
 
 	return nil
@@ -60,7 +60,7 @@ func (s *leaveApprovalFlowService) GetAllLeaveApprovalFlows(ctx context.Context)
 	flows, err := s.Repo.GetAllFlows(ctx)
 	if err != nil {
 		fmt.Println("errError", err.Error())
-		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to get approval flows")
+		return nil, pkg.CustomErr(nil, http.StatusInternalServerError, "failed to get approval flows")
 	}
 
 	// 2. Convert DB model → Response model
@@ -71,7 +71,7 @@ func (s *leaveApprovalFlowService) GetAllLeaveApprovalFlows(ctx context.Context)
 		var stages []models.ApprovalStage
 
 		if err := json.Unmarshal(flow.Flow, &stages); err != nil {
-			return nil, utils.CustomErr(nil, http.StatusInternalServerError, "invalid flow data")
+			return nil, pkg.CustomErr(nil, http.StatusInternalServerError, "invalid flow data")
 		}
 
 		response = append(response, models.LeaveApprovalFlowResponse{
@@ -89,14 +89,14 @@ func (s *leaveApprovalFlowService) GetLeaveApprovalFlowById(ctx context.Context,
 	// 1. Fetch from repo
 	flow, err := s.Repo.GetById(ctx, id)
 	if err != nil {
-		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to get approval flow")
+		return nil, pkg.CustomErr(nil, http.StatusInternalServerError, "failed to get approval flow")
 	}
 
 	// 2. Convert JSON → struct
 	var stages []models.ApprovalStage
 
 	if err := json.Unmarshal(flow.Flow, &stages); err != nil {
-		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "invalid flow data")
+		return nil, pkg.CustomErr(nil, http.StatusInternalServerError, "invalid flow data")
 	}
 
 	// 3. Build response
@@ -116,14 +116,14 @@ func (s *leaveApprovalFlowService) UpdateLeaveApprovelFlow(ctx context.Context, 
 		return err
 	}
 	if err := s.Repo.UpdateLeaveApprovelFlow(ctx, id, req); err != nil {
-		return utils.CustomErr(nil, http.StatusInternalServerError, err.Error())
+		return pkg.CustomErr(nil, http.StatusInternalServerError, err.Error())
 	}
 	return nil
 }
 
 func (s *leaveApprovalFlowService) DeleteLeaveApprovelFlow(ctx context.Context, id string) error {
 	if err := s.Repo.DeleteLeaveApprovelFlow(ctx, id); err != nil {
-		return utils.CustomErr(nil, http.StatusInternalServerError, err.Error())
+		return pkg.CustomErr(nil, http.StatusInternalServerError, err.Error())
 	}
 	return nil
 }
@@ -132,11 +132,11 @@ func (s *leaveApprovalFlowService) DeleteLeaveApprovelFlow(ctx context.Context, 
 func (s *leaveApprovalFlowService) AllowToCreateLeaveApprovelFlow(req *models.LeaveApprovalFlowRequest) error {
 
 	if req == nil {
-		return utils.CustomErr(nil, http.StatusBadRequest, "request is nil")
+		return pkg.CustomErr(nil, http.StatusBadRequest, "request is nil")
 	}
 
 	if len(req.Flow) == 0 {
-		return utils.CustomErr(nil, http.StatusBadRequest, "approval flow cannot be empty")
+		return pkg.CustomErr(nil, http.StatusBadRequest, "approval flow cannot be empty")
 	}
 
 	roleStages := make(map[models.ApproverRole]int)
@@ -153,7 +153,7 @@ func (s *leaveApprovalFlowService) AllowToCreateLeaveApprovelFlow(req *models.Le
 		role := models.ApproverRole(stage.ApproverRole)
 
 		if _, ok := validRoles[role]; !ok {
-			return utils.CustomErr(
+			return pkg.CustomErr(
 				nil,
 				http.StatusBadRequest,
 				fmt.Sprintf(
@@ -164,11 +164,11 @@ func (s *leaveApprovalFlowService) AllowToCreateLeaveApprovelFlow(req *models.Le
 		}
 
 		if _, exists := roleStages[role]; exists {
-			return utils.CustomErr(nil, http.StatusBadRequest, fmt.Sprintf("approver role %s already exists", stage.ApproverRole))
+			return pkg.CustomErr(nil, http.StatusBadRequest, fmt.Sprintf("approver role %s already exists", stage.ApproverRole))
 		}
 
 		if stage.StageNo <= 0 {
-			return utils.CustomErr(nil, http.StatusBadRequest, fmt.Sprintf("invalid stage number: %d", stage.StageNo))
+			return pkg.CustomErr(nil, http.StatusBadRequest, fmt.Sprintf("invalid stage number: %d", stage.StageNo))
 		}
 
 		roleStages[role] = stage.StageNo
@@ -202,7 +202,7 @@ func (s *leaveApprovalFlowService) AllowToCreateLeaveApprovelFlow(req *models.Le
 
 			// Same stage allowed
 			if currentStage > nextStage {
-				return utils.CustomErr(nil, http.StatusBadRequest, fmt.Sprintf("%s cannot be after %s", currentRole, nextRole))
+				return pkg.CustomErr(nil, http.StatusBadRequest, fmt.Sprintf("%s cannot be after %s", currentRole, nextRole))
 			}
 		}
 	}

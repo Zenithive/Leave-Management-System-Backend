@@ -8,14 +8,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
-	utils "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
+	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
 )
 
 func (h *HandlerFunc) GetLeaveReport(c *gin.Context) {
 	reportType := c.Query("report_type")
 	if reportType == "" {
-		utils.RespondWithError(c, http.StatusBadRequest, "Missing required query param: report_type (monthly|yearly|range)")
+		pkg.RespondWithError(c, http.StatusBadRequest, "Missing required query param: report_type (monthly|yearly|range)")
 		return
 	}
 
@@ -27,17 +27,17 @@ func (h *HandlerFunc) GetLeaveReport(c *gin.Context) {
 		monthStr := c.Query("month")
 		yearStr := c.Query("year")
 		if monthStr == "" || yearStr == "" {
-			utils.RespondWithError(c, http.StatusBadRequest, "Monthly report requires: month, year")
+			pkg.RespondWithError(c, http.StatusBadRequest, "Monthly report requires: month, year")
 			return
 		}
 		month, err := strconv.Atoi(monthStr)
 		if err != nil || month < 1 || month > 12 {
-			utils.RespondWithError(c, http.StatusBadRequest, "Invalid month. Must be between 1-12")
+			pkg.RespondWithError(c, http.StatusBadRequest, "Invalid month. Must be between 1-12")
 			return
 		}
 		year, err := strconv.Atoi(yearStr)
 		if err != nil || year < 2000 || year > 2100 {
-			utils.RespondWithError(c, http.StatusBadRequest, "Invalid year. Must be between 2000-2100")
+			pkg.RespondWithError(c, http.StatusBadRequest, "Invalid year. Must be between 2000-2100")
 			return
 		}
 		req.Month = month
@@ -46,12 +46,12 @@ func (h *HandlerFunc) GetLeaveReport(c *gin.Context) {
 	case "yearly":
 		yearStr := c.Query("year")
 		if yearStr == "" {
-			utils.RespondWithError(c, http.StatusBadRequest, "Yearly report requires: year")
+			pkg.RespondWithError(c, http.StatusBadRequest, "Yearly report requires: year")
 			return
 		}
 		year, err := strconv.Atoi(yearStr)
 		if err != nil || year < 2000 || year > 2100 {
-			utils.RespondWithError(c, http.StatusBadRequest, "Invalid year. Must be between 2000-2100")
+			pkg.RespondWithError(c, http.StatusBadRequest, "Invalid year. Must be between 2000-2100")
 			return
 		}
 		req.Year = year
@@ -63,28 +63,28 @@ func (h *HandlerFunc) GetLeaveReport(c *gin.Context) {
 		toYearStr := c.Query("to_year")
 
 		if fromMonthStr == "" || fromYearStr == "" || toMonthStr == "" || toYearStr == "" {
-			utils.RespondWithError(c, http.StatusBadRequest, "Range report requires: from_month, from_year, to_month, to_year")
+			pkg.RespondWithError(c, http.StatusBadRequest, "Range report requires: from_month, from_year, to_month, to_year")
 			return
 		}
 
 		fromMonth, err := strconv.Atoi(fromMonthStr)
 		if err != nil || fromMonth < 1 || fromMonth > 12 {
-			utils.RespondWithError(c, http.StatusBadRequest, "Invalid from_month. Must be between 1-12")
+			pkg.RespondWithError(c, http.StatusBadRequest, "Invalid from_month. Must be between 1-12")
 			return
 		}
 		fromYear, err := strconv.Atoi(fromYearStr)
 		if err != nil || fromYear < 2000 || fromYear > 2100 {
-			utils.RespondWithError(c, http.StatusBadRequest, "Invalid from_year. Must be between 2000-2100")
+			pkg.RespondWithError(c, http.StatusBadRequest, "Invalid from_year. Must be between 2000-2100")
 			return
 		}
 		toMonth, err := strconv.Atoi(toMonthStr)
 		if err != nil || toMonth < 1 || toMonth > 12 {
-			utils.RespondWithError(c, http.StatusBadRequest, "Invalid to_month. Must be between 1-12")
+			pkg.RespondWithError(c, http.StatusBadRequest, "Invalid to_month. Must be between 1-12")
 			return
 		}
 		toYear, err := strconv.Atoi(toYearStr)
 		if err != nil || toYear < 2000 || toYear > 2100 {
-			utils.RespondWithError(c, http.StatusBadRequest, "Invalid to_year. Must be between 2000-2100")
+			pkg.RespondWithError(c, http.StatusBadRequest, "Invalid to_year. Must be between 2000-2100")
 			return
 		}
 
@@ -94,7 +94,7 @@ func (h *HandlerFunc) GetLeaveReport(c *gin.Context) {
 		req.ToYear = toYear
 
 	default:
-		utils.RespondWithError(c, http.StatusBadRequest, "Invalid report_type. Must be: monthly, yearly, or range")
+		pkg.RespondWithError(c, http.StatusBadRequest, "Invalid report_type. Must be: monthly, yearly, or range")
 		return
 	}
 
@@ -115,7 +115,7 @@ func (h *HandlerFunc) GetLeaveReport(c *gin.Context) {
 			constant.ROLE_MANAGER:     true,
 		}
 		if !validRoles[strings.ToUpper(req.Role)] {
-			utils.RespondWithError(c, http.StatusBadRequest, "Invalid role filter. Must be: EMPLOYEE, INTERN, HR, ADMIN, SUPERADMIN, MANAGER")
+			pkg.RespondWithError(c, http.StatusBadRequest, "Invalid role filter. Must be: EMPLOYEE, INTERN, HR, ADMIN, SUPERADMIN, MANAGER")
 			return
 		}
 		req.Role = strings.ToUpper(req.Role)
@@ -130,7 +130,7 @@ func (h *HandlerFunc) GetLeaveReport(c *gin.Context) {
 			"accrued_leaves": true, "balance_leaves": true, "used_leaves": true,
 		}
 		if !validSortFields[req.SortBy] {
-			utils.RespondWithError(c, http.StatusBadRequest, "Invalid sort_by. Must be: name, email, role, total_leaves, paid_leaves, unpaid_leaves, early_leaves, accrued_leaves, balance_leaves, used_leaves")
+			pkg.RespondWithError(c, http.StatusBadRequest, "Invalid sort_by. Must be: name, email, role, total_leaves, paid_leaves, unpaid_leaves, early_leaves, accrued_leaves, balance_leaves, used_leaves")
 			return
 		}
 	}
@@ -139,7 +139,7 @@ func (h *HandlerFunc) GetLeaveReport(c *gin.Context) {
 	response, err := h.LeaveReportSvc.GetLeaveReport(&req)
 	if err != nil {
 		fmt.Printf("GetLeaveReport Service Error: %v\n", err)
-		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leave report: "+err.Error())
+		pkg.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leave report: "+err.Error())
 		return
 	}
 

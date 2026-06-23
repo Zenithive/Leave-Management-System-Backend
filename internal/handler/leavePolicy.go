@@ -18,27 +18,27 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
 )
 
 func (h *HandlerFunc) LeavePolicy(c *gin.Context) {
 
 	if role := c.GetString("role"); role != constant.ROLE_SUPER_ADMIN {
-		utils.RespondWithError(c, http.StatusUnauthorized, "not permitted to create leave policies")
+		pkg.RespondWithError(c, http.StatusUnauthorized, "not permitted to create leave policies")
 		return
 	}
 
 	// ── Input ─────────────────────────────────────────────────────────────────
 	var input models.LeaveTypeInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
+		pkg.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
 		return
 	}
 
 	res, err := h.LeavePolicyService.Create(c, &input)
 	if err != nil {
-		utils.Error(c, err)
+		pkg.Error(c, err)
 		return
 	}
 
@@ -51,7 +51,7 @@ func (h *HandlerFunc) LeavePolicy(c *gin.Context) {
 func (h *HandlerFunc) GetAllLeavePolicies(c *gin.Context) {
 	res, err := h.LeavePolicyService.Get(c)
 	if err != nil {
-		utils.Error(c, err)
+		pkg.Error(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, res)
@@ -61,7 +61,7 @@ func (h *HandlerFunc) UpdateLeavePolicy(c *gin.Context) {
 
 	if role := c.GetString("role"); role != constant.ROLE_SUPER_ADMIN &&
 		role != constant.ROLE_ADMIN && role != constant.ROLE_HR {
-		utils.RespondWithError(c, http.StatusUnauthorized, "not permitted to update leave policies")
+		pkg.RespondWithError(c, http.StatusUnauthorized, "not permitted to update leave policies")
 		return
 	}
 
@@ -74,12 +74,12 @@ func (h *HandlerFunc) UpdateLeavePolicy(c *gin.Context) {
 	// ── Input ─────────────────────────────────────────────────────────────────
 	var input models.LeaveTypeInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
+		pkg.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
 		return
 	}
 	res, err := h.LeavePolicyService.Update(c, leaveTypeID, &input)
 	if err != nil {
-		utils.Error(c, err)
+		pkg.Error(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -92,7 +92,7 @@ func (h *HandlerFunc) DeleteLeavePolicy(c *gin.Context) {
 
 	if role := c.GetString("role"); role != constant.ROLE_SUPER_ADMIN &&
 		role != constant.ROLE_ADMIN && role != constant.ROLE_HR {
-		utils.RespondWithError(c, http.StatusUnauthorized, "not permitted to delete leave policies")
+		pkg.RespondWithError(c, http.StatusUnauthorized, "not permitted to delete leave policies")
 		return
 	}
 
@@ -113,7 +113,7 @@ func (h *HandlerFunc) DeleteLeavePolicy(c *gin.Context) {
 func parseLeaveTypeID(c *gin.Context) (int, bool) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "invalid leave type ID")
+		pkg.RespondWithError(c, http.StatusBadRequest, "invalid leave type ID")
 		return 0, false
 	}
 	return id, true
@@ -126,7 +126,7 @@ func parseLeaveTypeID(c *gin.Context) (int, bool) {
 // 		FromUserID: fromUserID,
 // 	}
 // 	if err := h.Query.AddLog(data, tx); err != nil {
-// 		return utils.CustomErr(c, http.StatusInternalServerError, "failed to write audit log: "+err.Error())
+// 		return pkg.CustomErr(c, http.StatusInternalServerError, "failed to write audit log: "+err.Error())
 // 	}
 // 	return nil
 // }

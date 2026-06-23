@@ -5,9 +5,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
 )
 
 func (h *HandlerFunc) AddHoliday(c *gin.Context) {
@@ -17,24 +17,24 @@ func (h *HandlerFunc) AddHoliday(c *gin.Context) {
 	if role != constant.ROLE_SUPER_ADMIN &&
 		role != constant.ROLE_ADMIN &&
 		role != constant.ROLE_HR {
-		utils.RespondWithError(c, http.StatusForbidden, "not permitted")
+		pkg.RespondWithError(c, http.StatusForbidden, "not permitted")
 		return
 	}
 	var input models.Holiday
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
+		pkg.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
 		return
 	}
 
 	if err := h.Validator.Struct(input); err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "validation failed: "+err.Error())
+		pkg.RespondWithError(c, http.StatusBadRequest, "validation failed: "+err.Error())
 		return
 	}
 
 	id, err := h.Holidayservice.AddHoliday(c, &input)
 	if err != nil {
-		utils.Error(c, err)
+		pkg.Error(c, err)
 		return
 	}
 
@@ -49,7 +49,7 @@ func (h *HandlerFunc) GetHolidays(c *gin.Context) {
 
 	data, err := h.Holidayservice.GetAllHolidays(c)
 	if err != nil {
-		utils.Error(c, err)
+		pkg.Error(c, err)
 		return
 	}
 
@@ -64,18 +64,18 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 	role := c.GetString("role")
 
 	if err := access_role.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can delete holidays"); err != nil {
-		utils.RespondWithError(c, http.StatusForbidden, err.Error())
+		pkg.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
 	id := c.Param("id")
 	if id == "" {
-		utils.RespondWithError(c, http.StatusBadRequest, "holiday id is required")
+		pkg.RespondWithError(c, http.StatusBadRequest, "holiday id is required")
 		return
 	}
 
 	if err := h.Holidayservice.DeleteHoliday(c, id); err != nil {
-		utils.Error(c, err)
+		pkg.Error(c, err)
 		return
 	}
 
@@ -89,23 +89,23 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // func (s *HandlerFunc) AddHoliday(c *gin.Context) {
 // 	role, _ := c.Get("role")
 // 	if role.(string) != constant.ROLE_SUPER_ADMIN && role.(string) != constant.ROLE_ADMIN && role.(string) != constant.ROLE_HR {
-// 		utils.RespondWithError(c, http.StatusUnauthorized, "not permitted")
+// 		pkg.RespondWithError(c, http.StatusUnauthorized, "not permitted")
 // 		return
 // 	}
 // 	empID, err := common.GetEmployeeId(c)
 // 	if err != nil {
-// 		utils.RespondWithError(c, http.StatusForbidden, "Access Denied")
+// 		pkg.RespondWithError(c, http.StatusForbidden, "Access Denied")
 // 		return
 // 	}
 // 	var input *models.Holiday
 
 // 	if err := c.ShouldBindJSON(&input); err != nil {
-// 		utils.RespondWithError(c, http.StatusBadRequest, "Invalid input: "+err.Error())
+// 		pkg.RespondWithError(c, http.StatusBadRequest, "Invalid input: "+err.Error())
 // 		return
 // 	}
 
 // 	if err := s.Validator.Struct(input); err != nil {
-// 		utils.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
+// 		pkg.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
 // 		return
 // 	}
 
@@ -116,20 +116,20 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // 	err = common.ExecuteTransaction(c, s.Query.DB, func(tx *sqlx.Tx) error {
 // 		id, err := s.Query.AddHoliday(tx, input.Name, normalizedDate, input.Type)
 // 		if err != nil {
-// 			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to add holiday: "+err.Error())
+// 			return pkg.CustomErr(c, http.StatusInternalServerError, "Failed to add holiday: "+err.Error())
 // 		}
 // 		holidayId = id
 // 		data := models.NewCommon(constant.ComponentHoliday, constant.ActionCreate, empID)
 
 // 		err = s.Query.AddLog(data, tx)
 // 		if err != nil {
-// 			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to log action: "+err.Error())
+// 			return pkg.CustomErr(c, http.StatusInternalServerError, "Failed to log action: "+err.Error())
 // 		}
 
 // 		return err
 // 	})
 // 	if err != nil {
-// 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
+// 		pkg.RespondWithError(c, http.StatusInternalServerError, err.Error())
 // 		return
 // 	}
 
@@ -144,7 +144,7 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // func (s *HandlerFunc) GetHolidays(c *gin.Context) {
 // 	holidays, err := s.Query.GetAllHolidays()
 // 	if err != nil {
-// 		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch holidays: "+err.Error())
+// 		pkg.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch holidays: "+err.Error())
 // 		return
 // 	}
 // 	c.JSON(http.StatusOK, holidays)
@@ -154,35 +154,35 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // func (s *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // 	role := c.GetString("role")
 // 	if err := access_role.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can delete designations"); err != nil {
-// 		utils.RespondWithError(c, http.StatusForbidden, err.Error())
+// 		pkg.RespondWithError(c, http.StatusForbidden, err.Error())
 // 		return
 // 	}
 // 	id := c.Param("id")
 // 	if id == "" {
-// 		utils.RespondWithError(c, http.StatusBadRequest, "Holiday ID is required")
+// 		pkg.RespondWithError(c, http.StatusBadRequest, "Holiday ID is required")
 // 		return
 // 	}
 
 // 	empID, err := common.GetEmployeeId(c)
 // 	if err != nil {
-// 		utils.RespondWithError(c, http.StatusForbidden, "Access Denied")
+// 		pkg.RespondWithError(c, http.StatusForbidden, "Access Denied")
 // 		return
 // 	}
 
 // 	err = common.ExecuteTransaction(c, s.Query.DB, func(tx *sqlx.Tx) error {
 // 		err := s.Query.DeleteHoliday(id, tx)
 // 		if err != nil {
-// 			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to delete holiday: "+err.Error())
+// 			return pkg.CustomErr(c, http.StatusInternalServerError, "Failed to delete holiday: "+err.Error())
 // 		}
 // 		data := models.NewCommon(constant.ComponentHoliday, constant.ActionDelete, empID)
 // 		err = s.Query.AddLog(data, tx)
 // 		if err != nil {
-// 			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to log action: "+err.Error())
+// 			return pkg.CustomErr(c, http.StatusInternalServerError, "Failed to log action: "+err.Error())
 // 		}
 // 		return err
 // 	})
 // 	if err != nil {
-// 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
+// 		pkg.RespondWithError(c, http.StatusInternalServerError, err.Error())
 // 		return
 // 	}
 // 	c.JSON(http.StatusOK, gin.H{
@@ -209,23 +209,23 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // func (s *HandlerFunc) AddHoliday(c *gin.Context) {
 // 	role, _ := c.Get("role")
 // 	if role.(string) != constant.ROLE_SUPER_ADMIN && role.(string) != constant.ROLE_ADMIN && role.(string) != constant.ROLE_HR {
-// 		utils.RespondWithError(c, http.StatusUnauthorized, "not permitted")
+// 		pkg.RespondWithError(c, http.StatusUnauthorized, "not permitted")
 // 		return
 // 	}
 // 	empID, err := common.GetEmployeeId(c)
 // 	if err != nil {
-// 		utils.RespondWithError(c, http.StatusForbidden, "Access Denied")
+// 		pkg.RespondWithError(c, http.StatusForbidden, "Access Denied")
 // 		return
 // 	}
 // 	var input *models.Holiday
 
 // 	if err := c.ShouldBindJSON(&input); err != nil {
-// 		utils.RespondWithError(c, http.StatusBadRequest, "Invalid input: "+err.Error())
+// 		pkg.RespondWithError(c, http.StatusBadRequest, "Invalid input: "+err.Error())
 // 		return
 // 	}
 
 // 	if err := s.Validator.Struct(input); err != nil {
-// 		utils.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
+// 		pkg.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
 // 		return
 // 	}
 
@@ -236,20 +236,20 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // 	err = common.ExecuteTransaction(c, s.Query.DB, func(tx *sqlx.Tx) error {
 // 		id, err := s.Query.AddHoliday(tx, input.Name, normalizedDate, input.Type)
 // 		if err != nil {
-// 			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to add holiday: "+err.Error())
+// 			return pkg.CustomErr(c, http.StatusInternalServerError, "Failed to add holiday: "+err.Error())
 // 		}
 // 		holidayId = id
 // 		data := models.NewCommon(constant.ComponentHoliday, constant.ActionCreate, empID)
 
 // 		err = s.Query.AddLog(data, tx)
 // 		if err != nil {
-// 			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to log action: "+err.Error())
+// 			return pkg.CustomErr(c, http.StatusInternalServerError, "Failed to log action: "+err.Error())
 // 		}
 
 // 		return err
 // 	})
 // 	if err != nil {
-// 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
+// 		pkg.RespondWithError(c, http.StatusInternalServerError, err.Error())
 // 		return
 // 	}
 
@@ -264,7 +264,7 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // func (s *HandlerFunc) GetHolidays(c *gin.Context) {
 // 	holidays, err := s.Query.GetAllHolidays()
 // 	if err != nil {
-// 		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch holidays: "+err.Error())
+// 		pkg.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch holidays: "+err.Error())
 // 		return
 // 	}
 // 	c.JSON(http.StatusOK, holidays)
@@ -274,35 +274,35 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // func (s *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // 	role := c.GetString("role")
 // 	if err := access_role.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can delete designations"); err != nil {
-// 		utils.RespondWithError(c, http.StatusForbidden, err.Error())
+// 		pkg.RespondWithError(c, http.StatusForbidden, err.Error())
 // 		return
 // 	}
 // 	id := c.Param("id")
 // 	if id == "" {
-// 		utils.RespondWithError(c, http.StatusBadRequest, "Holiday ID is required")
+// 		pkg.RespondWithError(c, http.StatusBadRequest, "Holiday ID is required")
 // 		return
 // 	}
 
 // 	empID, err := common.GetEmployeeId(c)
 // 	if err != nil {
-// 		utils.RespondWithError(c, http.StatusForbidden, "Access Denied")
+// 		pkg.RespondWithError(c, http.StatusForbidden, "Access Denied")
 // 		return
 // 	}
 
 // 	err = common.ExecuteTransaction(c, s.Query.DB, func(tx *sqlx.Tx) error {
 // 		err := s.Query.DeleteHoliday(id, tx)
 // 		if err != nil {
-// 			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to delete holiday: "+err.Error())
+// 			return pkg.CustomErr(c, http.StatusInternalServerError, "Failed to delete holiday: "+err.Error())
 // 		}
 // 		data := models.NewCommon(constant.ComponentHoliday, constant.ActionDelete, empID)
 // 		err = s.Query.AddLog(data, tx)
 // 		if err != nil {
-// 			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to log action: "+err.Error())
+// 			return pkg.CustomErr(c, http.StatusInternalServerError, "Failed to log action: "+err.Error())
 // 		}
 // 		return err
 // 	})
 // 	if err != nil {
-// 		utils.RespondWithError(c, http.StatusInternalServerError, err.Error())
+// 		pkg.RespondWithError(c, http.StatusInternalServerError, err.Error())
 // 		return
 // 	}
 // 	c.JSON(http.StatusOK, gin.H{

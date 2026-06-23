@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
-	utils "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
+	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 )
 
 // DailyLeaveSlackNotification — cron endpoint that sends the daily leave summary to Slack.
@@ -27,23 +27,23 @@ func (h *HandlerFunc) DailyLeaveSlackNotification(c *gin.Context) {
 		token = c.GetHeader("X-Cron-Token")
 	}
 	if token == "" || token != h.Env.CRON_SECRET {
-		utils.RespondWithError(c, http.StatusUnauthorized, "Invalid or missing cron token")
+		pkg.RespondWithError(c, http.StatusUnauthorized, "Invalid or missing cron token")
 		return
 	}
 
 	// 2️ Check Slack webhook is configured
 	if h.Env.EXTERNAL_API_URL == "" {
 		fmt.Println("[Cron] EXTERNAL_API_URL not configured")
-		utils.RespondWithError(c, http.StatusServiceUnavailable, "Slack webhook not configured")
+		pkg.RespondWithError(c, http.StatusServiceUnavailable, "Slack webhook not configured")
 		return
 	}
 
 	// 3️ Skip weekends and holidays (reusable guard)
 	now := time.Now()
-	skip, err := utils.ShouldSkipCronToday(now, h.Query)
+	skip, err := pkg.ShouldSkipCronToday(now, h.Query)
 	if err != nil {
 		fmt.Printf("[Cron] Holiday check error: %v\n", err)
-		utils.RespondWithError(c, http.StatusInternalServerError, "Holiday check failed: "+err.Error())
+		pkg.RespondWithError(c, http.StatusInternalServerError, "Holiday check failed: "+err.Error())
 		return
 	}
 	if skip != nil {
@@ -60,7 +60,7 @@ func (h *HandlerFunc) DailyLeaveSlackNotification(c *gin.Context) {
 	leaves, err := h.Query.GetTodaysActiveLeaves()
 	if err != nil {
 		fmt.Printf("[Cron] Failed to fetch today's leaves: %v\n", err)
-		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leaves: "+err.Error())
+		pkg.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leaves: "+err.Error())
 		return
 	}
 
@@ -86,7 +86,7 @@ func (h *HandlerFunc) DailyLeaveSlackNotification(c *gin.Context) {
 
 	if err := slackService.SendToSlack(message); err != nil {
 		fmt.Printf("[Cron] Failed to send to Slack: %v\n", err)
-		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to send to Slack: "+err.Error())
+		pkg.RespondWithError(c, http.StatusInternalServerError, "Failed to send to Slack: "+err.Error())
 		return
 	}
 

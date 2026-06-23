@@ -1,4 +1,4 @@
-package utils
+package pkg
 
 import (
 	"fmt"
@@ -27,7 +27,7 @@ func (s *CronSkipReason) Error() string {
 // Pass a HolidayChecker (your *Repository satisfies this) to enable the
 // holiday check.  Pass nil to skip the DB lookup (weekends are always checked).
 //
-//	skip, err := utils.ShouldSkipCronToday(time.Now(), h.Query)
+//	skip, err := pkg.ShouldSkipCronToday(time.Now(), h.Query)
 //	if err != nil { /* handle DB error */ }
 //	if skip != nil { /* return early */ }
 func ShouldSkipCronToday(now time.Time, checker HolidayChecker) (*CronSkipReason, error) {

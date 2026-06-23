@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
-	utils "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
+	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 )
 
 type EmployeeAuthData struct {
@@ -25,7 +25,7 @@ type EmployeeAuthData struct {
 func (s *HandlerFunc) GetAllRoles(c *gin.Context) {
 	roles, err := s.Query.GetAllRoles()
 	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch roles: "+err.Error())
+		pkg.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch roles: "+err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -47,7 +47,7 @@ func (s *HandlerFunc) Login(c *gin.Context) {
 
 		// If token exists and is valid, user is already logged in
 		if tokenString != "" {
-			claims, err := utils.ValidateToken(tokenString, s.Env.SERACT_KEY)
+			claims, err := pkg.ValidateToken(tokenString, s.Env.SERACT_KEY)
 			if err == nil {
 				// Token is valid, user already logged in
 				userID, parseErr := uuid.Parse(claims.UserID)
@@ -74,35 +74,35 @@ func (s *HandlerFunc) Login(c *gin.Context) {
 	// 1. Parse request body
 	var input models.LoginInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, "Invalid request payload")
+		pkg.RespondWithError(c, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
 
 	// 2. Fetch employee + role name
 	emp, err := s.Query.GetEmployeeByEmail(input.Email)
 	if err != nil {
-		utils.RespondWithError(c, http.StatusUnauthorized, fmt.Sprintf("Login failed — email not found: %v", err.Error()))
+		pkg.RespondWithError(c, http.StatusUnauthorized, fmt.Sprintf("Login failed — email not found: %v", err.Error()))
 		return
 	}
 
 	// 3. Validate password
-	if !utils.CheckPassword(input.Password, emp.Password) {
+	if !pkg.CheckPassword(input.Password, emp.Password) {
 		log.Printf("Login failed — wrong password for email: %s", input.Email)
-		utils.RespondWithError(c, http.StatusUnauthorized, "Login failed — wrong password for email: "+input.Email)
+		pkg.RespondWithError(c, http.StatusUnauthorized, "Login failed — wrong password for email: "+input.Email)
 		return
 	}
 
 	// 3.5 Check employee status
 	if emp.Status == "deactive" {
-		utils.RespondWithError(c, http.StatusForbidden, "Your account is deactivated. You cannot login")
+		pkg.RespondWithError(c, http.StatusForbidden, "Your account is deactivated. You cannot login")
 		return
 	}
 
 	// 4. Generate JWT with role name
-	token, err := utils.GenerateToken(emp.ID, emp.Role, s.Env.SERACT_KEY)
+	token, err := pkg.GenerateToken(emp.ID, emp.Role, s.Env.SERACT_KEY)
 	if err != nil {
 		log.Printf("JWT generation error: %v", err)
-		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to generate authentication token")
+		pkg.RespondWithError(c, http.StatusInternalServerError, "Failed to generate authentication token")
 		return
 	}
 
@@ -124,7 +124,7 @@ func (s *HandlerFunc) VerifyToken(c *gin.Context) {
 	// Get token from Authorization header
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
-		utils.RespondWithError(c, http.StatusUnauthorized, "Missing Authorization header")
+		pkg.RespondWithError(c, http.StatusUnauthorized, "Missing Authorization header")
 		return
 	}
 
@@ -137,34 +137,34 @@ func (s *HandlerFunc) VerifyToken(c *gin.Context) {
 	}
 
 	if tokenString == "" {
-		utils.RespondWithError(c, http.StatusUnauthorized, "Token missing")
+		pkg.RespondWithError(c, http.StatusUnauthorized, "Token missing")
 		return
 	}
 
 	// Validate token
-	claims, err := utils.ValidateToken(tokenString, s.Env.SERACT_KEY)
+	claims, err := pkg.ValidateToken(tokenString, s.Env.SERACT_KEY)
 	if err != nil {
-		utils.RespondWithError(c, http.StatusUnauthorized, "Invalid or expired token")
+		pkg.RespondWithError(c, http.StatusUnauthorized, "Invalid or expired token")
 		return
 	}
 
 	// Parse user ID to UUID
 	userID, err := uuid.Parse(claims.UserID)
 	if err != nil {
-		utils.RespondWithError(c, http.StatusUnauthorized, "Invalid user ID")
+		pkg.RespondWithError(c, http.StatusUnauthorized, "Invalid user ID")
 		return
 	}
 
 	// Get employee details from database
 	emp, err := s.Query.GetEmployeeByID(userID)
 	if err != nil {
-		utils.RespondWithError(c, http.StatusUnauthorized, "User not found")
+		pkg.RespondWithError(c, http.StatusUnauthorized, "User not found")
 		return
 	}
 
 	// Check if employee is still active
 	if emp.Status == "deactive" {
-		utils.RespondWithError(c, http.StatusForbidden, "Account is deactivated")
+		pkg.RespondWithError(c, http.StatusForbidden, "Account is deactivated")
 		return
 	}
 
@@ -210,7 +210,7 @@ func (s *HandlerFunc) CheckAuthStatus(c *gin.Context) {
 	}
 
 	// Validate token
-	claims, err := utils.ValidateToken(tokenString, s.Env.SERACT_KEY)
+	claims, err := pkg.ValidateToken(tokenString, s.Env.SERACT_KEY)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"authenticated": false,
@@ -263,9 +263,9 @@ func (s *HandlerFunc) Logout(c *gin.Context) {
 	userIDRaw, _ := c.Get("user_id")
 	userRoleRaw, _ := c.Get("role")
 
-	expiredToken, err := utils.GenerateExpiredToken(userIDRaw.(string), userRoleRaw.(string), s.Env.SERACT_KEY)
+	expiredToken, err := pkg.GenerateExpiredToken(userIDRaw.(string), userRoleRaw.(string), s.Env.SERACT_KEY)
 	if err != nil {
-		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to generate expired token")
+		pkg.RespondWithError(c, http.StatusInternalServerError, "Failed to generate expired token")
 		return
 	}
 

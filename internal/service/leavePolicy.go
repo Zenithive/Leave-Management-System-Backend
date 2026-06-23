@@ -10,7 +10,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/utils"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common"
 )
@@ -66,7 +66,7 @@ func (s *LeavePolicy) Create(ctx context.Context, input *models.LeaveTypeInput) 
 		// 3. Insert leave type
 		res, err = s.LeavePolicyRepo.Create(ctx, tx, input)
 		if err != nil {
-			return utils.CustomErr(nil, http.StatusInternalServerError, "failed to create leave type")
+			return pkg.CustomErr(nil, http.StatusInternalServerError, "failed to create leave type")
 		}
 
 		// Populate display fields not returned by RETURNING clause
@@ -80,12 +80,12 @@ func (s *LeavePolicy) Create(ctx context.Context, input *models.LeaveTypeInput) 
 
 			activeEmployees, err := s.CommRepo.GetAllActiveEmployeesWithRoles(tx)
 			if err != nil {
-				return utils.CustomErr(nil, http.StatusInternalServerError, "failed to fetch active employees")
+				return pkg.CustomErr(nil, http.StatusInternalServerError, "failed to fetch active employees")
 			}
 
 			err = s.CommRepo.BulkAllocateLeaveBalanceForNewLeaveType(tx, res.ID, *input.DefaultEntitlement, input.InternEntitlement, activeEmployees)
 			if err != nil {
-				return utils.CustomErr(nil, http.StatusInternalServerError, "failed to allocate leave balances")
+				return pkg.CustomErr(nil, http.StatusInternalServerError, "failed to allocate leave balances")
 			}
 		}
 
@@ -103,7 +103,7 @@ func (s *LeavePolicy) GetByID(ctx context.Context, leaveTypeID int) (*models.Lea
 
 	leaveType, err := s.LeavePolicyRepo.GetById(ctx, strconv.Itoa(leaveTypeID))
 	if err != nil {
-		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to get leave policy")
+		return nil, pkg.CustomErr(nil, http.StatusInternalServerError, "failed to get leave policy")
 	}
 
 	// No approval flow assigned — return leave type with nil flow
@@ -114,7 +114,7 @@ func (s *LeavePolicy) GetByID(ctx context.Context, leaveTypeID int) (*models.Lea
 	// Fetch the approval flow using its own UUID (not the leave type ID)
 	leaveApproverFlow, err := s.LeaveApporverService.GetLeaveApprovalFlowById(ctx, *leaveType.ApprovalFlowID)
 	if err != nil {
-		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to load Leave Approvel flow")
+		return nil, pkg.CustomErr(nil, http.StatusInternalServerError, "failed to load Leave Approvel flow")
 	}
 
 	return models.MappPayload(leaveType, leaveApproverFlow), nil
@@ -125,11 +125,11 @@ func (s *LeavePolicy) Get(ctx context.Context) (*[]models.LeaveTypeResponse, err
 	leaveType, err := s.LeavePolicyRepo.Get(ctx)
 	if err != nil {
 
-		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to get leave policy")
+		return nil, pkg.CustomErr(nil, http.StatusInternalServerError, "failed to get leave policy")
 	}
 	leaveApproverFlow, err := s.LeaveApporverService.GetAllLeaveApprovalFlows(ctx)
 	if err != nil {
-		return nil, utils.CustomErr(nil, http.StatusInternalServerError, "failed to load Leave Approvel flow")
+		return nil, pkg.CustomErr(nil, http.StatusInternalServerError, "failed to load Leave Approvel flow")
 	}
 
 	// Build a lookup map for O(1) flow matching by ID
@@ -174,12 +174,12 @@ func (s *LeavePolicy) Update(ctx context.Context, leaveTypeID int, input *models
 	var res *models.LeaveType
 	oldLeaveType, err := s.LeavePolicyRepo.GetById(ctx, strconv.Itoa(leaveTypeID))
 	if err != nil {
-		return nil, utils.CustomErr(nil, http.StatusBadRequest, err.Error())
+		return nil, pkg.CustomErr(nil, http.StatusBadRequest, err.Error())
 	}
 	err = common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
 		res, err = s.LeavePolicyRepo.Update(ctx, tx, strconv.Itoa(leaveTypeID), input)
 		if err != nil {
-			return utils.CustomErr(nil, http.StatusInternalServerError, "failed to update leave policy")
+			return pkg.CustomErr(nil, http.StatusInternalServerError, "failed to update leave policy")
 		}
 
 		currentYear := time.Now().Year()
@@ -191,7 +191,7 @@ func (s *LeavePolicy) Update(ctx context.Context, leaveTypeID int, input *models
 			if err := s.CommRepo.UpdateLeaveBalancesForEntitlementChange(
 				tx, leaveTypeID, oldDefaultEntitlement, newDefaultEntitlement, currentYear,
 			); err != nil {
-				return utils.CustomErr(nil, http.StatusInternalServerError, "failed to update leave Balance")
+				return pkg.CustomErr(nil, http.StatusInternalServerError, "failed to update leave Balance")
 			}
 		}
 
@@ -202,7 +202,7 @@ func (s *LeavePolicy) Update(ctx context.Context, leaveTypeID int, input *models
 		if err := s.CommRepo.UpdateInternLeaveBalancesForEntitlementChange(
 			tx, leaveTypeID, newEffectiveIntern, currentYear,
 		); err != nil {
-			return utils.CustomErr(nil, http.StatusInternalServerError, "failed to update intern leave balances")
+			return pkg.CustomErr(nil, http.StatusInternalServerError, "failed to update intern leave balances")
 		}
 		return nil
 	})
@@ -213,7 +213,7 @@ func (s *LeavePolicy) Update(ctx context.Context, leaveTypeID int, input *models
 func (s *LeavePolicy) Delete(ctx context.Context, leaveTypeID int) error {
 	err := common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
 		if err := s.LeavePolicyRepo.Delete(tx, leaveTypeID); err != nil {
-			return utils.CustomErr(nil, http.StatusInternalServerError, err.Error())
+			return pkg.CustomErr(nil, http.StatusInternalServerError, err.Error())
 		}
 		return nil
 	})

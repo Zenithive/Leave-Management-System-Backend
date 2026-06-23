@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
-	utils "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
+	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
 )
@@ -19,7 +19,7 @@ func (h *HandlerFunc) GetLeaveTiming(c *gin.Context) {
 	data, err := h.Query.GetLeaveTiming()
 	if err != nil {
 		fmt.Printf("GetLeaveTiming DB Error: %v\n", err)
-		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leave timing")
+		pkg.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leave timing")
 		return
 	}
 
@@ -42,20 +42,20 @@ func (h *HandlerFunc) GetLeaveTimingByID(c *gin.Context) {
 	// 1️ Role validation
 	role := c.GetString("role")
 	if role != constant.ROLE_SUPER_ADMIN && role != constant.ROLE_ADMIN {
-		utils.RespondWithError(c, http.StatusForbidden, "Access denied")
+		pkg.RespondWithError(c, http.StatusForbidden, "Access denied")
 		return
 	}
 
 	// 2️ Bind URI
 	var req models.GetLeaveTimingByIDReq
 	if err := c.ShouldBindUri(&req); err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, err.Error())
+		pkg.RespondWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// 3️ Validate
 	if err := models.Validate.Struct(req); err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, err.Error())
+		pkg.RespondWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -63,10 +63,10 @@ func (h *HandlerFunc) GetLeaveTimingByID(c *gin.Context) {
 	data, err := h.Query.GetLeaveTimingByID(req.ID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			utils.RespondWithError(c, http.StatusNotFound, "Leave timing not found")
+			pkg.RespondWithError(c, http.StatusNotFound, "Leave timing not found")
 			return
 		}
-		utils.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leave timing")
+		pkg.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leave timing")
 		return
 	}
 
@@ -82,7 +82,7 @@ func (h *HandlerFunc) UpdateLeaveTiming(c *gin.Context) {
 	// 1️ Role validation
 	role := c.GetString("role")
 	if role != constant.ROLE_SUPER_ADMIN && role != constant.ROLE_ADMIN {
-		utils.RespondWithError(c, http.StatusForbidden, "Access denied")
+		pkg.RespondWithError(c, http.StatusForbidden, "Access denied")
 		return
 	}
 
@@ -90,18 +90,18 @@ func (h *HandlerFunc) UpdateLeaveTiming(c *gin.Context) {
 	var req models.UpdateLeaveTimingReq
 
 	if err := c.ShouldBindUri(&req); err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, err.Error())
+		pkg.RespondWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, err.Error())
+		pkg.RespondWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// 3️ Validate
 	if err := models.Validate.Struct(req); err != nil {
-		utils.RespondWithError(c, http.StatusBadRequest, err.Error())
+		pkg.RespondWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -111,17 +111,17 @@ func (h *HandlerFunc) UpdateLeaveTiming(c *gin.Context) {
 		err := h.Query.UpdateLeaveTiming(tx, req.ID, req.Timing)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				return utils.CustomErr(c, http.StatusNotFound, "Leave timing not found")
+				return pkg.CustomErr(c, http.StatusNotFound, "Leave timing not found")
 
 			}
-			return utils.CustomErr(c, http.StatusInternalServerError, "Failed to update leave timing")
+			return pkg.CustomErr(c, http.StatusInternalServerError, "Failed to update leave timing")
 		}
 		return nil
 	})
 
 	// If transaction returned an error, stop (CustomErr already responded)
 	if err != nil {
-		utils.RespondWithError(c, 500, "Failed to update settings: "+err.Error())
+		pkg.RespondWithError(c, 500, "Failed to update settings: "+err.Error())
 		return
 	}
 

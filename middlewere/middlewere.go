@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/handler"
-	utils "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
+	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 )
 
 // AuthMiddleware verifies Bearer JWT Token
@@ -16,7 +16,7 @@ func AuthMiddleware(h *handler.HandlerFunc) gin.HandlerFunc {
 		// 1. Read Authorization header
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			utils.RespondWithError(c, http.StatusUnauthorized, "Missing Authorization header")
+			pkg.RespondWithError(c, http.StatusUnauthorized, "Missing Authorization header")
 			c.Abort()
 			return
 		}
@@ -33,15 +33,15 @@ func AuthMiddleware(h *handler.HandlerFunc) gin.HandlerFunc {
 		tokenString = strings.TrimSpace(tokenString)
 
 		if tokenString == "" {
-			utils.RespondWithError(c, http.StatusUnauthorized, "Token missing")
+			pkg.RespondWithError(c, http.StatusUnauthorized, "Token missing")
 			c.Abort()
 			return
 		}
 
 		// 3. Validate JWT token
-		claims, err := utils.ValidateToken(tokenString, h.Env.SERACT_KEY)
+		claims, err := pkg.ValidateToken(tokenString, h.Env.SERACT_KEY)
 		if err != nil {
-			utils.RespondWithError(c, http.StatusUnauthorized, "Invalid or expired token"+err.Error())
+			pkg.RespondWithError(c, http.StatusUnauthorized, "Invalid or expired token"+err.Error())
 			c.Abort()
 			return
 		}
