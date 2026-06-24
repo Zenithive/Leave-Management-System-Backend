@@ -8,9 +8,9 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/database/database"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
-	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
 )
 
@@ -21,13 +21,13 @@ func (h *HandlerFunc) CreateDesignation(c *gin.Context) {
 	role := c.GetString("role")
 
 	if err := access_role.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can create designations"); err != nil {
-		pkg.RespondWithError(c, http.StatusForbidden, err.Error())
+		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
 	empId, err := common.GetEmployeeId(c)
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusForbidden, "Access Denied")
+		errors.RespondWithError(c, http.StatusForbidden, "Access Denied")
 		return
 	}
 
@@ -35,12 +35,12 @@ func (h *HandlerFunc) CreateDesignation(c *gin.Context) {
 	var input *models.DesignationInput
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
+		errors.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
 		return
 	}
 
 	if err := h.Validator.Struct(input); err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
+		errors.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
 		return
 	}
 
@@ -49,16 +49,16 @@ func (h *HandlerFunc) CreateDesignation(c *gin.Context) {
 	err = database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		designationID, err = h.Query.CreateDesignation(tx, input)
 		if err != nil {
-			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to create designation: "+err.Error())
+			return errors.CustomErr(c, http.StatusInternalServerError, "failed to create designation: "+err.Error())
 		}
 		logData := models.NewCommon(constant.ComponentDesignation, constant.ActionCreate, empId)
 		if err := h.Query.AddLog(logData, tx); err != nil {
-			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to create  degisnation log: "+err.Error())
+			return errors.CustomErr(c, http.StatusInternalServerError, "failed to create  degisnation log: "+err.Error())
 		}
 		return nil
 	})
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusInternalServerError, err.Error())
+		errors.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -75,7 +75,7 @@ func (h *HandlerFunc) GetAllDesignations(c *gin.Context) {
 	// 1️ Fetch all designations
 	designations, err := h.Query.GetAllDesignations()
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusInternalServerError, "failed to fetch designations: "+err.Error())
+		errors.RespondWithError(c, http.StatusInternalServerError, "failed to fetch designations: "+err.Error())
 		return
 	}
 
@@ -93,14 +93,14 @@ func (h *HandlerFunc) GetDesignationByID(c *gin.Context) {
 	designationIDStr := c.Param("id")
 	designationID, err := uuid.Parse(designationIDStr)
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, "invalid designation ID")
+		errors.RespondWithError(c, http.StatusBadRequest, "invalid designation ID")
 		return
 	}
 
 	// 2️ Fetch designation
 	designation, err := h.Query.GetDesignationByID(designationID)
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusNotFound, "designation not found")
+		errors.RespondWithError(c, http.StatusNotFound, "designation not found")
 		return
 	}
 
@@ -117,13 +117,13 @@ func (h *HandlerFunc) UpdateDesignation(c *gin.Context) {
 	// 1️ Permission check
 	role := c.GetString("role")
 	if err := access_role.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can update designations"); err != nil {
-		pkg.RespondWithError(c, http.StatusForbidden, err.Error())
+		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
 	empId, err := common.GetEmployeeId(c)
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusForbidden, "Access Denied")
+		errors.RespondWithError(c, http.StatusForbidden, "Access Denied")
 		return
 	}
 
@@ -131,19 +131,19 @@ func (h *HandlerFunc) UpdateDesignation(c *gin.Context) {
 	designationIDStr := c.Param("id")
 	designationID, err := uuid.Parse(designationIDStr)
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, "invalid designation ID")
+		errors.RespondWithError(c, http.StatusBadRequest, "invalid designation ID")
 		return
 	}
 
 	// 3️ Bind input JSON
 	var input *models.DesignationInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
+		errors.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
 		return
 	}
 
 	if err := h.Validator.Struct(input); err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
+		errors.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
 		return
 	}
 
@@ -151,16 +151,16 @@ func (h *HandlerFunc) UpdateDesignation(c *gin.Context) {
 	err = database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		err = h.Query.UpdateDesignation(tx, designationID, input)
 		if err != nil {
-			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to update designation: "+err.Error())
+			return errors.CustomErr(c, http.StatusInternalServerError, "failed to update designation: "+err.Error())
 		}
 		logData := models.NewCommon(constant.ComponentDesignation, constant.ActionUpdate, empId)
 		if err := h.Query.AddLog(logData, tx); err != nil {
-			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to create  degisnation log: "+err.Error())
+			return errors.CustomErr(c, http.StatusInternalServerError, "failed to create  degisnation log: "+err.Error())
 		}
 		return nil
 	})
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusInternalServerError, err.Error())
+		errors.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	// 5️ Response
@@ -176,13 +176,13 @@ func (h *HandlerFunc) DeleteDesignation(c *gin.Context) {
 	// 1️ Permission check
 	role := c.GetString("role")
 	if err := access_role.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can delete designations"); err != nil {
-		pkg.RespondWithError(c, http.StatusForbidden, err.Error())
+		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
 	empId, err := common.GetEmployeeId(c)
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusForbidden, "Access Denied")
+		errors.RespondWithError(c, http.StatusForbidden, "Access Denied")
 		return
 	}
 
@@ -191,7 +191,7 @@ func (h *HandlerFunc) DeleteDesignation(c *gin.Context) {
 
 	designationID, err := uuid.Parse(designationIDStr)
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, "invalid designation ID "+err.Error())
+		errors.RespondWithError(c, http.StatusBadRequest, "invalid designation ID "+err.Error())
 		return
 	}
 
@@ -199,16 +199,16 @@ func (h *HandlerFunc) DeleteDesignation(c *gin.Context) {
 	err = database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		err = h.Query.DeleteDesignation(tx, designationID)
 		if err != nil {
-			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to delete designation: "+err.Error())
+			return errors.CustomErr(c, http.StatusInternalServerError, "failed to delete designation: "+err.Error())
 		}
 		logData := models.NewCommon(constant.ComponentDesignation, constant.ActionDelete, empId)
 		if err := h.Query.AddLog(logData, tx); err != nil {
-			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to create  degisnation log: "+err.Error())
+			return errors.CustomErr(c, http.StatusInternalServerError, "failed to create  degisnation log: "+err.Error())
 		}
 		return nil
 	})
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusInternalServerError, err.Error())
+		errors.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 

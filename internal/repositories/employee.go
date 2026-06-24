@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
 )
 
 // employeeSortMap maps API sort_by keys → safe SQL column expressions.
@@ -97,7 +97,7 @@ func (r *Repository) UpdateEmployeeDesignation(empID uuid.UUID, designationID *u
 // Sort: name, email, joining_date, ending_date, salary, birth_date, manager_name, role, status.
 func (r *Repository) GetAllEmployees(params models.EmployeeFilterParams, role string) (*models.PaginatedEmployeeResponse, error) {
 	salaryCol := "NULL::double precision AS salary"
-	if role == constant.ROLE_ADMIN || role == constant.ROLE_SUPER_ADMIN {
+	if role == access_role.ROLE_ADMIN || role == access_role.ROLE_SUPER_ADMIN {
 		salaryCol = "e.salary"
 	}
 	// Build WHERE conditions dynamically

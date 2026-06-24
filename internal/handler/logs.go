@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
 )
 
 // GetLogs - only for super_admin to get logs filtered by days
@@ -16,7 +16,7 @@ func (h *HandlerFunc) GetLogs(c *gin.Context) {
 	role := c.GetString("role")
 
 	if err := access_role.SuperAdmin(role, "Access denied. Only SUPERADMIN can view logs"); err != nil {
-		pkg.RespondWithError(c, http.StatusInternalServerError, "Invalid days parameter. Must be a positive integer")
+		errors.RespondWithError(c, http.StatusInternalServerError, "Invalid days parameter. Must be a positive integer")
 		return
 	}
 	// Get days parameter from query (default to 7 days if not provided or empty)
@@ -27,7 +27,7 @@ func (h *HandlerFunc) GetLogs(c *gin.Context) {
 	if daysParam != "" {
 		parsedDays, err := strconv.Atoi(daysParam)
 		if err != nil || parsedDays < 1 {
-			pkg.RespondWithError(c, http.StatusInternalServerError, "Invalid days parameter. Must be a positive integer")
+			errors.RespondWithError(c, http.StatusInternalServerError, "Invalid days parameter. Must be a positive integer")
 			return
 		}
 		days = parsedDays
@@ -37,7 +37,7 @@ func (h *HandlerFunc) GetLogs(c *gin.Context) {
 	// Query to get logs with user names, filtered by days
 	logs, err := h.Query.GetLogs(dateThreshold)
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusInternalServerError, "failed to get logs")
+		errors.RespondWithError(c, http.StatusInternalServerError, "failed to get logs")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{

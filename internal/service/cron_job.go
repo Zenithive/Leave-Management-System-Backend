@@ -11,7 +11,7 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/providers"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/notification/providers"
 )
 
 // BirthdayCronService holds dependencies for the birthday cron job.

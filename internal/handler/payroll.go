@@ -14,8 +14,8 @@ import (
 	"github.com/jung-kurt/gofpdf"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
-	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
 )
 
 // PayrollPreview represents preview data for a payroll run
@@ -36,7 +36,7 @@ func (h *HandlerFunc) RunPayroll(c *gin.Context) {
 	roleRaw, _ := c.Get("role")
 	role := roleRaw.(string)
 	if role != "SUPERADMIN" && role != "ADMIN" {
-		pkg.RespondWithError(c, 403, "Not authorized to run payroll")
+		errors.RespondWithError(c, 403, "Not authorized to run payroll")
 		return
 	}
 
@@ -46,13 +46,13 @@ func (h *HandlerFunc) RunPayroll(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		pkg.RespondWithError(c, 400, "Invalid input: "+err.Error())
+		errors.RespondWithError(c, 400, "Invalid input: "+err.Error())
 		return
 	}
 
 	now := time.Now()
 	if input.Year > now.Year() || (input.Year == now.Year() && input.Month >= int(now.Month())) {
-		pkg.RespondWithError(c, http.StatusBadRequest, "Cannot run payroll for future months")
+		errors.RespondWithError(c, http.StatusBadRequest, "Cannot run payroll for future months")
 		return
 	}
 
@@ -64,14 +64,14 @@ func (h *HandlerFunc) RunPayroll(c *gin.Context) {
 		status := strings.ToUpper(strings.TrimSpace(existingRun.Status))
 
 		if status == "FINALIZED" {
-			pkg.RespondWithError(c, 400, "Payroll for this month and year is already finalized. Cannot run payroll again.")
+			errors.RespondWithError(c, 400, "Payroll for this month and year is already finalized. Cannot run payroll again.")
 			return
 		}
 	}
 	// --- Fetch active employees ---
 	employees, err := h.Query.GetEmployeeByMonthAndYear(input)
 	if err != nil {
-		pkg.RespondWithError(c, 500, "Failed to fetch employees: "+err.Error())
+		errors.RespondWithError(c, 500, "Failed to fetch employees: "+err.Error())
 		return
 	}
 	// --- Fetch working days ---
@@ -92,7 +92,7 @@ func (h *HandlerFunc) RunPayroll(c *gin.Context) {
 		// Handle cross-month leaves correctly
 		/*absentDays := service.CalculateAbsentDaysForMonth(h.Query.DB, emp.ID, input.Month, input.Year)
 		if absentDays < 0 {
-			pkg.RespondWithError(c, 500, "Failed to calculate absent days")
+			errors.RespondWithError(c, 500, "Failed to calculate absent days")
 			return
 		}*/
 
@@ -124,7 +124,7 @@ func (h *HandlerFunc) RunPayroll(c *gin.Context) {
 		runID, input.Month, input.Year, "PREVIEW",
 	)
 	if err != nil {
-		pkg.RespondWithError(c, 500, "Failed to create payroll run: "+err.Error())
+		errors.RespondWithError(c, 500, "Failed to create payroll run: "+err.Error())
 		return
 	}
 
@@ -146,14 +146,14 @@ func (h *HandlerFunc) FinalizePayroll(c *gin.Context) {
 	roleRaw, _ := c.Get("role")
 	role := roleRaw.(string)
 	if role != "SUPERADMIN" {
-		pkg.RespondWithError(c, 403, "Only SUPERADMIN can finalize payroll")
+		errors.RespondWithError(c, 403, "Only SUPERADMIN can finalize payroll")
 		return
 	}
 
 	// --- Parse Payroll Run ID ---
 	runID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		pkg.RespondWithError(c, 400, "Invalid payroll run ID")
+		errors.RespondWithError(c, 400, "Invalid payroll run ID")
 		return
 	}
 
@@ -166,19 +166,19 @@ func (h *HandlerFunc) FinalizePayroll(c *gin.Context) {
 	err = h.Query.DB.Get(&run,
 		`SELECT month, year, status FROM Tbl_Payroll_run WHERE id=$1`, runID)
 	if err != nil {
-		pkg.RespondWithError(c, 404, "Payroll run not found")
+		errors.RespondWithError(c, 404, "Payroll run not found")
 		return
 	}
 
 	// --- Block if Already Finalized ---
 	if strings.ToUpper(strings.TrimSpace(run.Status)) == "FINALIZED" {
-		pkg.RespondWithError(c, 400, "Payroll is already finalized. Cannot finalize again. Finalized payrolls are locked and cannot be modified.")
+		errors.RespondWithError(c, 400, "Payroll is already finalized. Cannot finalize again. Finalized payrolls are locked and cannot be modified.")
 		return
 	}
 
 	// --- Block if not in PREVIEW status ---
 	if strings.ToUpper(strings.TrimSpace(run.Status)) != "PREVIEW" {
-		pkg.RespondWithError(c, 400, fmt.Sprintf("Cannot finalize payroll with status: %s. Only PREVIEW payrolls can be finalized.", run.Status))
+		errors.RespondWithError(c, 400, fmt.Sprintf("Cannot finalize payroll with status: %s. Only PREVIEW payrolls can be finalized.", run.Status))
 		return
 	}
 
@@ -193,7 +193,7 @@ func (h *HandlerFunc) FinalizePayroll(c *gin.Context) {
 	// --- Transaction Start ---
 	tx, err := h.Query.DB.Beginx()
 	if err != nil {
-		pkg.RespondWithError(c, 500, "Failed to start transaction")
+		errors.RespondWithError(c, 500, "Failed to start transaction")
 		return
 	}
 	defer tx.Rollback()
@@ -218,7 +218,7 @@ func (h *HandlerFunc) FinalizePayroll(c *gin.Context) {
 	`, runID)
 
 	if err != nil {
-		pkg.RespondWithError(c, 500, "Failed to fetch payroll employees: "+err.Error())
+		errors.RespondWithError(c, 500, "Failed to fetch payroll employees: "+err.Error())
 		return
 	}
 
@@ -237,7 +237,7 @@ func (h *HandlerFunc) FinalizePayroll(c *gin.Context) {
 		/*
 			absentDays := service.CalculateAbsentDaysForMonth(h.Query.DB, emp.ID, run.Month, run.Year)
 			if absentDays < 0 {
-				pkg.RespondWithError(c, 500, "Failed to calculate absent days")
+				errors.RespondWithError(c, 500, "Failed to calculate absent days")
 				return
 			}*/
 		leaveSummary := service.CalculateAbsentDaysForMonth(h.Query.DB, emp.ID, run.Month, run.Year)
@@ -253,7 +253,7 @@ func (h *HandlerFunc) FinalizePayroll(c *gin.Context) {
 		`, pID, runID, emp.ID, salary, workingDays, leaveSummary.PaidDays, leaveSummary.UnpaidDays, leaveSummary.EarlyLeaves, deduction, net)
 
 		if err != nil {
-			pkg.RespondWithError(c, 500, "Payslip insert failed: "+err.Error())
+			errors.RespondWithError(c, 500, "Payslip insert failed: "+err.Error())
 			return
 		}
 
@@ -263,12 +263,12 @@ func (h *HandlerFunc) FinalizePayroll(c *gin.Context) {
 	// --- Mark Payroll Run Finalized ---
 	_, err = tx.Exec(`UPDATE Tbl_Payroll_run SET status='FINALIZED', updated_at=NOW() WHERE id=$1`, runID)
 	if err != nil {
-		pkg.RespondWithError(c, 500, "Failed to update payroll run: "+err.Error())
+		errors.RespondWithError(c, 500, "Failed to update payroll run: "+err.Error())
 		return
 	}
 
 	if err = tx.Commit(); err != nil {
-		pkg.RespondWithError(c, 500, "Failed to commit: "+err.Error())
+		errors.RespondWithError(c, 500, "Failed to commit: "+err.Error())
 		return
 	}
 
@@ -499,7 +499,7 @@ func renderAttendanceSummary(pdf *gofpdf.Fpdf, d PayslipReportData) {
 func (h *HandlerFunc) GetPayslipPDF(c *gin.Context) {
 	payslipID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		pkg.RespondWithError(c, 400, "Invalid payslip ID")
+		errors.RespondWithError(c, 400, "Invalid payslip ID")
 		return
 	}
 
@@ -550,7 +550,7 @@ func (h *HandlerFunc) GetPayslipPDF(c *gin.Context) {
         WHERE p.id = $1`, payslipID)
 
 	if err != nil {
-		pkg.RespondWithError(c, 404, "Payslip not found")
+		errors.RespondWithError(c, 404, "Payslip not found")
 		return
 	}
 
@@ -604,7 +604,7 @@ func (h *HandlerFunc) PreviewPayslipPDF(c *gin.Context) {
 	roleRaw, _ := c.Get("role")
 	role := roleRaw.(string)
 	if role != "SUPERADMIN" && role != "ADMIN" {
-		pkg.RespondWithError(c, 403, "Only ADMIN and SUPERADMIN can preview payslip")
+		errors.RespondWithError(c, 403, "Only ADMIN and SUPERADMIN can preview payslip")
 		return
 	}
 
@@ -933,7 +933,7 @@ func (h *HandlerFunc) GetPayslipPDF(c *gin.Context) {
 func (h *HandlerFunc) GetFinalizedPayslips(c *gin.Context) {
 	roleValue, ok := c.Get("role")
 	if !ok {
-		pkg.RespondWithError(c, 500, "Failed to get role")
+		errors.RespondWithError(c, 500, "Failed to get role")
 		return
 	}
 	role := roleValue.(string)
@@ -942,23 +942,23 @@ func (h *HandlerFunc) GetFinalizedPayslips(c *gin.Context) {
 	var err error
 
 	//  If Employee, Intern, Manager or HR -> only their own slips
-	if role == constant.ROLE_EMPLOYEE || role == constant.ROLE_INTERN || role == constant.ROLE_MANAGER || role == constant.ROLE_HR {
+	if role == access_role.ROLE_EMPLOYEE || role == access_role.ROLE_INTERN || role == access_role.ROLE_MANAGER || role == access_role.ROLE_HR {
 		empIDValue, ok := c.Get("user_id")
 		if !ok {
-			pkg.RespondWithError(c, 500, "Failed to get employee ID")
+			errors.RespondWithError(c, 500, "Failed to get employee ID")
 			return
 		}
 
 		// empIDValue is string, parse it to uuid
 		empIDStr, ok := empIDValue.(string)
 		if !ok {
-			pkg.RespondWithError(c, 500, "Invalid employee ID format")
+			errors.RespondWithError(c, 500, "Invalid employee ID format")
 			return
 		}
 
 		empID, err := uuid.Parse(empIDStr)
 		if err != nil {
-			pkg.RespondWithError(c, 500, "Failed to parse employee ID: "+err.Error())
+			errors.RespondWithError(c, 500, "Failed to parse employee ID: "+err.Error())
 			return
 		}
 		rows, err = h.Query.GetFinalizedPayslipsByEmployee(empID)
@@ -968,7 +968,7 @@ func (h *HandlerFunc) GetFinalizedPayslips(c *gin.Context) {
 	}
 
 	if err != nil {
-		pkg.RespondWithError(c, 500, "Failed to fetch payslips: "+err.Error())
+		errors.RespondWithError(c, 500, "Failed to fetch payslips: "+err.Error())
 		return
 	}
 
@@ -976,7 +976,7 @@ func (h *HandlerFunc) GetFinalizedPayslips(c *gin.Context) {
 	if rows != nil {
 		defer rows.Close()
 	} else {
-		pkg.RespondWithError(c, 500, "No rows returned from query")
+		errors.RespondWithError(c, 500, "No rows returned from query")
 		return
 	}
 
@@ -1022,7 +1022,7 @@ func (h *HandlerFunc) GetFinalizedPayslips(c *gin.Context) {
 			&slip.CreatedAt,
 		)
 		if err != nil {
-			pkg.RespondWithError(c, 500, "Scan failed: "+err.Error())
+			errors.RespondWithError(c, 500, "Scan failed: "+err.Error())
 			return
 		}
 		result = append(result, slip)

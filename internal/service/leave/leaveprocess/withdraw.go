@@ -6,7 +6,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
 )
 
@@ -70,13 +70,13 @@ func (p *WithdrawProcessor) Process(ctx context.Context, tx *sqlx.Tx, lctx *Leav
 
 	// 4. Persist the updated approval log
 	if err := lctx.FlowLogRepo.UpdateApprovalLog(ctx, tx, lctx.Leave.ID, lctx.Flow.ApprovalLog); err != nil {
-		return pkg.CustomErr(nil, http.StatusInternalServerError, "failed to update approval log: "+err.Error())
+		return errors.CustomErr(nil, http.StatusInternalServerError, "failed to update approval log: "+err.Error())
 	}
 
 	// 5. Not all stages settled → higher stages still need to withdraw
 	if !allStagesSettledForWithdraw(lctx.Flow.ApprovalLog) {
 		if err := lctx.LeaveFlowRepo.UpdateLeaveStatusTx(tx.Tx, lctx.Leave.ID, constant.LEAVE_WITHDRAWAL_PENDING, lctx.ApproverID); err != nil {
-			return pkg.CustomErr(nil, http.StatusInternalServerError,
+			return errors.CustomErr(nil, http.StatusInternalServerError,
 				"failed to set withdrawal pending: "+err.Error())
 		}
 		return nil
@@ -85,13 +85,13 @@ func (p *WithdrawProcessor) Process(ctx context.Context, tx *sqlx.Tx, lctx *Leav
 	// 8. All stages settled → this is the FINAL withdrawal
 	//    Set leave status = WITHDRAWN
 	if err := lctx.LeaveFlowRepo.UpdateLeaveStatusTx(tx.Tx, lctx.Leave.ID, constant.LEAVE_WITHDRAWN, lctx.ApproverID); err != nil {
-		return pkg.CustomErr(nil, http.StatusInternalServerError,
+		return errors.CustomErr(nil, http.StatusInternalServerError,
 			"failed to withdraw leave: "+err.Error())
 	}
 	// 9. Restore balance ONLY on final withdrawal — non-early leave types only
 	if !isEarlyLeave(lctx.LeaveType) {
 		if err := lctx.CommRepo.UpdateWidthrowLeaveBalanceByEmployeeId(tx, lctx.Leave.EmployeeID, lctx.Leave.LeaveTypeID, lctx.Leave.Days); err != nil {
-			return pkg.CustomErr(nil, http.StatusInternalServerError,
+			return errors.CustomErr(nil, http.StatusInternalServerError,
 				"failed to restore leave balance: "+err.Error())
 		}
 	}

@@ -5,19 +5,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
 )
 
 func (h *HandlerFunc) GetLeaveLog(c *gin.Context) {
 	leaveID := c.Query("leave_id")
 	if leaveID == "" {
-		pkg.RespondWithError(c, http.StatusBadRequest, "leave_id is required")
+		errors.RespondWithError(c, http.StatusBadRequest, "leave_id is required")
 		return
 	}
 
 	res, err := h.LeaveFlowLogService.GetByLeaveID(c.Request.Context(), uuid.MustParse(leaveID))
 	if err != nil {
-		pkg.Error(c, err)
+		errors.Error(c, err)
 		return
 	}
 

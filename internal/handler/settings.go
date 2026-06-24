@@ -11,8 +11,8 @@ import (
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/database/database"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
-	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
 )
 
@@ -22,13 +22,13 @@ func (h *HandlerFunc) GetCompanySettings(c *gin.Context) {
 	roleRaw, _ := c.Get("role")
 	role := roleRaw.(string)
 	if role != "SUPERADMIN" && role != "ADMIN" {
-		pkg.RespondWithError(c, 403, "Not authorized to view settings")
+		errors.RespondWithError(c, 403, "Not authorized to view settings")
 		return
 	}
 	var settings models.CompanySettings
 	err := h.Query.GetCompanySettings(&settings)
 	if err != nil {
-		pkg.RespondWithError(c, 500, "Failed to fetch settings: "+err.Error())
+		errors.RespondWithError(c, 500, "Failed to fetch settings: "+err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -43,52 +43,52 @@ func (h *HandlerFunc) UpdateCompanySettings(c *gin.Context) {
 	roleRaw, _ := c.Get("role")
 	role := roleRaw.(string)
 	if role != "SUPERADMIN" && role != "ADMIN" {
-		pkg.RespondWithError(c, 403, "Not authorized to update settings")
+		errors.RespondWithError(c, 403, "Not authorized to update settings")
 		return
 	}
 	var input models.CompanyField
 
 
 	if err := c.ShouldBindWith(&input, binding.FormMultipart); err != nil {
-		pkg.RespondWithError(c, 400, "Invalid input (Form error): "+err.Error())
+		errors.RespondWithError(c, 400, "Invalid input (Form error): "+err.Error())
 		return
 	}
 	empIDRaw, ok := c.Get("user_id")
 	if !ok {
-		pkg.RespondWithError(c, http.StatusUnauthorized, "Employee ID missing")
+		errors.RespondWithError(c, http.StatusUnauthorized, "Employee ID missing")
 		return
 
 	}
 
 	empIDStr, ok := empIDRaw.(string)
 	if !ok {
-		pkg.RespondWithError(c, http.StatusInternalServerError, "Invalid employee ID format")
+		errors.RespondWithError(c, http.StatusInternalServerError, "Invalid employee ID format")
 		return
 	}
 
 	empID, err := uuid.Parse(empIDStr)
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusInternalServerError, "Invalid employee UUID")
+		errors.RespondWithError(c, http.StatusInternalServerError, "Invalid employee UUID")
 		return
 	}
 
 	err =database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		err := h.Query.UpdateCompanySettings(tx, input)
 		if err != nil {
-			return pkg.CustomErr(c, 500, "Failed to fetch settings: "+err.Error())
+			return errors.CustomErr(c, 500, "Failed to fetch settings: "+err.Error())
 		}
 		//add log
 		data := models.NewCommon(constant.CompanySettings, constant.ActionCreate, empID)
 
 		err = h.Query.AddLog(data, tx)
 		if err != nil {
-			return pkg.CustomErr(c, http.StatusInternalServerError, "Failed to log action: "+err.Error())
+			return errors.CustomErr(c, http.StatusInternalServerError, "Failed to log action: "+err.Error())
 		}
 		return err
 	})
 
 	if err != nil {
-		pkg.RespondWithError(c, 500, "Failed to update settings: "+err.Error())
+		errors.RespondWithError(c, 500, "Failed to update settings: "+err.Error())
 		return
 	}
 
@@ -103,7 +103,7 @@ func (h *HandlerFunc) UpdateCompanySettings(c *gin.Context) {
 	roleRaw, _ := c.Get("role")
 	role, ok := roleRaw.(string)
 	if !ok || (role != "SUPERADMIN" && role != "ADMIN") {
-		pkg.RespondWithError(c, 403, "Not authorized to update settings")
+		errors.RespondWithError(c, 403, "Not authorized to update settings")
 		return
 	}
 
@@ -128,7 +128,7 @@ func (h *HandlerFunc) UpdateCompanySettings(c *gin.Context) {
 	if err == nil {
 		logoPath = "uploads/logos/" + uuid.New().String() + "-" + file.Filename
 		if err := c.SaveUploadedFile(file, logoPath); err != nil {
-			pkg.RespondWithError(c, 500, "Failed to save logo file")
+			errors.RespondWithError(c, 500, "Failed to save logo file")
 			return
 		}
 	}
@@ -136,7 +136,7 @@ func (h *HandlerFunc) UpdateCompanySettings(c *gin.Context) {
 	// 4. Get Employee ID for Audit Logs
 	empIDRaw, ok := c.Get("user_id")
 	if !ok {
-		pkg.RespondWithError(c, http.StatusUnauthorized, "Employee ID missing")
+		errors.RespondWithError(c, http.StatusUnauthorized, "Employee ID missing")
 		return
 	}
 	empID, _ := uuid.Parse(empIDRaw.(string))
@@ -149,7 +149,7 @@ func (h *HandlerFunc) UpdateCompanySettings(c *gin.Context) {
 		return h.Query.AddLog(models.NewCommon(constant.CompanySettings, constant.ActionUpdate, empID), tx)
 	})
 	if err != nil {
-		pkg.RespondWithError(c, 500, "Failed to update settings: "+err.Error())
+		errors.RespondWithError(c, 500, "Failed to update settings: "+err.Error())
 		return
 	}
 
@@ -163,7 +163,7 @@ func (h *HandlerFunc) UpdateCompanySettings(c *gin.Context) {
 // Returns the rendered birthday message using the current template and provided placeholders.
 func (h *HandlerFunc) PreviewBirthdayMessage(c *gin.Context) {
 	if err := access_role.Admin_SuperAdmin(c.GetString("role"), "not authorized"); err != nil {
-		pkg.RespondWithError(c, http.StatusForbidden, err.Error())
+		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
@@ -174,7 +174,7 @@ func (h *HandlerFunc) PreviewBirthdayMessage(c *gin.Context) {
 	if birthDateStr != "" {
 		t, err := time.Parse("2006-01-02", birthDateStr)
 		if err != nil {
-			pkg.RespondWithError(c, http.StatusBadRequest, "invalid birth_date format, use YYYY-MM-DD")
+			errors.RespondWithError(c, http.StatusBadRequest, "invalid birth_date format, use YYYY-MM-DD")
 			return
 		}
 		birthDate = &t
@@ -182,7 +182,7 @@ func (h *HandlerFunc) PreviewBirthdayMessage(c *gin.Context) {
 
 	tmpl, err := h.Query.GetBirthdayMessageTemplate()
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusInternalServerError, "failed to fetch template: "+err.Error())
+		errors.RespondWithError(c, http.StatusInternalServerError, "failed to fetch template: "+err.Error())
 		return
 	}
 

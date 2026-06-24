@@ -4,25 +4,24 @@ import (
 	"errors"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
 )
 
 func Admin_SuperAdmin_Hr(role string, message string) error {
-	if role != constant.ROLE_SUPER_ADMIN && role != constant.ROLE_ADMIN && role != constant.ROLE_HR {
+	if role != ROLE_SUPER_ADMIN && role != ROLE_ADMIN && role != ROLE_HR {
 		return errors.New(message)
 	}
 	return nil
 }
 
 func Admin_SuperAdmin(role string, message string) error {
-	if role != constant.ROLE_SUPER_ADMIN && role != constant.ROLE_ADMIN {
+	if role != ROLE_SUPER_ADMIN && role != ROLE_ADMIN {
 		return errors.New(message)
 	}
 	return nil
 }
 
 func SuperAdmin(role string, message string) error {
-	if role != constant.ROLE_SUPER_ADMIN {
+	if role != ROLE_SUPER_ADMIN {
 		return errors.New(message)
 	}
 	return nil
@@ -30,22 +29,22 @@ func SuperAdmin(role string, message string) error {
 
 // IsEmployeeLike returns true for roles that have employee-level access (EMPLOYEE and INTERN).
 func IsEmployeeLike(role string) bool {
-	return role == constant.ROLE_EMPLOYEE || role == constant.ROLE_INTERN
+	return role == ROLE_EMPLOYEE || role == ROLE_INTERN
 }
 
 var AdminAccessRoles = []string{
-	constant.ROLE_SUPER_ADMIN,
-	constant.ROLE_ADMIN,
-	constant.ROLE_HR,
+	ROLE_SUPER_ADMIN,
+	ROLE_ADMIN,
+	ROLE_HR,
 }
 
 var EmployeeAccessRoles = []string{
-	constant.ROLE_EMPLOYEE,
-	constant.ROLE_INTERN,
+	ROLE_EMPLOYEE,
+	ROLE_INTERN,
 }
 
 var SuperAdminOnly = []string{
-	constant.ROLE_SUPER_ADMIN,
+	ROLE_SUPER_ADMIN,
 }
 
 func RoleMiddleware(allowedRoles ...string) gin.HandlerFunc {

@@ -24,7 +24,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
 )
 
 const (
@@ -141,7 +141,7 @@ func (s *LeaveAccrualService) RunAccrual(month time.Month, year int) (credited, 
 
 			// Determine accrual rate based on role
 			days := accrualRateDefault
-			if emp.Role == constant.ROLE_INTERN {
+			if emp.Role == access_role.ROLE_INTERN {
 				days = accrualRateIntern
 			}
 

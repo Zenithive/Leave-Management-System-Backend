@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
-	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
 )
 
 // GetLeaveBalances - GET /api/employees/:id/leave-balances
@@ -20,7 +20,7 @@ func (s *HandlerFunc) GetLeaveBalances(c *gin.Context) {
 	employeeIDParam := c.Param("id")
 	employeeID, err := uuid.Parse(employeeIDParam)
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, "Invalid employee ID")
+		errors.RespondWithError(c, http.StatusBadRequest, "Invalid employee ID")
 		return
 	}
 
@@ -31,7 +31,7 @@ func (s *HandlerFunc) GetLeaveBalances(c *gin.Context) {
 	userID, _ := uuid.Parse(userIDRaw.(string))
 
 	if (role == "EMPLOYEE" || role == "INTERN") && userID != employeeID {
-		pkg.RespondWithError(c, http.StatusForbidden, "Employees can only view their own balances")
+		errors.RespondWithError(c, http.StatusForbidden, "Employees can only view their own balances")
 		return
 	}
 
@@ -41,7 +41,7 @@ func (s *HandlerFunc) GetLeaveBalances(c *gin.Context) {
 	// 4. Fetch all leave types with their default entitlements (repository layer)
 	leaveTypes, err := s.Query.GetAllLeaveTypesWithEntitlements()
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusInternalServerError,
+		errors.RespondWithError(c, http.StatusInternalServerError,
 			"Failed to fetch leave types: "+err.Error())
 		return
 	}
@@ -49,7 +49,7 @@ func (s *HandlerFunc) GetLeaveBalances(c *gin.Context) {
 	// 5. Fetch leave balances for current year (repository layer)
 	balanceRecords, err := s.Query.GetLeaveBalancesByEmployeeAndYear(employeeID, currentYear)
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusInternalServerError,
+		errors.RespondWithError(c, http.StatusInternalServerError,
 			"Failed to fetch leave balances: "+err.Error())
 		return
 	}
@@ -113,7 +113,7 @@ func (s *HandlerFunc) AdjustLeaveBalance(c *gin.Context) {
 	roleRaw, _ := c.Get("role")
 	role := roleRaw.(string)
 	if role != "ADMIN" && role != "SUPERADMIN" {
-		pkg.RespondWithError(c, 403, "Not authorized to adjust leave balances")
+		errors.RespondWithError(c, 403, "Not authorized to adjust leave balances")
 		return
 	}
 
@@ -121,7 +121,7 @@ func (s *HandlerFunc) AdjustLeaveBalance(c *gin.Context) {
 	employeeIDParam := c.Param("id")
 	employeeID, err := uuid.Parse(employeeIDParam)
 	if err != nil {
-		pkg.RespondWithError(c, 400, "Invalid employee ID")
+		errors.RespondWithError(c, 400, "Invalid employee ID")
 		return
 	}
 
@@ -132,7 +132,7 @@ func (s *HandlerFunc) AdjustLeaveBalance(c *gin.Context) {
 		Reason      string  `json:"reason" validate:"required"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
-		pkg.RespondWithError(c, 400, "Invalid input: "+err.Error())
+		errors.RespondWithError(c, 400, "Invalid input: "+err.Error())
 		return
 	}
 
@@ -141,7 +141,7 @@ func (s *HandlerFunc) AdjustLeaveBalance(c *gin.Context) {
 	// 4️ Start transaction
 	tx, err := s.Query.DB.Beginx()
 	if err != nil {
-		pkg.RespondWithError(c, 500, "Failed to start transaction")
+		errors.RespondWithError(c, 500, "Failed to start transaction")
 		return
 	}
 	defer tx.Rollback()
@@ -153,26 +153,26 @@ func (s *HandlerFunc) AdjustLeaveBalance(c *gin.Context) {
 		// 5A: Fetch target employee's role to pick correct entitlement
 		employeeRole, err := s.Query.GetEmployeeRole(employeeID)
 		if err != nil {
-			pkg.RespondWithError(c, 500, "Failed to fetch employee role: "+err.Error())
+			errors.RespondWithError(c, 500, "Failed to fetch employee role: "+err.Error())
 			return
 		}
 
 		// 5B: Fetch default entitlement (repository layer)
 		defaultEntitlement, err := s.Query.GetDefaultEntitlementByLeaveTypeID(tx, input.LeaveTypeID, employeeRole)
 		if err != nil {
-			pkg.RespondWithError(c, 500, "Failed to fetch leave type: "+err.Error())
+			errors.RespondWithError(c, 500, "Failed to fetch leave type: "+err.Error())
 			return
 		}
 
 		// 5B: Create balance row (repository layer)
 		balance, err = s.Query.CreateLeaveBalanceForAdjustment(tx, employeeID, input.LeaveTypeID, currentYear, defaultEntitlement)
 		if err != nil {
-			pkg.RespondWithError(c, 500, "Failed to create leave balance: "+err.Error())
+			errors.RespondWithError(c, 500, "Failed to create leave balance: "+err.Error())
 			return
 		}
 
 	} else if err != nil {
-		pkg.RespondWithError(c, 500, "Failed to fetch leave balance: "+err.Error())
+		errors.RespondWithError(c, 500, "Failed to fetch leave balance: "+err.Error())
 		return
 	}
 
@@ -183,20 +183,20 @@ func (s *HandlerFunc) AdjustLeaveBalance(c *gin.Context) {
 	// Update leave balance (repository layer)
 	err = s.Query.UpdateLeaveBalanceAdjustment(tx, balance.ID, newAdjusted, newClosing)
 	if err != nil {
-		pkg.RespondWithError(c, 500, "Failed to update leave balance: "+err.Error())
+		errors.RespondWithError(c, 500, "Failed to update leave balance: "+err.Error())
 		return
 	}
 
 	// 7️ Insert into adjustment log (repository layer)
 	err = s.Query.InsertLeaveAdjustment(tx, employeeID, input.LeaveTypeID, input.Quantity, input.Reason, c.GetString("user_id"), currentYear)
 	if err != nil {
-		pkg.RespondWithError(c, 500, "Failed to record leave adjustment: "+err.Error())
+		errors.RespondWithError(c, 500, "Failed to record leave adjustment: "+err.Error())
 		return
 	}
 
 	// 8️ Commit
 	if err := tx.Commit(); err != nil {
-		pkg.RespondWithError(c, 500, "Transaction commit failed")
+		errors.RespondWithError(c, 500, "Transaction commit failed")
 		return
 	}
 

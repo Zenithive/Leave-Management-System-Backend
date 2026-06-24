@@ -15,9 +15,9 @@ import (
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service/leave/leaveflow"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/handlers"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/providers"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/notification"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/notification/handlers"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/notification/providers"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/routes"
 )
 

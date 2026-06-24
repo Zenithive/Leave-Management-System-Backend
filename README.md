@@ -78,7 +78,7 @@ The frontend (separate repository) communicates with this API over REST. The bac
 
 ### Prerequisites
 - Go 1.25+
-- PostgreSQL (local, Dockerized, or hosted — Railway/Supabase)
+- PostgreSQL (local, Dockerized, or hosted — Railway/Supabase/otherplatform)
 - Docker & Docker Compose (optional, for containerized setup)
 
 ### 1. Clone & install

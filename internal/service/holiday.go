@@ -9,7 +9,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
 )
 
 type HolidayService interface {
@@ -59,7 +59,7 @@ func (s *holidayService) GetAllHolidays(ctx context.Context) ([]models.Holiday, 
 func (s *holidayService) DeleteHoliday(ctx context.Context, id string) error {
 
 	if err := s.Repo.DeleteHoliday(ctx, id); err != nil {
-		return pkg.CustomErr(nil, http.StatusInternalServerError, err.Error())
+		return errors.CustomErr(nil, http.StatusInternalServerError, err.Error())
 	}
 	return nil
 }

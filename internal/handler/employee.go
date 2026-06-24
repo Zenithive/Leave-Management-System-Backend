@@ -13,11 +13,11 @@ import (
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/database/database"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification"
-	notifmodels "github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/models"
-	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/notification"
+	notifmodels "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/notification/models"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/security"
 )
 
 type UpdateRoleInput struct {
@@ -36,21 +36,21 @@ func (h *HandlerFunc) GetEmployee(c *gin.Context) {
 	r := role.(string)
 
 	if err := access_role.Admin_SuperAdmin_Hr(r, "only ADMIN, SUPERADMIN, and HR can view employees"); err != nil {
-		pkg.RespondWithError(c, http.StatusForbidden, err.Error())
+		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
 
 	// Bind query parameters to filter struct
 	var params models.EmployeeFilterParams
 	if err := c.ShouldBindQuery(&params); err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, "invalid query parameters: "+err.Error())
+		errors.RespondWithError(c, http.StatusBadRequest, "invalid query parameters: "+err.Error())
 		return
 	}
 
 	// Get employees with filters, sorting, and pagination
 	result, err := h.Query.GetAllEmployees(params, r)
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusInternalServerError, err.Error())
+		errors.RespondWithError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -80,14 +80,14 @@ func (h *HandlerFunc) GetEmployeeById(c *gin.Context) {
 	empIDStr := c.Param("id")
 	empID, err := uuid.Parse(empIDStr)
 	if err != nil {
-		pkg.RespondWithError(c, 400, "invalid employee ID")
+		errors.RespondWithError(c, 400, "invalid employee ID")
 		return
 	}
 
 	// 2️ Fetch employee details (EmployeeResponse has no password)
 	employee, err := h.Query.GetEmployeeByID(empID)
 	if err != nil {
-		pkg.RespondWithError(c, 404, "employee not found")
+		errors.RespondWithError(c, 404, "employee not found")
 		return
 	}
 
@@ -100,51 +100,51 @@ func (h *HandlerFunc) GetEmployeeById(c *gin.Context) {
 
 func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 	role := c.GetString("role")
-	if role != constant.ROLE_SUPER_ADMIN && role != constant.ROLE_ADMIN && role != constant.ROLE_HR {
-		pkg.RespondWithError(c, http.StatusUnauthorized, "not permitted")
+	if role != access_role.ROLE_SUPER_ADMIN && role != access_role.ROLE_ADMIN && role != access_role.ROLE_HR {
+		errors.RespondWithError(c, http.StatusUnauthorized, "not permitted")
 		return
 	}
 
 	var input models.EmployeeInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, err.Error())
+		errors.RespondWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// HR and ADMIN cannot create SUPERADMIN users
 	if (role == "ADMIN" || role == "HR") && input.Role == "SUPERADMIN" {
-		pkg.RespondWithError(c, 403, "HR and ADMIN cannot create SUPERADMIN users")
+		errors.RespondWithError(c, 403, "HR and ADMIN cannot create SUPERADMIN users")
 		return
 	}
 	// EMAIL EXIST CHECK
 	exists, err := h.Query.CheckEmailExists(input.Email)
 	if err != nil {
-		pkg.RespondWithError(c, 500, err.Error())
+		errors.RespondWithError(c, 500, err.Error())
 		return
 	}
 	if exists {
-		pkg.RespondWithError(c, 400, "email already exists")
+		errors.RespondWithError(c, 400, "email already exists")
 		return
 	}
 
 	// GET ROLE ID
 	roleID, err := h.Query.GetRoleID(input.Role)
 	if err != nil {
-		pkg.RespondWithError(c, 400, "role not found")
+		errors.RespondWithError(c, 400, "role not found")
 		return
 	}
 
 	// GENERATE SECURE PASSWORD (combination format)
-	generatedPassword, err := pkg.GenerateSecurePassword()
+	generatedPassword, err := security.GenerateSecurePassword()
 	if err != nil {
-		pkg.RespondWithError(c, 500, "failed to generate secure password")
+		errors.RespondWithError(c, 500, "failed to generate secure password")
 		return
 	}
 
 	// HASH PASSWORD
-	hash, err := pkg.HashPassword(generatedPassword)
+	hash, err := security.HashPassword(generatedPassword)
 	if err != nil {
-		pkg.RespondWithError(c, 500, "failed to hash password")
+		errors.RespondWithError(c, 500, "failed to hash password")
 		return
 	}
 
@@ -158,11 +158,11 @@ func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 		// 1. Insert employee
 		id, err := h.Query.InsertEmployee(tx, input.FullName, input.Email, roleID, hash, input.Salary, input.JoiningDate)
 		if err != nil || id == uuid.Nil {
-			return pkg.CustomErr(c, 500, "failed to create employee")
+			return errors.CustomErr(c, 500, "failed to create employee")
 		}
 		data, err := h.Query.GetAllLeaveType()
 		if err != nil {
-			return pkg.CustomErr(c, 500, "failed to allocate leave balance: ")
+			return errors.CustomErr(c, 500, "failed to allocate leave balance: ")
 		}
 
 		// Determine if the employee is joining in the current year → prorate their leave.
@@ -174,7 +174,7 @@ func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 			isEarlyLeave := leaveType.IsEarly != nil && *leaveType.IsEarly
 			if !isEarlyLeave {
 				entitlement := leaveType.DefaultEntitlement
-				if input.Role == constant.ROLE_INTERN && leaveType.InternEntitlement != nil {
+				if input.Role == access_role.ROLE_INTERN && leaveType.InternEntitlement != nil {
 					entitlement = *leaveType.InternEntitlement
 				}
 				// Prorate only when the employee joins mid-year in the current year.
@@ -182,13 +182,13 @@ func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 					entitlement = service.CalculateProratedLeave(entitlement, int(input.JoiningDate.Month()))
 				}
 				if err := h.Query.CreateLeaveBalance(tx, id, leaveType.ID, entitlement); err != nil {
-					return pkg.CustomErr(c, 500, "failed to allocate leave balance: "+err.Error())
+					return errors.CustomErr(c, 500, "failed to allocate leave balance: "+err.Error())
 				}
 			}
 		}
 		return nil
 	}); err != nil {
-		pkg.RespondWithError(c, 500, err.Error())
+		errors.RespondWithError(c, 500, err.Error())
 		return
 	}
 
@@ -215,7 +215,7 @@ func (h *HandlerFunc) UpdateEmployeeRole(c *gin.Context) {
 	currentUserID, _ := uuid.Parse(c.GetString("user_id"))
 
 	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		pkg.RespondWithError(c, 401, "not permitted")
+		errors.RespondWithError(c, 401, "not permitted")
 		return
 	}
 
@@ -225,7 +225,7 @@ func (h *HandlerFunc) UpdateEmployeeRole(c *gin.Context) {
 	empIDStr := c.Param("id")
 	empID, err := uuid.Parse(empIDStr)
 	if err != nil {
-		pkg.RespondWithError(c, 400, "invalid employee ID")
+		errors.RespondWithError(c, 400, "invalid employee ID")
 		return
 	}
 
@@ -233,7 +233,7 @@ func (h *HandlerFunc) UpdateEmployeeRole(c *gin.Context) {
 	// 2.5️ ADMIN and HR cannot change their own role
 	// ---------------------------
 	if (role == "ADMIN" || role == "HR") && currentUserID == empID {
-		pkg.RespondWithError(c, 403, "ADMIN and HR cannot change their own role. Only SUPERADMIN can change roles.")
+		errors.RespondWithError(c, 403, "ADMIN and HR cannot change their own role. Only SUPERADMIN can change roles.")
 		return
 	}
 
@@ -242,7 +242,7 @@ func (h *HandlerFunc) UpdateEmployeeRole(c *gin.Context) {
 	// ---------------------------
 	var input UpdateRoleInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		pkg.RespondWithError(c, 400, "invalid input: "+err.Error())
+		errors.RespondWithError(c, 400, "invalid input: "+err.Error())
 		return
 	}
 
@@ -251,7 +251,7 @@ func (h *HandlerFunc) UpdateEmployeeRole(c *gin.Context) {
 	// ---------------------------
 	currentRole, isManager, err := h.Query.GetEmployeeCurrentRoleAndManagerStatus(empID)
 	if err != nil {
-		pkg.RespondWithError(c, 500, "failed to fetch employee role: "+err.Error())
+		errors.RespondWithError(c, 500, "failed to fetch employee role: "+err.Error())
 		return
 	}
 
@@ -259,13 +259,13 @@ func (h *HandlerFunc) UpdateEmployeeRole(c *gin.Context) {
 	// 4.5️ HR and ADMIN cannot edit SUPERADMIN
 	// ---------------------------
 	if (role == "ADMIN" || role == "HR") && currentRole == "SUPERADMIN" {
-		pkg.RespondWithError(c, 403, "HR and ADMIN cannot modify SUPERADMIN users")
+		errors.RespondWithError(c, 403, "HR and ADMIN cannot modify SUPERADMIN users")
 		return
 	}
 
 	// HR and ADMIN cannot promote to SUPERADMIN
 	if (role == "ADMIN" || role == "HR") && input.Role == "SUPERADMIN" {
-		pkg.RespondWithError(c, 403, "HR and ADMIN cannot promote users to SUPERADMIN")
+		errors.RespondWithError(c, 403, "HR and ADMIN cannot promote users to SUPERADMIN")
 		return
 	}
 
@@ -273,7 +273,7 @@ func (h *HandlerFunc) UpdateEmployeeRole(c *gin.Context) {
 	// 5️ Check if role is unchanged
 	// ---------------------------
 	if currentRole == input.Role {
-		pkg.RespondWithError(c, 400, "employee already has this role")
+		errors.RespondWithError(c, 400, "employee already has this role")
 		return
 	}
 
@@ -282,7 +282,7 @@ func (h *HandlerFunc) UpdateEmployeeRole(c *gin.Context) {
 	// ---------------------------
 	if isManager && input.Role != "MANAGER" {
 		// Employee manages other employees → cannot remove MANAGER role
-		pkg.RespondWithError(c, 403, "cannot change role of employee who is a manager with subordinates")
+		errors.RespondWithError(c, 403, "cannot change role of employee who is a manager with subordinates")
 		return
 	}
 
@@ -293,19 +293,19 @@ func (h *HandlerFunc) UpdateEmployeeRole(c *gin.Context) {
 	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		role, err := h.Query.GetEmployeeRole(empID)
 		if err != nil {
-			return pkg.CustomErr(c, 500, "failed to fetch employee role: "+err.Error())
+			return errors.CustomErr(c, 500, "failed to fetch employee role: "+err.Error())
 		}
 		updatedID, err = h.Query.UpdateEmployeeRole(tx, empID, input.Role)
 		if err != nil {
-			return pkg.CustomErr(c, 500, "failed to update role: "+err.Error())
+			return errors.CustomErr(c, 500, "failed to update role: "+err.Error())
 		}
 		a := time.Now().Year()
 		if err = h.Query.AdjustLeaveBalancesForRoleChange(tx, empID, role, input.Role, a); err != nil {
-			return pkg.CustomErr(c, 500, "failed to adjust leave balances for role change: "+err.Error())
+			return errors.CustomErr(c, 500, "failed to adjust leave balances for role change: "+err.Error())
 		}
 		return nil
 	}); err != nil {
-		pkg.RespondWithError(c, 500, err.Error())
+		errors.RespondWithError(c, 500, err.Error())
 		return
 
 	}
@@ -327,7 +327,7 @@ func (h *HandlerFunc) DeleteEmployeeStatus(c *gin.Context) {
 	idParam := c.Param("id")
 	empID, err := uuid.Parse(idParam)
 	if err != nil {
-		pkg.RespondWithError(c, 400, "invalid employee id")
+		errors.RespondWithError(c, 400, "invalid employee id")
 		return
 	}
 
@@ -336,20 +336,20 @@ func (h *HandlerFunc) DeleteEmployeeStatus(c *gin.Context) {
 	r := role.(string)
 
 	if r != "SUPERADMIN" && r != "ADMIN" && role != "HR" {
-		pkg.RespondWithError(c, 401, "not permitted")
+		errors.RespondWithError(c, 401, "not permitted")
 		return
 	}
 
 	// Check if target employee exists (works for both active and deactive)
 	targetEmp, err := h.Query.GetEmployeeByID(empID)
 	if err != nil {
-		pkg.RespondWithError(c, 404, "employee not found")
+		errors.RespondWithError(c, 404, "employee not found")
 		return
 	}
 
 	// HR and ADMIN cannot deactivate SUPERADMIN
 	if (r == "ADMIN") && targetEmp.Role == "SUPERADMIN" {
-		pkg.RespondWithError(c, 403, "HR and ADMIN cannot modify SUPERADMIN users")
+		errors.RespondWithError(c, 403, "HR and ADMIN cannot modify SUPERADMIN users")
 		return
 	}
 
@@ -359,7 +359,7 @@ func (h *HandlerFunc) DeleteEmployeeStatus(c *gin.Context) {
 		newStatus, txErr = h.Query.DeleteEmployeeStatus(tx, empID)
 		return txErr
 	}); err != nil {
-		pkg.RespondWithError(c, 500, err.Error())
+		errors.RespondWithError(c, 500, err.Error())
 		return
 	}
 
@@ -372,52 +372,52 @@ func (h *HandlerFunc) UpdateEmployeeManager(c *gin.Context) {
 	// 1️ Permission check
 	role := c.GetString("role")
 	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		pkg.RespondWithError(c, 401, "not permitted")
+		errors.RespondWithError(c, 401, "not permitted")
 		return
 	}
 
 	// 2️ Parse Employee ID
 	empID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		pkg.RespondWithError(c, 400, "invalid employee ID")
+		errors.RespondWithError(c, 400, "invalid employee ID")
 		return
 	}
 
 	// 2.5️ Check if target employee is SUPERADMIN
 	targetEmp, err := h.Query.GetEmployeeByID(empID)
 	if err != nil {
-		pkg.RespondWithError(c, 404, "employee not found")
+		errors.RespondWithError(c, 404, "employee not found")
 		return
 	}
 
 	// HR and ADMIN cannot assign manager to SUPERADMIN
 	if (role == "ADMIN" || role == "HR") && targetEmp.Role == "SUPERADMIN" {
-		pkg.RespondWithError(c, 403, "HR and ADMIN cannot modify SUPERADMIN users")
+		errors.RespondWithError(c, 403, "HR and ADMIN cannot modify SUPERADMIN users")
 		return
 	}
 
 	// 3️ Parse Manager ID
 	var input UpdateManagerInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		pkg.RespondWithError(c, 400, "invalid input: "+err.Error())
+		errors.RespondWithError(c, 400, "invalid input: "+err.Error())
 		return
 	}
 	managerID, err := uuid.Parse(input.ManagerID)
 	if err != nil {
-		pkg.RespondWithError(c, 400, "invalid manager ID")
+		errors.RespondWithError(c, 400, "invalid manager ID")
 		return
 	}
 
 	// 4️ Self assignment check
 	if empID == managerID {
-		pkg.RespondWithError(c, 400, "cannot assign employee as their own manager")
+		errors.RespondWithError(c, 400, "cannot assign employee as their own manager")
 		return
 	}
 
 	// 4.5️ Prevent manager from assigning themselves to others
 	currentUserID, _ := uuid.Parse(c.GetString("user_id"))
 	if currentUserID == managerID && role != "SUPERADMIN" {
-		pkg.RespondWithError(c, 403, "you cannot assign yourself as a manager to others. Only SUPERADMIN can do this.")
+		errors.RespondWithError(c, 403, "you cannot assign yourself as a manager to others. Only SUPERADMIN can do this.")
 		return
 	}
 
@@ -425,23 +425,23 @@ func (h *HandlerFunc) UpdateEmployeeManager(c *gin.Context) {
 	var mgrRole, mgrStatus string
 	err = h.Query.DB.Get(&mgrRole, "SELECT r.type FROM Tbl_Employee e JOIN Tbl_Role r ON e.role_id = r.id WHERE e.id=$1", managerID)
 	if err != nil {
-		pkg.RespondWithError(c, 404, "manager not found")
+		errors.RespondWithError(c, 404, "manager not found")
 		return
 	}
 	err = h.Query.DB.Get(&mgrStatus, "SELECT status FROM Tbl_Employee WHERE id=$1", managerID)
 	if err != nil || mgrStatus != "active" {
-		pkg.RespondWithError(c, 403, "manager is deactivated")
+		errors.RespondWithError(c, 403, "manager is deactivated")
 		return
 	}
 	if mgrRole != "MANAGER" {
-		pkg.RespondWithError(c, 400, "assigned employee is not a manager")
+		errors.RespondWithError(c, 400, "assigned employee is not a manager")
 		return
 	}
 
 	// 7️ Update manager
 	err = h.Query.UpdateManager(empID, managerID)
 	if err != nil {
-		pkg.RespondWithError(c, 500, "failed to update manager: "+err.Error())
+		errors.RespondWithError(c, 500, "failed to update manager: "+err.Error())
 		return
 	}
 
@@ -465,20 +465,20 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 	empIDStr := c.Param("id")
 	empID, err := uuid.Parse(empIDStr)
 	if err != nil {
-		pkg.RespondWithError(c, 400, "invalid employee ID")
+		errors.RespondWithError(c, 400, "invalid employee ID")
 		return
 	}
 
 	// 3️ Check if employee exists
 	existingEmp, err := h.Query.GetEmployeeByID(empID)
 	if err != nil {
-		pkg.RespondWithError(c, 404, "employee not found")
+		errors.RespondWithError(c, 404, "employee not found")
 		return
 	}
 
 	// 3.5️ HR and ADMIN cannot edit SUPERADMIN
 	if (role == "ADMIN" || role == "HR") && existingEmp.Role == "SUPERADMIN" {
-		pkg.RespondWithError(c, 403, "HR and ADMIN cannot modify SUPERADMIN users")
+		errors.RespondWithError(c, 403, "HR and ADMIN cannot modify SUPERADMIN users")
 		return
 	}
 
@@ -492,7 +492,7 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 		EndingDate  *time.Time `json:"ending_date"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
-		pkg.RespondWithError(c, 400, "invalid input: "+err.Error())
+		errors.RespondWithError(c, 400, "invalid input: "+err.Error())
 		return
 	}
 
@@ -501,7 +501,7 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 		today := time.Now().Truncate(24 * time.Hour)
 		bd := input.BirthDate.Truncate(24 * time.Hour)
 		if !bd.Before(today) {
-			pkg.RespondWithError(c, 400, "birth_date must be a past date")
+			errors.RespondWithError(c, 400, "birth_date must be a past date")
 			return
 		}
 	}
@@ -512,13 +512,13 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 
 	// Check if trying to update email, salary, joining_date, birth_date, or ending_date
 	if (input.Email != nil || input.Salary != nil || input.JoiningDate != nil || input.BirthDate != nil || input.EndingDate != nil) && !isAdmin {
-		pkg.RespondWithError(c, 403, "only SUPERADMIN aADMIN , HR can update email, salary, joining date, and ending date")
+		errors.RespondWithError(c, 403, "only SUPERADMIN aADMIN , HR can update email, salary, joining date, and ending date")
 		return
 	}
 
 	// Check if trying to update someone else's name
 	if input.FullName != nil && !isSelf && !isAdmin {
-		pkg.RespondWithError(c, 403, "you can only update your own name")
+		errors.RespondWithError(c, 403, "you can only update your own name")
 		return
 	}
 
@@ -527,7 +527,7 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 	if input.Email != nil {
 		emailDomain := os.Getenv("COMPANY_EMAIL_DOMAIN")
 		if emailDomain != "" && !strings.HasSuffix(*input.Email, "@"+emailDomain) {
-			pkg.RespondWithError(c, 400, "email must end with @"+emailDomain)
+			errors.RespondWithError(c, 400, "email must end with @"+emailDomain)
 			return
 		}
 
@@ -535,11 +535,11 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 		if existingEmp.Email != *input.Email {
 			exists, err := h.Query.CheckEmailExists(*input.Email)
 			if err != nil {
-				pkg.RespondWithError(c, 500, "failed to check email: "+err.Error())
+				errors.RespondWithError(c, 500, "failed to check email: "+err.Error())
 				return
 			}
 			if exists {
-				pkg.RespondWithError(c, 400, "email already exists")
+				errors.RespondWithError(c, 400, "email already exists")
 				return
 			}
 		}
@@ -579,24 +579,24 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 	if input.JoiningDate != nil {
 		if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 			if err := h.Query.UpdateEmployeeInfoTx(tx, empID, finalName, finalEmail, finalSalary, finalJoiningDate, finalBirthDate, finalEndingDate); err != nil {
-				return pkg.CustomErr(c, 500, "failed to update employee: "+err.Error())
+				return errors.CustomErr(c, 500, "failed to update employee: "+err.Error())
 			}
 			empRole, err := h.Query.GetEmployeeRole(empID)
 			if err != nil {
-				return pkg.CustomErr(c, 500, "failed to fetch employee role: "+err.Error())
+				return errors.CustomErr(c, 500, "failed to fetch employee role: "+err.Error())
 			}
 			currentYear := time.Now().Year()
 			if err := h.Query.RecalculateLeaveBalancesForJoiningDateChange(tx, empID, finalJoiningDate, empRole, currentYear); err != nil {
-				return pkg.CustomErr(c, 500, "failed to recalculate leave balances: "+err.Error())
+				return errors.CustomErr(c, 500, "failed to recalculate leave balances: "+err.Error())
 			}
 			return nil
 		}); err != nil {
-			pkg.RespondWithError(c, 500, err.Error())
+			errors.RespondWithError(c, 500, err.Error())
 			return
 		}
 	} else {
 		if err := h.Query.UpdateEmployeeInfo(empID, finalName, finalEmail, finalSalary, finalJoiningDate, finalBirthDate, finalEndingDate); err != nil {
-			pkg.RespondWithError(c, 500, "failed to update employee: "+err.Error())
+			errors.RespondWithError(c, 500, "failed to update employee: "+err.Error())
 			return
 		}
 	}
@@ -618,7 +618,7 @@ func (h *HandlerFunc) UpdateEmployeePassword(c *gin.Context) {
 	// 1️ Permission check - Only SUPERADMIN, ADMIN, and HR
 	role := c.GetString("role")
 	// if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-	// 	pkg.RespondWithError(c, 401, "not permitted to update password")
+	// 	errors.RespondWithError(c, 401, "not permitted to update password")
 	// 	return
 	// }
 
@@ -626,7 +626,7 @@ func (h *HandlerFunc) UpdateEmployeePassword(c *gin.Context) {
 	empIDStr := c.Param("id")
 	empID, err := uuid.Parse(empIDStr)
 	if err != nil {
-		pkg.RespondWithError(c, 400, "invalid employee ID")
+		errors.RespondWithError(c, 400, "invalid employee ID")
 		return
 	}
 
@@ -635,40 +635,40 @@ func (h *HandlerFunc) UpdateEmployeePassword(c *gin.Context) {
 		NewPassword string `json:"new_password" validate:"required,min=6"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
-		pkg.RespondWithError(c, 400, "invalid input: password is required and must be at least 8 characters")
+		errors.RespondWithError(c, 400, "invalid input: password is required and must be at least 8 characters")
 		return
 	}
 
 	// 4️ Validate password length
 	if len(input.NewPassword) < 8 {
-		pkg.RespondWithError(c, 400, "password must be at least 8  characters long")
+		errors.RespondWithError(c, 400, "password must be at least 8  characters long")
 		return
 	}
 
 	// 5️ Check if employee exists
 	existingEmp, err := h.Query.GetEmployeeByID(empID)
 	if err != nil {
-		pkg.RespondWithError(c, 404, "employee not found")
+		errors.RespondWithError(c, 404, "employee not found")
 		return
 	}
 
 	// 5.5️ HR and ADMIN cannot change SUPERADMIN password
 	if (role == "ADMIN" || role == "HR") && existingEmp.Role == "SUPERADMIN" {
-		pkg.RespondWithError(c, 403, "HR and ADMIN cannot modify SUPERADMIN users")
+		errors.RespondWithError(c, 403, "HR and ADMIN cannot modify SUPERADMIN users")
 		return
 	}
 
 	// 6️ Hash the new password
-	hashedPassword, err := pkg.HashPassword(input.NewPassword)
+	hashedPassword, err := security.HashPassword(input.NewPassword)
 	if err != nil {
-		pkg.RespondWithError(c, 500, "failed to hash password: "+err.Error())
+		errors.RespondWithError(c, 500, "failed to hash password: "+err.Error())
 		return
 	}
 
 	// 7️ Update password in database
 	err = h.Query.UpdateEmployeePassword(empID, hashedPassword)
 	if err != nil {
-		pkg.RespondWithError(c, 500, "failed to update password: "+err.Error())
+		errors.RespondWithError(c, 500, "failed to update password: "+err.Error())
 		return
 	}
 
@@ -708,21 +708,21 @@ func (h *HandlerFunc) GetMyTeam(c *gin.Context) {
 
 	// 2️ Permission check - Only MANAGER can use this endpoint
 	if role != "MANAGER" {
-		pkg.RespondWithError(c, 403, "only managers can access team member list")
+		errors.RespondWithError(c, 403, "only managers can access team member list")
 		return
 	}
 
 	// 3️ Bind sort params
 	var params models.TeamFilterParams
 	if err := c.ShouldBindQuery(&params); err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, "invalid query parameters: "+err.Error())
+		errors.RespondWithError(c, http.StatusBadRequest, "invalid query parameters: "+err.Error())
 		return
 	}
 
 	// 4️ Fetch team members
 	employees, err := h.Query.GetEmployeesByManagerID(currentUserID, params)
 	if err != nil {
-		pkg.RespondWithError(c, 500, "failed to fetch team members: "+err.Error())
+		errors.RespondWithError(c, 500, "failed to fetch team members: "+err.Error())
 		return
 	}
 
@@ -743,7 +743,7 @@ func (h *HandlerFunc) UpdateEmployeeDesignation(c *gin.Context) {
 	// 1️ Permission check
 	role := c.GetString("role")
 	if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-		pkg.RespondWithError(c, http.StatusForbidden, "only ADMIN, SUPERADMIN, and HR can assign designations")
+		errors.RespondWithError(c, http.StatusForbidden, "only ADMIN, SUPERADMIN, and HR can assign designations")
 		return
 	}
 
@@ -751,20 +751,20 @@ func (h *HandlerFunc) UpdateEmployeeDesignation(c *gin.Context) {
 	empIDStr := c.Param("id")
 	empID, err := uuid.Parse(empIDStr)
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, "invalid employee ID")
+		errors.RespondWithError(c, http.StatusBadRequest, "invalid employee ID")
 		return
 	}
 
 	// 3️ Check if employee exists
 	targetEmp, err := h.Query.GetEmployeeByID(empID)
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusNotFound, "employee not found")
+		errors.RespondWithError(c, http.StatusNotFound, "employee not found")
 		return
 	}
 
 	// 4️ HR and ADMIN cannot modify SUPERADMIN
 	if (role == "ADMIN" || role == "HR") && targetEmp.Role == "SUPERADMIN" {
-		pkg.RespondWithError(c, http.StatusForbidden, "HR and ADMIN cannot modify SUPERADMIN users")
+		errors.RespondWithError(c, http.StatusForbidden, "HR and ADMIN cannot modify SUPERADMIN users")
 		return
 	}
 
@@ -773,7 +773,7 @@ func (h *HandlerFunc) UpdateEmployeeDesignation(c *gin.Context) {
 		DesignationID *string `json:"designation_id"` // Can be null to remove designation
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
+		errors.RespondWithError(c, http.StatusBadRequest, "invalid input: "+err.Error())
 		return
 	}
 
@@ -782,14 +782,14 @@ func (h *HandlerFunc) UpdateEmployeeDesignation(c *gin.Context) {
 	if input.DesignationID != nil && *input.DesignationID != "" {
 		parsedID, err := uuid.Parse(*input.DesignationID)
 		if err != nil {
-			pkg.RespondWithError(c, http.StatusBadRequest, "invalid designation ID")
+			errors.RespondWithError(c, http.StatusBadRequest, "invalid designation ID")
 			return
 		}
 
 		// Check if designation exists
 		_, err = h.Query.GetDesignationByID(parsedID)
 		if err != nil {
-			pkg.RespondWithError(c, http.StatusNotFound, "designation not found")
+			errors.RespondWithError(c, http.StatusNotFound, "designation not found")
 			return
 		}
 		designationID = &parsedID
@@ -798,7 +798,7 @@ func (h *HandlerFunc) UpdateEmployeeDesignation(c *gin.Context) {
 	// 7️ Update employee designation
 	err = h.Query.UpdateEmployeeDesignation(empID, designationID)
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusInternalServerError, "failed to update designation: "+err.Error())
+		errors.RespondWithError(c, http.StatusInternalServerError, "failed to update designation: "+err.Error())
 		return
 	}
 
@@ -819,13 +819,13 @@ func (h *HandlerFunc) GetTodayBirthdays(c *gin.Context) {
 
 	tmpl, err := h.Query.GetBirthdayMessageTemplate()
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusInternalServerError, "failed to fetch template: "+err.Error())
+		errors.RespondWithError(c, http.StatusInternalServerError, "failed to fetch template: "+err.Error())
 		return
 	}
 
 	employees, err := h.Query.GetTodayBirthdays()
 	if err != nil {
-		pkg.RespondWithError(c, http.StatusInternalServerError, "failed to fetch birthdays: "+err.Error())
+		errors.RespondWithError(c, http.StatusInternalServerError, "failed to fetch birthdays: "+err.Error())
 		return
 	}
 

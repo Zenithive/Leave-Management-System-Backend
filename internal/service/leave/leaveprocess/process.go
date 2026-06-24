@@ -11,7 +11,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ func (r *ProcessorRegistry) Register(action string, p LeaveActionProcessor) {
 func (r *ProcessorRegistry) Resolve(action string) (LeaveActionProcessor, error) {
 	p, ok := r.processors[strings.ToUpper(action)]
 	if !ok {
-		return nil, pkg.CustomErr(nil, http.StatusBadRequest,
+		return nil, errors.CustomErr(nil, http.StatusBadRequest,
 			fmt.Sprintf("unsupported leave action: %s", action))
 	}
 	return p, nil

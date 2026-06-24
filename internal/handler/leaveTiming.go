@@ -9,8 +9,8 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/database/database"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
-	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
 )
 
 func (h *HandlerFunc) GetLeaveTiming(c *gin.Context) {
@@ -19,7 +19,7 @@ func (h *HandlerFunc) GetLeaveTiming(c *gin.Context) {
 	data, err := h.Query.GetLeaveTiming()
 	if err != nil {
 		fmt.Printf("GetLeaveTiming DB Error: %v\n", err)
-		pkg.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leave timing")
+		errors.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leave timing")
 		return
 	}
 
@@ -41,21 +41,21 @@ func (h *HandlerFunc) GetLeaveTimingByID(c *gin.Context) {
 
 	// 1️ Role validation
 	role := c.GetString("role")
-	if role != constant.ROLE_SUPER_ADMIN && role != constant.ROLE_ADMIN {
-		pkg.RespondWithError(c, http.StatusForbidden, "Access denied")
+	if role != access_role.ROLE_SUPER_ADMIN && role != access_role.ROLE_ADMIN {
+		errors.RespondWithError(c, http.StatusForbidden, "Access denied")
 		return
 	}
 
 	// 2️ Bind URI
 	var req models.GetLeaveTimingByIDReq
 	if err := c.ShouldBindUri(&req); err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, err.Error())
+		errors.RespondWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// 3️ Validate
 	if err := models.Validate.Struct(req); err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, err.Error())
+		errors.RespondWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -63,10 +63,10 @@ func (h *HandlerFunc) GetLeaveTimingByID(c *gin.Context) {
 	data, err := h.Query.GetLeaveTimingByID(req.ID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			pkg.RespondWithError(c, http.StatusNotFound, "Leave timing not found")
+			errors.RespondWithError(c, http.StatusNotFound, "Leave timing not found")
 			return
 		}
-		pkg.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leave timing")
+		errors.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leave timing")
 		return
 	}
 
@@ -81,8 +81,8 @@ func (h *HandlerFunc) UpdateLeaveTiming(c *gin.Context) {
 
 	// 1️ Role validation
 	role := c.GetString("role")
-	if role != constant.ROLE_SUPER_ADMIN && role != constant.ROLE_ADMIN {
-		pkg.RespondWithError(c, http.StatusForbidden, "Access denied")
+	if role != access_role.ROLE_SUPER_ADMIN && role != access_role.ROLE_ADMIN {
+		errors.RespondWithError(c, http.StatusForbidden, "Access denied")
 		return
 	}
 
@@ -90,18 +90,18 @@ func (h *HandlerFunc) UpdateLeaveTiming(c *gin.Context) {
 	var req models.UpdateLeaveTimingReq
 
 	if err := c.ShouldBindUri(&req); err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, err.Error())
+		errors.RespondWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, err.Error())
+		errors.RespondWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// 3️ Validate
 	if err := models.Validate.Struct(req); err != nil {
-		pkg.RespondWithError(c, http.StatusBadRequest, err.Error())
+		errors.RespondWithError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -111,17 +111,17 @@ func (h *HandlerFunc) UpdateLeaveTiming(c *gin.Context) {
 		err := h.Query.UpdateLeaveTiming(tx, req.ID, req.Timing)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				return pkg.CustomErr(c, http.StatusNotFound, "Leave timing not found")
+				return errors.CustomErr(c, http.StatusNotFound, "Leave timing not found")
 
 			}
-			return pkg.CustomErr(c, http.StatusInternalServerError, "Failed to update leave timing")
+			return errors.CustomErr(c, http.StatusInternalServerError, "Failed to update leave timing")
 		}
 		return nil
 	})
 
 	// If transaction returned an error, stop (CustomErr already responded)
 	if err != nil {
-		pkg.RespondWithError(c, 500, "Failed to update settings: "+err.Error())
+		errors.RespondWithError(c, 500, "Failed to update settings: "+err.Error())
 		return
 	}
 
