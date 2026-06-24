@@ -101,7 +101,10 @@ func (h *HandlerFunc) DeleteLeavePolicy(c *gin.Context) {
 	if !ok {
 		return
 	}
-	h.LeavePolicyService.Delete(c, leaveTypeID)
+	if err := h.LeavePolicyService.Delete(c, leaveTypeID); err != nil {
+		pkg.Error(c, err)
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "leave policy deleted successfully",

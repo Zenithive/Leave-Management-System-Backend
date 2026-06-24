@@ -8,11 +8,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/database/database"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
 	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
 )
 
@@ -72,7 +72,7 @@ func (h *HandlerFunc) UpdateCompanySettings(c *gin.Context) {
 		return
 	}
 
-	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	err =database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		err := h.Query.UpdateCompanySettings(tx, input)
 		if err != nil {
 			return pkg.CustomErr(c, 500, "Failed to fetch settings: "+err.Error())
@@ -142,7 +142,7 @@ func (h *HandlerFunc) UpdateCompanySettings(c *gin.Context) {
 	empID, _ := uuid.Parse(empIDRaw.(string))
 
 	// 5. Execute Database Transaction
-	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	err = database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.UpdateCompanySettings(tx, input, logoPath); err != nil {
 			return err
 		}

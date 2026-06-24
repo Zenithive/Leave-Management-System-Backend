@@ -10,13 +10,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/database/database"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification"
 	notifmodels "github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/models"
 	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
 )
 
@@ -154,7 +154,7 @@ func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 		input.Salary = &zeroSalary
 	}
 
-	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		// 1. Insert employee
 		id, err := h.Query.InsertEmployee(tx, input.FullName, input.Email, roleID, hash, input.Salary, input.JoiningDate)
 		if err != nil || id == uuid.Nil {
@@ -290,7 +290,7 @@ func (h *HandlerFunc) UpdateEmployeeRole(c *gin.Context) {
 	// 7️ Update Role
 	// ---------------------------
 	var updatedID string
-	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		role, err := h.Query.GetEmployeeRole(empID)
 		if err != nil {
 			return pkg.CustomErr(c, 500, "failed to fetch employee role: "+err.Error())
@@ -354,7 +354,7 @@ func (h *HandlerFunc) DeleteEmployeeStatus(c *gin.Context) {
 	}
 
 	var newStatus string
-	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		var txErr error
 		newStatus, txErr = h.Query.DeleteEmployeeStatus(tx, empID)
 		return txErr
@@ -577,7 +577,7 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 	// 8️ Update employee info — wrap in transaction if joining_date is changing
 	// so we can recalculate leave balances atomically.
 	if input.JoiningDate != nil {
-		if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+		if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 			if err := h.Query.UpdateEmployeeInfoTx(tx, empID, finalName, finalEmail, finalSalary, finalJoiningDate, finalBirthDate, finalEndingDate); err != nil {
 				return pkg.CustomErr(c, 500, "failed to update employee: "+err.Error())
 			}

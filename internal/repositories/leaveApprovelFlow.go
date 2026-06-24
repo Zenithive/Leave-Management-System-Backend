@@ -19,6 +19,7 @@ type LeaveApprovalFlowRepository interface {
 	GetById(ctx context.Context, id string) (*models.LeaveApprovalFlow, error)
 	UpdateLeaveApprovelFlow(ctx context.Context, id string, req *models.LeaveApprovalFlowRequest) error
 	DeleteLeaveApprovelFlow(ctx context.Context, id string) error
+	GetDefaultFlowID(ctx context.Context) (string, error)
 }
 
 // =====================================================
@@ -154,4 +155,23 @@ func (r *leaveApprovalFlowRepo) DeleteLeaveApprovelFlow(ctx context.Context, id 
 	}
 
 	return nil
+}
+
+func (r *leaveApprovalFlowRepo) GetDefaultFlowID(ctx context.Context) (string, error) {
+
+	query := `
+		SELECT id
+		FROM leave_approval_flow
+		WHERE is_system = true
+		LIMIT 1
+	`
+
+	var id string
+
+	err := r.db.GetContext(ctx, &id, query)
+	if err != nil {
+		return "", err
+	}
+
+	return id, nil
 }

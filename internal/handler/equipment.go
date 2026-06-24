@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/database/database"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
@@ -38,7 +39,7 @@ func (h *HandlerFunc) CreateCategory(c *gin.Context) {
 		return
 	}
 
-	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.CreateCategory(tx, req); err != nil {
 			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to create category: "+err.Error())
 		}
@@ -103,7 +104,7 @@ func (h *HandlerFunc) UpdateCategory(c *gin.Context) {
 		return
 	}
 
-	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.UpdateCategory(tx, categoryID, req); err != nil {
 			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to update category: "+err.Error())
 		}
@@ -133,7 +134,7 @@ func (h *HandlerFunc) DeleteCategory(c *gin.Context) {
 		return
 	}
 
-	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.DeleteCategory(tx, categoryID); err != nil {
 			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to delete category: "+err.Error())
 		}
@@ -171,7 +172,7 @@ func (h *HandlerFunc) CreateEquipment(c *gin.Context) {
 		return
 	}
 
-	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.CreateEquipment(tx, req); err != nil {
 			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to create equipment: "+err.Error())
 		}
@@ -279,7 +280,7 @@ func (h *HandlerFunc) UpdateEquipment(c *gin.Context) {
 		return
 	}
 
-	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.UpdateEquipment(tx, equipmentID, req); err != nil {
 			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to update equipment: "+err.Error())
 		}
@@ -309,7 +310,7 @@ func (h *HandlerFunc) DeleteEquipment(c *gin.Context) {
 		return
 	}
 
-	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.DeleteEquipment(tx, equipmentID); err != nil {
 			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to delete equipment: "+err.Error())
 		}
@@ -350,7 +351,7 @@ func (h *HandlerFunc) AssignEquipment(c *gin.Context) {
 		return
 	}
 
-	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.AssignEquipment(tx, req); err != nil {
 			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to assign equipment: "+err.Error())
 		}
@@ -436,7 +437,7 @@ func (h *HandlerFunc) RemoveEquipment(c *gin.Context) {
 		return
 	}
 
-	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.RemoveEquipment(tx, req); err != nil {
 			return pkg.CustomErr(c, http.StatusInternalServerError, err.Error())
 		}
@@ -473,7 +474,7 @@ func (h *HandlerFunc) UpdateAssignment(c *gin.Context) {
 		return
 	}
 
-	if err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.UpdateAssignment(tx, req); err != nil {
 			return pkg.CustomErr(c, http.StatusInternalServerError, err.Error())
 		}

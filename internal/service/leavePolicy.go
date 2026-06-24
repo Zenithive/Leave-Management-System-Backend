@@ -8,11 +8,10 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/database/database"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
-
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common"
 )
 
 // LeaveTypeService provides business-logic operations for leave types.
@@ -56,12 +55,12 @@ func (s *LeavePolicy) Create(ctx context.Context, input *models.LeaveTypeInput) 
 	var err error
 
 	// 1. Normalize input
-	if err := s.NormalizeLeaveTypeInput(input); err != nil {
+	if err := s.NormalizeLeaveTypeInput(ctx, input); err != nil {
 		return nil, err
 	}
 
 	// 2. Transaction wrapper
-	err = common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
+	err = database.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
 
 		// 3. Insert leave type
 		res, err = s.LeavePolicyRepo.Create(ctx, tx, input)
@@ -168,7 +167,7 @@ func (s *LeavePolicy) Get(ctx context.Context) (*[]models.LeaveTypeResponse, err
 
 func (s *LeavePolicy) Update(ctx context.Context, leaveTypeID int, input *models.LeaveTypeInput) (*models.LeaveType, error) {
 	// 1. Normalize input
-	if err := s.NormalizeLeaveTypeInput(input); err != nil {
+	if err := s.NormalizeLeaveTypeInput(ctx, input); err != nil {
 		return nil, err
 	}
 	var res *models.LeaveType
@@ -176,7 +175,7 @@ func (s *LeavePolicy) Update(ctx context.Context, leaveTypeID int, input *models
 	if err != nil {
 		return nil, pkg.CustomErr(nil, http.StatusBadRequest, err.Error())
 	}
-	err = common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
+	err = database.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
 		res, err = s.LeavePolicyRepo.Update(ctx, tx, strconv.Itoa(leaveTypeID), input)
 		if err != nil {
 			return pkg.CustomErr(nil, http.StatusInternalServerError, "failed to update leave policy")
@@ -211,7 +210,7 @@ func (s *LeavePolicy) Update(ctx context.Context, leaveTypeID int, input *models
 }
 
 func (s *LeavePolicy) Delete(ctx context.Context, leaveTypeID int) error {
-	err := common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
+	err := database.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
 		if err := s.LeavePolicyRepo.Delete(tx, leaveTypeID); err != nil {
 			return pkg.CustomErr(nil, http.StatusInternalServerError, err.Error())
 		}
@@ -220,7 +219,7 @@ func (s *LeavePolicy) Delete(ctx context.Context, leaveTypeID int) error {
 	return err
 }
 
-func (s *LeavePolicy) NormalizeLeaveTypeInput(input *models.LeaveTypeInput) error {
+func (s *LeavePolicy) NormalizeLeaveTypeInput(ctx context.Context, input *models.LeaveTypeInput) error {
 	if input.IsPaid == nil {
 		v := false
 		input.IsPaid = &v
@@ -245,8 +244,14 @@ func (s *LeavePolicy) NormalizeLeaveTypeInput(input *models.LeaveTypeInput) erro
 		v := false
 		input.IsWorkFromHome = &v
 	}
-	if input.ApprovalFlowID != nil && *input.ApprovalFlowID == "" {
-		input.ApprovalFlowID = nil
+	if input.ApprovalFlowID == nil {
+		if input.ApprovalFlowID == nil {
+			id, err := s.LeaveApporverService.GetDefaultFlowID(ctx)
+			if err != nil {
+				return err
+			}
+			input.ApprovalFlowID = &id
+		}
 	}
 	if *input.DefaultEntitlement < 0 {
 		return fmt.Errorf("default entitlement cannot be negative")

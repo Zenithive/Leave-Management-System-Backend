@@ -22,6 +22,7 @@ type LeaveApprovalFlowService interface {
 	GetAllLeaveApprovalFlows(ctx context.Context) ([]models.LeaveApprovalFlowResponse, error)
 	UpdateLeaveApprovelFlow(ctx context.Context, id string, req *models.LeaveApprovalFlowRequest) error
 	DeleteLeaveApprovelFlow(ctx context.Context, id string) error
+	GetDefaultFlowID(ctx context.Context) (string, error)
 }
 
 // =====================================================
@@ -208,4 +209,14 @@ func (s *leaveApprovalFlowService) AllowToCreateLeaveApprovelFlow(req *models.Le
 	}
 
 	return nil
+}
+
+func (s *leaveApprovalFlowService) GetDefaultFlowID(ctx context.Context) (string, error) {
+
+	id, err := s.Repo.GetDefaultFlowID(ctx)
+	if err != nil {
+		return "", pkg.CustomErr(nil, http.StatusNotFound, "default leave approval flow not found")
+	}
+
+	return id, nil
 }

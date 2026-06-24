@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/database/database"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
@@ -45,7 +46,7 @@ func (h *HandlerFunc) CreateDesignation(c *gin.Context) {
 
 	// 3️ Create designation
 	var designationID string
-	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	err = database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		designationID, err = h.Query.CreateDesignation(tx, input)
 		if err != nil {
 			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to create designation: "+err.Error())
@@ -147,7 +148,7 @@ func (h *HandlerFunc) UpdateDesignation(c *gin.Context) {
 	}
 
 	// 4️ Update designation
-	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	err = database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		err = h.Query.UpdateDesignation(tx, designationID, input)
 		if err != nil {
 			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to update designation: "+err.Error())
@@ -195,7 +196,7 @@ func (h *HandlerFunc) DeleteDesignation(c *gin.Context) {
 	}
 
 	// 3️ Delete designation (will set employee designation_id to NULL due to ON DELETE SET NULL)
-	err = common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	err = database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		err = h.Query.DeleteDesignation(tx, designationID)
 		if err != nil {
 			return pkg.CustomErr(c, http.StatusInternalServerError, "failed to delete designation: "+err.Error())

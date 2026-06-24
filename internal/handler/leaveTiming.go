@@ -7,9 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/database/database"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
 )
 
@@ -105,7 +105,7 @@ func (h *HandlerFunc) UpdateLeaveTiming(c *gin.Context) {
 		return
 	}
 
-	err := common.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+	err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		// 4️ Update DB
 
 		err := h.Query.UpdateLeaveTiming(tx, req.ID, req.Timing)

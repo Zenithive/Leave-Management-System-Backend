@@ -113,7 +113,7 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // 	normalizedDate := time.Date(input.Date.Year(), input.Date.Month(), input.Date.Day(), 0, 0, 0, 0, time.UTC)
 // 	var holidayId string
 
-// 	err = common.ExecuteTransaction(c, s.Query.DB, func(tx *sqlx.Tx) error {
+// 	err =database.ExecuteTransaction(c, s.Query.DB, func(tx *sqlx.Tx) error {
 // 		id, err := s.Query.AddHoliday(tx, input.Name, normalizedDate, input.Type)
 // 		if err != nil {
 // 			return pkg.CustomErr(c, http.StatusInternalServerError, "Failed to add holiday: "+err.Error())
@@ -169,7 +169,7 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // 		return
 // 	}
 
-// 	err = common.ExecuteTransaction(c, s.Query.DB, func(tx *sqlx.Tx) error {
+// 	err =database.ExecuteTransaction(c, s.Query.DB, func(tx *sqlx.Tx) error {
 // 		err := s.Query.DeleteHoliday(id, tx)
 // 		if err != nil {
 // 			return pkg.CustomErr(c, http.StatusInternalServerError, "Failed to delete holiday: "+err.Error())
@@ -233,7 +233,7 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // 	normalizedDate := time.Date(input.Date.Year(), input.Date.Month(), input.Date.Day(), 0, 0, 0, 0, time.UTC)
 // 	var holidayId string
 
-// 	err = common.ExecuteTransaction(c, s.Query.DB, func(tx *sqlx.Tx) error {
+// 	err =database.ExecuteTransaction(c, s.Query.DB, func(tx *sqlx.Tx) error {
 // 		id, err := s.Query.AddHoliday(tx, input.Name, normalizedDate, input.Type)
 // 		if err != nil {
 // 			return pkg.CustomErr(c, http.StatusInternalServerError, "Failed to add holiday: "+err.Error())
@@ -289,7 +289,7 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // 		return
 // 	}
 
-// 	err = common.ExecuteTransaction(c, s.Query.DB, func(tx *sqlx.Tx) error {
+// 	err =database.ExecuteTransaction(c, s.Query.DB, func(tx *sqlx.Tx) error {
 // 		err := s.Query.DeleteHoliday(id, tx)
 // 		if err != nil {
 // 			return pkg.CustomErr(c, http.StatusInternalServerError, "Failed to delete holiday: "+err.Error())

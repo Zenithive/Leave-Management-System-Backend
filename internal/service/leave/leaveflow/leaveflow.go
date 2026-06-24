@@ -12,13 +12,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/database/database"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service/leave/leaveprocess"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification"
 	notifmodels "github.com/sanjayk-eng/UserMenagmentSystem_Backend/notification/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
 
 	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
@@ -73,7 +73,7 @@ func (s *leaveFlow) Create(ctx context.Context, leave *models.LeaveInput, role s
 	}
 	var Days float64
 	var leaveID uuid.UUID
-	err = common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
+	err = database.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
 		leaveDays, err := service.CalculateWorkingDaysWithTiming(s.CommRepo, tx, leave.StartDate, leave.EndDate, LeaveTypeInfo.TimingID, leaveTiming)
 		if err != nil {
 			return pkg.CustomErr(nil, http.StatusBadRequest, err.Error())
@@ -167,7 +167,7 @@ func (s *leaveFlow) ActionLeave(ctx context.Context, req models.ActionLeaveReq, 
 		LeaveFlowRepo: s.Repo,
 	}
 
-	if err := common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
+	if err := database.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
 		return processor.Process(ctx, tx, lctx)
 	}); err != nil {
 		return err
@@ -320,7 +320,7 @@ func (s *leaveFlow) UpdateLeave(ctx context.Context, empID uuid.UUID, leaveId st
 	}
 
 	var Days float64
-	err = common.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
+	err = database.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
 		leaveDays, err := service.CalculateWorkingDaysWithTiming(s.CommRepo, tx, leave.StartDate, leave.EndDate, LeaveTypeInfo.TimingID, leaveTiming)
 		if err != nil {
 			return pkg.CustomErr(nil, http.StatusBadRequest, err.Error())

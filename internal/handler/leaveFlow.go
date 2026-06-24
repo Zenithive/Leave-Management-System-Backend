@@ -7,12 +7,11 @@ import (
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/helper"
 )
 
 func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
-	empID, ok := helper.ExtractEmployeeID(c)
-	if !ok {
+	empID, err := common.GetEmployeeId(c)
+	if err != nil {
 		pkg.RespondWithError(c, http.StatusUnauthorized, "missing EpID")
 		return
 	}
@@ -34,8 +33,8 @@ func (h *HandlerFunc) ApplyLeave(c *gin.Context) {
 }
 
 func (h *HandlerFunc) LeaveAction(c *gin.Context) {
-	empID, ok := helper.ExtractEmployeeID(c)
-	if !ok {
+	empID, err := common.GetEmployeeId(c)
+	if err != nil {
 		pkg.RespondWithError(c, http.StatusUnauthorized, "missing EpID")
 		return
 	}
@@ -59,8 +58,8 @@ func (h *HandlerFunc) LeaveAction(c *gin.Context) {
 }
 
 func (h *HandlerFunc) GetLeaves(c *gin.Context) {
-	empID, ok := helper.ExtractEmployeeID(c)
-	if !ok {
+	empID, err := common.GetEmployeeId(c)
+	if err != nil {
 		pkg.RespondWithError(c, http.StatusUnauthorized, "missing EpID")
 		return
 	}
@@ -82,8 +81,8 @@ func (h *HandlerFunc) GetLeaves(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 func (h *HandlerFunc) GetAllMyLeave(c *gin.Context) {
-	empID, ok := helper.ExtractEmployeeID(c)
-	if !ok {
+	empID, err := common.GetEmployeeId(c)
+	if err != nil {
 		pkg.RespondWithError(c, http.StatusUnauthorized, "missing EpID")
 		return
 	}
@@ -119,8 +118,8 @@ func (h *HandlerFunc) CancelLeave(c *gin.Context) {
 }
 
 func (h *HandlerFunc) EditLeave(c *gin.Context) {
-	empID, ok := helper.ExtractEmployeeID(c)
-	if !ok {
+	empID, err := common.GetEmployeeId(c)
+	if err != nil {
 		pkg.RespondWithError(c, http.StatusUnauthorized, "missing EpID")
 		return
 	}
