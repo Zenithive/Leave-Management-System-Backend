@@ -14,7 +14,7 @@ import (
 	"github.com/Zenithive/LeaveManagementSystem/internal/repositories"
 	"github.com/Zenithive/LeaveManagementSystem/internal/service"
 	"github.com/Zenithive/LeaveManagementSystem/internal/service/leave/leaveprocess"
-	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/constant"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/notification"
@@ -229,13 +229,13 @@ func (s *leaveFlow) GetLeaves(ctx context.Context, empID uuid.UUID, role string,
 	)
 	switch role {
 
-	case access_role.ROLE_EMPLOYEE, access_role.ROLE_INTERN:
+	case accessrole.ROLE_EMPLOYEE, accessrole.ROLE_INTERN:
 		result, err = s.Repo.GetAllEmployeeLeaveByMonthYear(empID, month, year)
-	case access_role.ROLE_MANAGER:
+	case accessrole.ROLE_MANAGER:
 
 		result, err = s.Repo.GetAllleavebaseonassignManagerByMonthYear(empID, month, year)
 
-	case access_role.ROLE_ADMIN, access_role.ROLE_HR, access_role.ROLE_SUPER_ADMIN:
+	case accessrole.ROLE_ADMIN, accessrole.ROLE_HR, accessrole.ROLE_SUPER_ADMIN:
 		result, err = s.Repo.GetAllLeaveByMonthYear(month, year)
 
 	default:
@@ -350,7 +350,7 @@ func (s *leaveFlow) UpdateLeave(ctx context.Context, empID uuid.UUID, leaveId st
 		if err = s.Repo.UpdateLeave(tx, leaveUUID, empID, leave, leaveDays); err != nil {
 			return errors.CustomErr(nil, http.StatusInternalServerError, "failed to update leave: "+err.Error())
 		}
-		if err := s.LeaveFlowLogService.RegenerateApprovalLog(ctx, tx, leaveUUID, leaveTypeRes, access_role.ROLE_EMPLOYEE); err != nil {
+		if err := s.LeaveFlowLogService.RegenerateApprovalLog(ctx, tx, leaveUUID, leaveTypeRes, accessrole.ROLE_EMPLOYEE); err != nil {
 			return err
 		}
 

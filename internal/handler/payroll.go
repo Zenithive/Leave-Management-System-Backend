@@ -11,7 +11,7 @@ import (
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 	"github.com/Zenithive/LeaveManagementSystem/internal/service"
-	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+	accessrole "github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -942,7 +942,7 @@ func (h *HandlerFunc) GetFinalizedPayslips(c *gin.Context) {
 	var err error
 
 	//  If Employee, Intern, Manager or HR -> only their own slips
-	if role == access_role.ROLE_EMPLOYEE || role == access_role.ROLE_INTERN || role == access_role.ROLE_MANAGER || role == access_role.ROLE_HR {
+	if role == accessrole.ROLE_EMPLOYEE || role == accessrole.ROLE_INTERN || role == accessrole.ROLE_MANAGER || role == accessrole.ROLE_HR {
 		empIDValue, ok := c.Get("user_id")
 		if !ok {
 			errors.RespondWithError(c, 500, "Failed to get employee ID")

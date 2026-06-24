@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/models"
-	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
 	"github.com/gin-gonic/gin"
 )
@@ -13,9 +13,9 @@ func (h *HandlerFunc) AddHoliday(c *gin.Context) {
 
 	role := c.GetString("role")
 
-	if role != access_role.ROLE_SUPER_ADMIN &&
-		role != access_role.ROLE_ADMIN &&
-		role != access_role.ROLE_HR {
+	if role != accessrole.ROLE_SUPER_ADMIN &&
+		role != accessrole.ROLE_ADMIN &&
+		role != accessrole.ROLE_HR {
 		errors.RespondWithError(c, http.StatusForbidden, "not permitted")
 		return
 	}
@@ -62,7 +62,7 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 
 	role := c.GetString("role")
 
-	if err := access_role.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can delete holidays"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can delete holidays"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -87,7 +87,7 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // AddHoliday handles adding a new holiday
 // func (s *HandlerFunc) AddHoliday(c *gin.Context) {
 // 	role, _ := c.Get("role")
-// 	if role.(string) != access_role.ROLE_SUPER_ADMIN && role.(string) != access_role.ROLE_ADMIN && role.(string) != access_role.ROLE_HR {
+// 	if role.(string) != accessrole.ROLE_SUPER_ADMIN && role.(string) != accessrole.ROLE_ADMIN && role.(string) != accessrole.ROLE_HR {
 // 		errors.RespondWithError(c, http.StatusUnauthorized, "not permitted")
 // 		return
 // 	}
@@ -152,7 +152,7 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // // DeleteHoliday removes a holiday
 // func (s *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // 	role := c.GetString("role")
-// 	if err := access_role.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can delete designations"); err != nil {
+// 	if err := accessrole.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can delete designations"); err != nil {
 // 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 // 		return
 // 	}
@@ -199,7 +199,7 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // 	"github.com/jmoiron/sqlx"
 // 	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 // 	"github.com/Zenithive/LeaveManagementSystem/pkg"
-// 	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+// 	"github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
 // 	"github.com/Zenithive/LeaveManagementSystem/pkg/common"
 // 	"github.com/Zenithive/LeaveManagementSystem/pkg/constant"
 // )
@@ -207,7 +207,7 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // // AddHoliday handles adding a new holiday
 // func (s *HandlerFunc) AddHoliday(c *gin.Context) {
 // 	role, _ := c.Get("role")
-// 	if role.(string) != access_role.ROLE_SUPER_ADMIN && role.(string) != access_role.ROLE_ADMIN && role.(string) != access_role.ROLE_HR {
+// 	if role.(string) != accessrole.ROLE_SUPER_ADMIN && role.(string) != accessrole.ROLE_ADMIN && role.(string) != accessrole.ROLE_HR {
 // 		errors.RespondWithError(c, http.StatusUnauthorized, "not permitted")
 // 		return
 // 	}
@@ -272,7 +272,7 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // // DeleteHoliday removes a holiday
 // func (s *HandlerFunc) DeleteHoliday(c *gin.Context) {
 // 	role := c.GetString("role")
-// 	if err := access_role.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can delete designations"); err != nil {
+// 	if err := accessrole.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can delete designations"); err != nil {
 // 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 // 		return
 // 	}

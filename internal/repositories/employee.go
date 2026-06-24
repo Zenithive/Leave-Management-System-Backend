@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/models"
-	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
@@ -97,7 +97,7 @@ func (r *Repository) UpdateEmployeeDesignation(empID uuid.UUID, designationID *u
 // Sort: name, email, joining_date, ending_date, salary, birth_date, manager_name, role, status.
 func (r *Repository) GetAllEmployees(params models.EmployeeFilterParams, role string) (*models.PaginatedEmployeeResponse, error) {
 	salaryCol := "NULL::double precision AS salary"
-	if role == access_role.ROLE_ADMIN || role == access_role.ROLE_SUPER_ADMIN {
+	if role == accessrole.ROLE_ADMIN || role == accessrole.ROLE_SUPER_ADMIN {
 		salaryCol = "e.salary"
 	}
 	// Build WHERE conditions dynamically

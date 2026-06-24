@@ -1,4 +1,4 @@
-package access_role
+package accessrole
 
 import (
 	"errors"

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+	accessrole "github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
 	"github.com/gin-gonic/gin"
 )
@@ -15,7 +15,7 @@ func (h *HandlerFunc) GetLogs(c *gin.Context) {
 	// Check if user is SUPERADMIN
 	role := c.GetString("role")
 
-	if err := access_role.SuperAdmin(role, "Access denied. Only SUPERADMIN can view logs"); err != nil {
+	if err := accessrole.SuperAdmin(role, "Access denied. Only SUPERADMIN can view logs"); err != nil {
 		errors.RespondWithError(c, http.StatusInternalServerError, "Invalid days parameter. Must be a positive integer")
 		return
 	}

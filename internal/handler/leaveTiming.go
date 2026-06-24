@@ -7,7 +7,7 @@ import (
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/config/database"
 	"github.com/Zenithive/LeaveManagementSystem/internal/models"
-	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
@@ -41,7 +41,7 @@ func (h *HandlerFunc) GetLeaveTimingByID(c *gin.Context) {
 
 	// 1️ Role validation
 	role := c.GetString("role")
-	if role != access_role.ROLE_SUPER_ADMIN && role != access_role.ROLE_ADMIN {
+	if role != accessrole.ROLE_SUPER_ADMIN && role != accessrole.ROLE_ADMIN {
 		errors.RespondWithError(c, http.StatusForbidden, "Access denied")
 		return
 	}
@@ -81,7 +81,7 @@ func (h *HandlerFunc) UpdateLeaveTiming(c *gin.Context) {
 
 	// 1️ Role validation
 	role := c.GetString("role")
-	if role != access_role.ROLE_SUPER_ADMIN && role != access_role.ROLE_ADMIN {
+	if role != accessrole.ROLE_SUPER_ADMIN && role != accessrole.ROLE_ADMIN {
 		errors.RespondWithError(c, http.StatusForbidden, "Access denied")
 		return
 	}

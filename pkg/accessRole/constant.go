@@ -1,4 +1,4 @@
-package access_role
+package accessrole
 
 const (
 	ROLE_SUPER_ADMIN = "SUPERADMIN"

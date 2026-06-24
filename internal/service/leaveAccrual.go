@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/repositories"
-	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+	accessrole "github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
 	"github.com/robfig/cron/v3"
 )
 
@@ -141,7 +141,7 @@ func (s *LeaveAccrualService) RunAccrual(month time.Month, year int) (credited, 
 
 			// Determine accrual rate based on role
 			days := accrualRateDefault
-			if emp.Role == access_role.ROLE_INTERN {
+			if emp.Role == accessrole.ROLE_INTERN {
 				days = accrualRateIntern
 			}
 

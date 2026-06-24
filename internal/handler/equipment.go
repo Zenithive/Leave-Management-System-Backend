@@ -5,7 +5,7 @@ import (
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/config/database"
 	"github.com/Zenithive/LeaveManagementSystem/internal/models"
-	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/common"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
 	pagi "github.com/Zenithive/LeaveManagementSystem/pkg/common/pagination"
@@ -20,7 +20,7 @@ import (
 // ======================
 
 func (h *HandlerFunc) CreateCategory(c *gin.Context) {
-	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can create categories"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can create categories"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -54,7 +54,7 @@ func (h *HandlerFunc) CreateCategory(c *gin.Context) {
 }
 
 func (h *HandlerFunc) GetAllCategory(c *gin.Context) {
-	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can view categories"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can view categories"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -79,7 +79,7 @@ func (h *HandlerFunc) GetAllCategory(c *gin.Context) {
 }
 
 func (h *HandlerFunc) UpdateCategory(c *gin.Context) {
-	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can update categories"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can update categories"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -119,7 +119,7 @@ func (h *HandlerFunc) UpdateCategory(c *gin.Context) {
 }
 
 func (h *HandlerFunc) DeleteCategory(c *gin.Context) {
-	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can delete categories"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can delete categories"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -153,7 +153,7 @@ func (h *HandlerFunc) DeleteCategory(c *gin.Context) {
 // ======================
 
 func (h *HandlerFunc) CreateEquipment(c *gin.Context) {
-	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can create equipment"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can create equipment"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -187,7 +187,7 @@ func (h *HandlerFunc) CreateEquipment(c *gin.Context) {
 }
 
 func (h *HandlerFunc) GetAllEquipment(c *gin.Context) {
-	if err := access_role.Admin_SuperAdmin(c.GetString("role"), "only ADMIN and SUPERADMIN can view equipment"); err != nil {
+	if err := accessrole.Admin_SuperAdmin(c.GetString("role"), "only ADMIN and SUPERADMIN can view equipment"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -215,7 +215,7 @@ func (h *HandlerFunc) GetAllEquipment(c *gin.Context) {
 }
 
 func (h *HandlerFunc) GetEquipmentByCategory(c *gin.Context) {
-	if err := access_role.Admin_SuperAdmin(c.GetString("role"), "only ADMIN and SUPERADMIN can view equipment"); err != nil {
+	if err := accessrole.Admin_SuperAdmin(c.GetString("role"), "only ADMIN and SUPERADMIN can view equipment"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -255,7 +255,7 @@ func (h *HandlerFunc) GetEquipmentByCategory(c *gin.Context) {
 }
 
 func (h *HandlerFunc) UpdateEquipment(c *gin.Context) {
-	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can update equipment"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can update equipment"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -295,7 +295,7 @@ func (h *HandlerFunc) UpdateEquipment(c *gin.Context) {
 }
 
 func (h *HandlerFunc) DeleteEquipment(c *gin.Context) {
-	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can delete equipment"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(c.GetString("role"), "only ADMIN, SUPERADMIN, and HR can delete equipment"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -329,7 +329,7 @@ func (h *HandlerFunc) DeleteEquipment(c *gin.Context) {
 // ======================
 
 func (h *HandlerFunc) AssignEquipment(c *gin.Context) {
-	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "access denied"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(c.GetString("role"), "access denied"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -366,7 +366,7 @@ func (h *HandlerFunc) AssignEquipment(c *gin.Context) {
 }
 
 func (h *HandlerFunc) GetAllAssignedEquipment(c *gin.Context) {
-	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "access denied"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(c.GetString("role"), "access denied"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -418,7 +418,7 @@ func (h *HandlerFunc) GetAssignedEquipmentByEmployee(c *gin.Context) {
 }
 
 func (h *HandlerFunc) RemoveEquipment(c *gin.Context) {
-	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "access denied"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(c.GetString("role"), "access denied"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -452,7 +452,7 @@ func (h *HandlerFunc) RemoveEquipment(c *gin.Context) {
 }
 
 func (h *HandlerFunc) UpdateAssignment(c *gin.Context) {
-	if err := access_role.Admin_SuperAdmin_Hr(c.GetString("role"), "access denied"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(c.GetString("role"), "access denied"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}

@@ -5,7 +5,7 @@ import (
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/config/database"
 	"github.com/Zenithive/LeaveManagementSystem/internal/models"
-	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/common"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/constant"
@@ -20,7 +20,7 @@ func (h *HandlerFunc) CreateDesignation(c *gin.Context) {
 	// 1️ Permission check
 	role := c.GetString("role")
 
-	if err := access_role.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can create designations"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can create designations"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -116,7 +116,7 @@ func (h *HandlerFunc) GetDesignationByID(c *gin.Context) {
 func (h *HandlerFunc) UpdateDesignation(c *gin.Context) {
 	// 1️ Permission check
 	role := c.GetString("role")
-	if err := access_role.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can update designations"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can update designations"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -175,7 +175,7 @@ func (h *HandlerFunc) UpdateDesignation(c *gin.Context) {
 func (h *HandlerFunc) DeleteDesignation(c *gin.Context) {
 	// 1️ Permission check
 	role := c.GetString("role")
-	if err := access_role.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can delete designations"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(role, "only ADMIN, SUPERADMIN, and HR can delete designations"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}

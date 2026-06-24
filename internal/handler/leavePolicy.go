@@ -17,14 +17,14 @@ import (
 	"strconv"
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/models"
-	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
 	"github.com/gin-gonic/gin"
 )
 
 func (h *HandlerFunc) LeavePolicy(c *gin.Context) {
 
-	if role := c.GetString("role"); role != access_role.ROLE_SUPER_ADMIN {
+	if role := c.GetString("role"); role != accessrole.ROLE_SUPER_ADMIN {
 		errors.RespondWithError(c, http.StatusUnauthorized, "not permitted to create leave policies")
 		return
 	}
@@ -59,8 +59,8 @@ func (h *HandlerFunc) GetAllLeavePolicies(c *gin.Context) {
 
 func (h *HandlerFunc) UpdateLeavePolicy(c *gin.Context) {
 
-	if role := c.GetString("role"); role != access_role.ROLE_SUPER_ADMIN &&
-		role != access_role.ROLE_ADMIN && role != access_role.ROLE_HR {
+	if role := c.GetString("role"); role != accessrole.ROLE_SUPER_ADMIN &&
+		role != accessrole.ROLE_ADMIN && role != accessrole.ROLE_HR {
 		errors.RespondWithError(c, http.StatusUnauthorized, "not permitted to update leave policies")
 		return
 	}
@@ -90,8 +90,8 @@ func (h *HandlerFunc) UpdateLeavePolicy(c *gin.Context) {
 
 func (h *HandlerFunc) DeleteLeavePolicy(c *gin.Context) {
 
-	if role := c.GetString("role"); role != access_role.ROLE_SUPER_ADMIN &&
-		role != access_role.ROLE_ADMIN && role != access_role.ROLE_HR {
+	if role := c.GetString("role"); role != accessrole.ROLE_SUPER_ADMIN &&
+		role != accessrole.ROLE_ADMIN && role != accessrole.ROLE_HR {
 		errors.RespondWithError(c, http.StatusUnauthorized, "not permitted to delete leave policies")
 		return
 	}

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/models"
-	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+	accessrole "github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
 	"github.com/gin-gonic/gin"
 )
@@ -107,12 +107,12 @@ func (h *HandlerFunc) GetLeaveReport(c *gin.Context) {
 	// Validate role filter if provided
 	if req.Role != "" {
 		validRoles := map[string]bool{
-			access_role.ROLE_EMPLOYEE:    true,
-			access_role.ROLE_INTERN:      true,
-			access_role.ROLE_HR:          true,
-			access_role.ROLE_ADMIN:       true,
-			access_role.ROLE_SUPER_ADMIN: true,
-			access_role.ROLE_MANAGER:     true,
+			accessrole.ROLE_EMPLOYEE:    true,
+			accessrole.ROLE_INTERN:      true,
+			accessrole.ROLE_HR:          true,
+			accessrole.ROLE_ADMIN:       true,
+			accessrole.ROLE_SUPER_ADMIN: true,
+			accessrole.ROLE_MANAGER:     true,
 		}
 		if !validRoles[strings.ToUpper(req.Role)] {
 			errors.RespondWithError(c, http.StatusBadRequest, "Invalid role filter. Must be: EMPLOYEE, INTERN, HR, ADMIN, SUPERADMIN, MANAGER")

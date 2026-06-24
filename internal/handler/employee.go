@@ -10,7 +10,7 @@ import (
 	"github.com/Zenithive/LeaveManagementSystem/internal/config/database"
 	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 	"github.com/Zenithive/LeaveManagementSystem/internal/service"
-	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/notification"
 	notifmodels "github.com/Zenithive/LeaveManagementSystem/pkg/notification/models"
@@ -35,7 +35,7 @@ func (h *HandlerFunc) GetEmployee(c *gin.Context) {
 	role, _ := c.Get("role")
 	r := role.(string)
 
-	if err := access_role.Admin_SuperAdmin_Hr(r, "only ADMIN, SUPERADMIN, and HR can view employees"); err != nil {
+	if err := accessrole.Admin_SuperAdmin_Hr(r, "only ADMIN, SUPERADMIN, and HR can view employees"); err != nil {
 		errors.RespondWithError(c, http.StatusForbidden, err.Error())
 		return
 	}
@@ -100,7 +100,7 @@ func (h *HandlerFunc) GetEmployeeById(c *gin.Context) {
 
 func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 	role := c.GetString("role")
-	if role != access_role.ROLE_SUPER_ADMIN && role != access_role.ROLE_ADMIN && role != access_role.ROLE_HR {
+	if role != accessrole.ROLE_SUPER_ADMIN && role != accessrole.ROLE_ADMIN && role != accessrole.ROLE_HR {
 		errors.RespondWithError(c, http.StatusUnauthorized, "not permitted")
 		return
 	}
@@ -174,7 +174,7 @@ func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 			isEarlyLeave := leaveType.IsEarly != nil && *leaveType.IsEarly
 			if !isEarlyLeave {
 				entitlement := leaveType.DefaultEntitlement
-				if input.Role == access_role.ROLE_INTERN && leaveType.InternEntitlement != nil {
+				if input.Role == accessrole.ROLE_INTERN && leaveType.InternEntitlement != nil {
 					entitlement = *leaveType.InternEntitlement
 				}
 				// Prorate only when the employee joins mid-year in the current year.
