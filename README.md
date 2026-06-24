@@ -1,5 +1,3 @@
-<div align="center">
-
 # Leave Management System — Backend
 
 **A role-based leave management API with multi-stage approvals, configurable leave policies, and automated notifications.**
@@ -11,7 +9,7 @@
 
 [Features](#features) • [Architecture](#architecture) • [Getting Started](#getting-started) • [Docker](#docker-setup) • [Contributing](#contributing)
 
-</div>
+
 
 ---
 
@@ -59,6 +57,46 @@ This is the backend service for a **Leave Management System (LMS)** built for or
 
 The frontend (separate repository) communicates with this API over REST. The backend persists leave, user, policy, and asset data in PostgreSQL, sends transactional email on leave events, and posts to Slack via Incoming Webhooks for birthdays and the daily leave summary. Since the hosting platform doesn't run scheduled jobs itself, an external scheduler (e.g. cron-job.org) triggers the daily summary through a token-protected endpoint.
 
+## Project Structure
+
+```
+.
+├── cmd/
+│   ├── server/              # Application entrypoint (main.go)
+│   └── seed/                # Database seed script
+├── internal/
+│   ├── config/              # Env/config loading
+│   ├── handler/              # HTTP request handlers
+│   ├── models/                # Data structures / entities
+│   ├── repositories/           # Database access layer (queries, persistence)
+│   └── service/
+│       └── leave/             # Leave business logic
+│           ├── leaveflow/      # Approval chain / routing logic
+│           └── leaveprocess/   # Approve, reject, withdraw, process actions
+├── middleware/                 # Auth (JWT), role-based access checks, CORS
+├── migration/                   # Goose database migration files
+├── pkg/
+│   ├── access_role/             # Role definitions and permission checks
+│   ├── common/                   # Shared types/helpers used across packages
+│   ├── constant/                  # App-wide constants (actions, components)
+│   ├── notification/
+│   │   ├── handlers/               # Notification dispatch handlers
+│   │   ├── models/                  # Notification payload types
+│   │   ├── providers/                # Email (Resend) / Slack senders
+│   │   └── templates/                 # Message templates
+│   ├── security/                       # JWT, password hashing, token utilities
+│   └── cron_guard.go                    # Cron endpoint token validation
+├── routes/                                # Route registration and grouping
+├── schema/                                 # Database schema reference
+├── .env.example                            # Environment variable template
+├── docker-compose.yaml                      # Docker Compose configuration
+├── Dockerfile                                # Multi-stage build for the backend image
+├── go.mod / go.sum                            # Go module dependencies
+└── README.md
+```
+
+**Layering convention:** `routes` → `middleware` → `handler` → `service` → `repositories`. Routes pass through middleware (auth, role checks) before reaching a handler. Handlers deal with HTTP concerns only; business rules (approval chains, policy validation, balance calculations) live in `service`; `repositories` is the only layer that talks to the database directly. `pkg/` holds code that's reusable independent of the core domain (security, notifications, constants); `internal/` holds the application's core domain logic.
+
 ## Tech Stack
 
 | | |
@@ -68,7 +106,7 @@ The frontend (separate repository) communicates with this API over REST. The bac
 | **Frontend** | React _(separate repository)_ |
 | **Database** | PostgreSQL via `sqlx` + `lib/pq` |
 | **Migrations** | [Goose](https://github.com/pressly/goose) |
-| **Auth** | JWT (`golang-jwt/jwt`), `golang.org/x/crypto` |
+| **Auth & Security** | JWT, password hashing — `pkg/security` |
 | **Validation** | `go-playground/validator` |
 | **Reports (PDF)** | `jung-kurt/gofpdf` |
 | **Containerization** | Docker, Docker Compose |
@@ -78,7 +116,7 @@ The frontend (separate repository) communicates with this API over REST. The bac
 
 ### Prerequisites
 - Go 1.25+
-- PostgreSQL (local, Dockerized, or hosted — Railway/Supabase/otherplatform)
+- PostgreSQL (local, Dockerized, or hosted — Railway/Supabase)
 - Docker & Docker Compose (optional, for containerized setup)
 
 ### 1. Clone & install
@@ -120,13 +158,13 @@ DB_URL=postgresql://user:password@localhost:5432/dbname?sslmode=disable
 Run migrations:
 
 ```bash
-goose -dir pkg/migration postgres "$DB_URL" up
+goose -dir migration postgres "$DB_URL" up
 ```
 
 ### 4. Run
 
 ```bash
-go run main.go
+go run cmd/server/main.go
 ```
 
 The server starts on `APP_PORT` (default `8082`).
