@@ -66,7 +66,6 @@ func (s *leaveApprovalFlowService) GetAllLeaveApprovalFlows(ctx context.Context)
 
 	// 2. Convert DB model → Response model
 	var response []models.LeaveApprovalFlowResponse
-
 	for _, flow := range flows {
 
 		var stages []models.ApprovalStage
@@ -112,7 +111,7 @@ func (s *leaveApprovalFlowService) GetLeaveApprovalFlowById(ctx context.Context,
 }
 
 func (s *leaveApprovalFlowService) UpdateLeaveApprovelFlow(ctx context.Context, id string, req *models.LeaveApprovalFlowRequest) error {
-	// 1. Validate request
+
 	if err := s.AllowToCreateLeaveApprovelFlow(req); err != nil {
 		return err
 	}
@@ -140,7 +139,7 @@ func (s *leaveApprovalFlowService) AllowToCreateLeaveApprovelFlow(req *models.Le
 		return errors.CustomErr(nil, http.StatusBadRequest, "approval flow cannot be empty")
 	}
 
-	roleStages := make(map[models.ApproverRole]int)
+	roleStages := make(map[models.ApproverRole]int, 0)
 
 	validRoles := map[models.ApproverRole]struct{}{
 		models.ApproverManager:    {},

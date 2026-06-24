@@ -65,7 +65,7 @@ The frontend (separate repository) communicates with this API over REST. The bac
 │   ├── server/              # Application entrypoint (main.go)
 │   └── seed/                # Database seed script
 ├── internal/
-│   ├── config/              # Env/config loading
+│   ├── config/              # Env/config /database loading
 │   ├── handler/              # HTTP request handlers
 │   ├── models/                # Data structures / entities
 │   ├── repositories/           # Database access layer (queries, persistence)
@@ -85,7 +85,7 @@ The frontend (separate repository) communicates with this API over REST. The bac
 │   │   ├── providers/                # Email (Resend) / Slack senders
 │   │   └── templates/                 # Message templates
 │   ├── security/                       # JWT, password hashing, token utilities
-│   └── cron_guard.go                    # Cron endpoint token validation
+│   
 ├── routes/                                # Route registration and grouping
 ├── schema/                                 # Database schema reference
 ├── .env.example                            # Environment variable template

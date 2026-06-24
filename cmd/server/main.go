@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/gin-gonic/gin"
 	"github.com/Zenithive/LeaveManagementSystem/internal/config"
 	"github.com/Zenithive/LeaveManagementSystem/internal/config/database"
 	"github.com/Zenithive/LeaveManagementSystem/internal/handler"
@@ -19,6 +18,7 @@ import (
 	"github.com/Zenithive/LeaveManagementSystem/pkg/notification/handlers"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/notification/providers"
 	"github.com/Zenithive/LeaveManagementSystem/routes"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {

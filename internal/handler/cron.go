@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/service"
-	pkg "github.com/Zenithive/LeaveManagementSystem/pkg"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
 	"github.com/gin-gonic/gin"
 )
@@ -41,7 +40,7 @@ func (h *HandlerFunc) DailyLeaveSlackNotification(c *gin.Context) {
 
 	// 3️ Skip weekends and holidays (reusable guard)
 	now := time.Now()
-	skip, err := pkg.ShouldSkipCronToday(now, h.Query)
+	skip, err := service.ShouldSkipCronToday(now, h.Query)
 	if err != nil {
 		fmt.Printf("[Cron] Holiday check error: %v\n", err)
 		errors.RespondWithError(c, http.StatusInternalServerError, "Holiday check failed: "+err.Error())
