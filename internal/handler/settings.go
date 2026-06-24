@@ -36,68 +36,6 @@ func (h *HandlerFunc) GetCompanySettings(c *gin.Context) {
 	})
 }
 
-/*
-// UpdateCompanySettings - PUT /api/settings/company
-func (h *HandlerFunc) UpdateCompanySettings(c *gin.Context) {
-	// Only SUPERADMIN and ADMIN allowed
-	roleRaw, _ := c.Get("role")
-	role := roleRaw.(string)
-	if role != "SUPERADMIN" && role != "ADMIN" {
-		errors.RespondWithError(c, 403, "Not authorized to update settings")
-		return
-	}
-	var input models.CompanyField
-
-
-	if err := c.ShouldBindWith(&input, binding.FormMultipart); err != nil {
-		errors.RespondWithError(c, 400, "Invalid input (Form error): "+err.Error())
-		return
-	}
-	empIDRaw, ok := c.Get("user_id")
-	if !ok {
-		errors.RespondWithError(c, http.StatusUnauthorized, "Employee ID missing")
-		return
-
-	}
-
-	empIDStr, ok := empIDRaw.(string)
-	if !ok {
-		errors.RespondWithError(c, http.StatusInternalServerError, "Invalid employee ID format")
-		return
-	}
-
-	empID, err := uuid.Parse(empIDStr)
-	if err != nil {
-		errors.RespondWithError(c, http.StatusInternalServerError, "Invalid employee UUID")
-		return
-	}
-
-	err =database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
-		err := h.Query.UpdateCompanySettings(tx, input)
-		if err != nil {
-			return errors.CustomErr(c, 500, "Failed to fetch settings: "+err.Error())
-		}
-		//add log
-		data := models.NewCommon(constant.CompanySettings, constant.ActionCreate, empID)
-
-		err = h.Query.AddLog(data, tx)
-		if err != nil {
-			return errors.CustomErr(c, http.StatusInternalServerError, "Failed to log action: "+err.Error())
-		}
-		return err
-	})
-
-	if err != nil {
-		errors.RespondWithError(c, 500, "Failed to update settings: "+err.Error())
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Company settings updated successfully",
-	})
-}
-*/
-
 func (h *HandlerFunc) UpdateCompanySettings(c *gin.Context) {
 	// 1. Authorization check
 	roleRaw, _ := c.Get("role")

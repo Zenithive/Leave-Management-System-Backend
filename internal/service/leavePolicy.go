@@ -246,11 +246,11 @@ func (s *LeavePolicy) NormalizeLeaveTypeInput(ctx context.Context, input *models
 	}
 	if input.ApprovalFlowID == nil {
 		if input.ApprovalFlowID == nil {
-			id, err := s.LeaveApporverService.GetDefaultFlowID(ctx)
+			v, err := s.LeaveApporverService.GetDefaultFlowID(ctx)
 			if err != nil {
 				return err
 			}
-			input.ApprovalFlowID = &id
+			input.ApprovalFlowID = &v
 		}
 	}
 	if *input.DefaultEntitlement < 0 {
