@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
-	models2 "github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/notification/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/notification/providers"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/notification/templates"
+	"github.com/Zenithive/LeaveManagementSystem/internal/config"
+	models2 "github.com/Zenithive/LeaveManagementSystem/internal/models"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/notification/models"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/notification/providers"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/notification/templates"
 )
 
 // LeaveNotificationHandler handles all leave-related notification events.

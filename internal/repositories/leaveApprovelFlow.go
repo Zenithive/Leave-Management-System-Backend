@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 	"github.com/jmoiron/sqlx"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 )
 
 // =====================================================

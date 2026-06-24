@@ -8,17 +8,17 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config/database"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/handler"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service/leave/leaveflow"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/notification"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/notification/handlers"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/notification/providers"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/routes"
+	"github.com/Zenithive/LeaveManagementSystem/internal/config"
+	"github.com/Zenithive/LeaveManagementSystem/internal/config/database"
+	"github.com/Zenithive/LeaveManagementSystem/internal/handler"
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
+	"github.com/Zenithive/LeaveManagementSystem/internal/repositories"
+	"github.com/Zenithive/LeaveManagementSystem/internal/service"
+	"github.com/Zenithive/LeaveManagementSystem/internal/service/leave/leaveflow"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/notification"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/notification/handlers"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/notification/providers"
+	"github.com/Zenithive/LeaveManagementSystem/routes"
 )
 
 func main() {

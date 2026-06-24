@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
 )
 
 // TriggerLeaveAccrual - POST /api/admin/leave-accrual/run

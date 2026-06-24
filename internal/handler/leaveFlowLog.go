@@ -3,9 +3,9 @@ package handler
 import (
 	"net/http"
 
+	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
 )
 
 func (h *HandlerFunc) GetLeaveLog(c *gin.Context) {

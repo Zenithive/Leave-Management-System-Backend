@@ -1,4 +1,4 @@
-module github.com/sanjayk-eng/UserMenagmentSystem_Backend
+module github.com/Zenithive/LeaveManagementSystem
 
 go 1.25
 

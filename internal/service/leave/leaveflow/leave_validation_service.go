@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
+	"github.com/Zenithive/LeaveManagementSystem/internal/repositories"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
 )
 
 // LeaveValidationService provides reusable validation functions for leave operations

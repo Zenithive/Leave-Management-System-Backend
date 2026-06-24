@@ -3,7 +3,7 @@ package repositories
 import (
 	"strings"
 
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 )
 
 // ============================================================================

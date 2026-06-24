@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 )
 
 type EmployeeAuthData struct {

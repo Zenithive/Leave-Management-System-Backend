@@ -1,12 +1,12 @@
 package handler
 
 import (
+	"github.com/Zenithive/LeaveManagementSystem/internal/config"
+	"github.com/Zenithive/LeaveManagementSystem/internal/repositories"
+	"github.com/Zenithive/LeaveManagementSystem/internal/service"
+	"github.com/Zenithive/LeaveManagementSystem/internal/service/leave/leaveflow"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/notification"
 	"github.com/go-playground/validator/v10"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service/leave/leaveflow"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/notification"
 )
 
 // HandlerFunc holds all dependencies injected at startup.

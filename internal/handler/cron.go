@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Zenithive/LeaveManagementSystem/internal/service"
+	pkg "github.com/Zenithive/LeaveManagementSystem/pkg"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
-	pkg "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
 )
 
 // DailyLeaveSlackNotification — cron endpoint that sends the daily leave summary to Slack.

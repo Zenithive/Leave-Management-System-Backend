@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Zenithive/LeaveManagementSystem/internal/handler"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/security"
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/handler"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/security"
 )
 
 // AuthMiddleware verifies Bearer JWT Token

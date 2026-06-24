@@ -5,15 +5,15 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Zenithive/LeaveManagementSystem/internal/config/database"
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
+	"github.com/Zenithive/LeaveManagementSystem/internal/service"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/constant"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config/database"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/service"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
 )
 
 // GetCompanySettings - GET /api/settings/company

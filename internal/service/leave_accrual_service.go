@@ -22,9 +22,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/Zenithive/LeaveManagementSystem/internal/repositories"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
 	"github.com/robfig/cron/v3"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
 )
 
 const (

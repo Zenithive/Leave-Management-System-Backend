@@ -5,9 +5,9 @@ import (
 	"math"
 	"time"
 
+	"github.com/Zenithive/LeaveManagementSystem/internal/repositories"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
 )
 
 // ValidateUnpaidLeaveApplication checks if an employee can apply for unpaid leave.

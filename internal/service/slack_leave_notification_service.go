@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 )
 
 type DailyLeaveSlackService struct {

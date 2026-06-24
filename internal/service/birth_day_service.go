@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/constant"
 )
 
 // RenderBirthdayMessage replaces supported placeholders in the template:

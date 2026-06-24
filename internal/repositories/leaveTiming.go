@@ -3,8 +3,8 @@ package repositories
 import (
 	"database/sql"
 
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 	"github.com/jmoiron/sqlx"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 )
 
 // Get All Leave Timing

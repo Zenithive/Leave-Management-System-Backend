@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 )
 
 type LeaveFlowLog interface {

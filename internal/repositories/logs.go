@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 	"github.com/jmoiron/sqlx"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 )
 
 func (r *Repository) AddLog(data *models.Common, q *sqlx.Tx) error {

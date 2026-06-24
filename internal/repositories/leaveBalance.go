@@ -5,9 +5,9 @@ import (
 	"math"
 	"time"
 
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 )
 
 // GetAllLeaveTypesWithEntitlements fetches all non-early leave types with their default entitlements.

@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
+	"github.com/Zenithive/LeaveManagementSystem/internal/config"
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 )
 
 // appName returns the application name from config.

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/notification/handlers"
-	notifmodels "github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/notification/models"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/notification/handlers"
+	notifmodels "github.com/Zenithive/LeaveManagementSystem/pkg/notification/models"
 )
 
 // EventProcessor routes a notification Event to the correct domain handler.

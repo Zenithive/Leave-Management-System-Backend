@@ -3,10 +3,10 @@ package handler
 import (
 	"net/http"
 
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
 )
 
 func (h *HandlerFunc) AddHoliday(c *gin.Context) {
@@ -197,11 +197,11 @@ func (h *HandlerFunc) DeleteHoliday(c *gin.Context) {
 
 // 	"github.com/gin-gonic/gin"
 // 	"github.com/jmoiron/sqlx"
-// 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
-// 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg"
-// 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
-// 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common"
-// 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
+// 	"github.com/Zenithive/LeaveManagementSystem/internal/models"
+// 	"github.com/Zenithive/LeaveManagementSystem/pkg"
+// 	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
+// 	"github.com/Zenithive/LeaveManagementSystem/pkg/common"
+// 	"github.com/Zenithive/LeaveManagementSystem/pkg/constant"
 // )
 
 // // AddHoliday handles adding a new holiday

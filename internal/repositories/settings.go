@@ -1,8 +1,8 @@
 package repositories
 
 import (
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 	"github.com/jmoiron/sqlx"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 )
 
 func (r *Repository) GetCompanySettings(settings *models.CompanySettings) error {

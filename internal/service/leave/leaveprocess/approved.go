@@ -4,10 +4,10 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/common/errors"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/constant"
 	"github.com/jmoiron/sqlx"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/constant"
 )
 
 type ApproveProcessor struct{}

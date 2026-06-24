@@ -5,10 +5,10 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/handler"
-	middleware "github.com/sanjayk-eng/UserMenagmentSystem_Backend/middlewere"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/access_role"
+	"github.com/Zenithive/LeaveManagementSystem/internal/config"
+	"github.com/Zenithive/LeaveManagementSystem/internal/handler"
+	middleware "github.com/Zenithive/LeaveManagementSystem/middlewere"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/access_role"
 )
 
 func SetupRoutes(r *gin.Engine, h *handler.HandlerFunc, env *config.ENV) {

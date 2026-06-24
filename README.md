@@ -122,7 +122,7 @@ The frontend (separate repository) communicates with this API over REST. The bac
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/sanjayk-eng/UserMenagmentSystem_Backend.git
+git clone https://github.com/Zenithive/LeaveManagementSystem.git
 cd UserMenagmentSystem_Backend
 go mod tidy
 ```
