@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/database/database"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config/database"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/pkg/common/errors"

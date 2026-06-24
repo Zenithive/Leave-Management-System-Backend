@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/database/database"
+	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/config/database"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/handler"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/models"
 	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/internal/repositories"
