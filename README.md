@@ -76,7 +76,7 @@ The frontend (separate repository) communicates with this API over REST. The bac
 ├── middleware/                 # Auth (JWT), role-based access checks, CORS
 ├── migration/                   # Goose database migration files
 ├── pkg/
-│   ├── access_role/             # Role definitions and permission checks
+│   ├── accessrole/             # Role definitions and permission checks
 │   ├── common/                   # Shared types/helpers used across packages
 │   ├── constant/                  # App-wide constants (actions, components)
 │   ├── notification/
