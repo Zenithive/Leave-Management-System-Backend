@@ -34,7 +34,7 @@ var (
 func LoadENV() *ENV {
 	once.Do(func() {
 
-		if err := godotenv.Overload("../../.env"); err != nil {
+		if err := godotenv.Overload(".env"); err != nil {
 			log.Println("⚠ No .env file found, using system environment variables")
 		}
 

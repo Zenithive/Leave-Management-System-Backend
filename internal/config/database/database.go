@@ -50,7 +50,7 @@ func Connection(env *config.ENV) *sqlx.DB {
 
 		DB = db
 		log.Println(" Database connection established successfully")
-		RunMigrations("../../migration")
+		RunMigrations("./migration")
 	})
 	return DB
 }
