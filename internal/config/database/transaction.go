@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -16,7 +17,7 @@ func ExecuteTransaction(ctx context.Context, db *sqlx.DB, fn func(tx *sqlx.Tx) e
 	defer func() {
 		if pErr := recover(); pErr != nil {
 			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				fmt.Printf("failed to rollback transaction after panic: %v", rollbackErr)
+				slog.Error("failed to rollback transaction after panic", "rollback_err", rollbackErr, "panic", pErr)
 			}
 			panic(pErr)
 		}

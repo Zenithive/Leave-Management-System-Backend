@@ -158,11 +158,11 @@ func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 		// 1. Insert employee
 		id, err := h.Query.InsertEmployee(tx, input.FullName, input.Email, roleID, hash, input.Salary, input.JoiningDate)
 		if err != nil || id == uuid.Nil {
-			return errors.CustomErr(c, 500, "failed to create employee")
+			return errors.CustomErr(500, "failed to create employee")
 		}
 		data, err := h.Query.GetAllLeaveType()
 		if err != nil {
-			return errors.CustomErr(c, 500, "failed to allocate leave balance: ")
+			return errors.CustomErr(500, "failed to allocate leave balance: ")
 		}
 
 		// Determine if the employee is joining in the current year → prorate their leave.
@@ -182,7 +182,7 @@ func (h *HandlerFunc) CreateEmployee(c *gin.Context) {
 					entitlement = service.CalculateProratedLeave(entitlement, int(input.JoiningDate.Month()))
 				}
 				if err := h.Query.CreateLeaveBalance(tx, id, leaveType.ID, entitlement); err != nil {
-					return errors.CustomErr(c, 500, "failed to allocate leave balance: "+err.Error())
+					return errors.CustomErr(500, "failed to allocate leave balance: "+err.Error())
 				}
 			}
 		}
@@ -293,15 +293,15 @@ func (h *HandlerFunc) UpdateEmployeeRole(c *gin.Context) {
 	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		role, err := h.Query.GetEmployeeRole(empID)
 		if err != nil {
-			return errors.CustomErr(c, 500, "failed to fetch employee role: "+err.Error())
+			return errors.CustomErr(500, "failed to fetch employee role: "+err.Error())
 		}
 		updatedID, err = h.Query.UpdateEmployeeRole(tx, empID, input.Role)
 		if err != nil {
-			return errors.CustomErr(c, 500, "failed to update role: "+err.Error())
+			return errors.CustomErr(500, "failed to update role: "+err.Error())
 		}
 		a := time.Now().Year()
 		if err = h.Query.AdjustLeaveBalancesForRoleChange(tx, empID, role, input.Role, a); err != nil {
-			return errors.CustomErr(c, 500, "failed to adjust leave balances for role change: "+err.Error())
+			return errors.CustomErr(500, "failed to adjust leave balances for role change: "+err.Error())
 		}
 		return nil
 	}); err != nil {
@@ -579,15 +579,15 @@ func (h *HandlerFunc) UpdateEmployeeInfo(c *gin.Context) {
 	if input.JoiningDate != nil {
 		if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 			if err := h.Query.UpdateEmployeeInfoTx(tx, empID, finalName, finalEmail, finalSalary, finalJoiningDate, finalBirthDate, finalEndingDate); err != nil {
-				return errors.CustomErr(c, 500, "failed to update employee: "+err.Error())
+				return errors.CustomErr(500, "failed to update employee: "+err.Error())
 			}
 			empRole, err := h.Query.GetEmployeeRole(empID)
 			if err != nil {
-				return errors.CustomErr(c, 500, "failed to fetch employee role: "+err.Error())
+				return errors.CustomErr(500, "failed to fetch employee role: "+err.Error())
 			}
 			currentYear := time.Now().Year()
 			if err := h.Query.RecalculateLeaveBalancesForJoiningDateChange(tx, empID, finalJoiningDate, empRole, currentYear); err != nil {
-				return errors.CustomErr(c, 500, "failed to recalculate leave balances: "+err.Error())
+				return errors.CustomErr(500, "failed to recalculate leave balances: "+err.Error())
 			}
 			return nil
 		}); err != nil {
@@ -617,12 +617,8 @@ func (s *HandlerFunc) GetEmployeeReports(c *gin.Context) {
 func (h *HandlerFunc) UpdateEmployeePassword(c *gin.Context) {
 	// 1️ Permission check - Only SUPERADMIN, ADMIN, and HR
 	role := c.GetString("role")
-	// if role != "SUPERADMIN" && role != "ADMIN" && role != "HR" {
-	// 	errors.RespondWithError(c, 401, "not permitted to update password")
-	// 	return
-	// }
 
-	// 2️ Parse Employee ID
+	// 2 Parse Employee ID
 	empIDStr := c.Param("id")
 	empID, err := uuid.Parse(empIDStr)
 	if err != nil {
@@ -630,42 +626,40 @@ func (h *HandlerFunc) UpdateEmployeePassword(c *gin.Context) {
 		return
 	}
 
-	// 3️ Bind input JSON
+	// 3 Bind + validate input
 	var input struct {
-		NewPassword string `json:"new_password" validate:"required,min=6"`
+		NewPassword string `json:"new_password" validate:"required,min=8"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		errors.RespondWithError(c, 400, "invalid input: password is required and must be at least 8 characters")
 		return
 	}
-
-	// 4️ Validate password length
 	if len(input.NewPassword) < 8 {
-		errors.RespondWithError(c, 400, "password must be at least 8  characters long")
+		errors.RespondWithError(c, 400, "password must be at least 8 characters long")
 		return
 	}
 
-	// 5️ Check if employee exists
+	// 4 Check if employee exists
 	existingEmp, err := h.Query.GetEmployeeByID(empID)
 	if err != nil {
 		errors.RespondWithError(c, 404, "employee not found")
 		return
 	}
 
-	// 5.5️ HR and ADMIN cannot change SUPERADMIN password
+	// HR and ADMIN cannot change SUPERADMIN password
 	if (role == "ADMIN" || role == "HR") && existingEmp.Role == "SUPERADMIN" {
 		errors.RespondWithError(c, 403, "HR and ADMIN cannot modify SUPERADMIN users")
 		return
 	}
 
-	// 6️ Hash the new password
+	// 5 Hash the new password
 	hashedPassword, err := security.HashPassword(input.NewPassword)
 	if err != nil {
 		errors.RespondWithError(c, 500, "failed to hash password: "+err.Error())
 		return
 	}
 
-	// 7️ Update password in database
+	// 6 Update password in database
 	err = h.Query.UpdateEmployeePassword(empID, hashedPassword)
 	if err != nil {
 		errors.RespondWithError(c, 500, "failed to update password: "+err.Error())
@@ -691,7 +685,7 @@ func (h *HandlerFunc) UpdateEmployeePassword(c *gin.Context) {
 		},
 	})
 
-	// 9️ Response
+	// 7 Response
 	c.JSON(200, gin.H{
 		"message":     "password updated successfully",
 		"employee_id": empID,

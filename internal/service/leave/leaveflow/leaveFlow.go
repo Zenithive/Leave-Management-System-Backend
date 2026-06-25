@@ -3,7 +3,6 @@ package leaveflow
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -77,16 +76,16 @@ func (s *leaveFlow) Create(ctx context.Context, leave *models.LeaveInput, role s
 	err = database.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
 		leaveDays, err := service.CalculateWorkingDaysWithTiming(s.CommRepo, tx, leave.StartDate, leave.EndDate, LeaveTypeInfo.TimingID, leaveTiming)
 		if err != nil {
-			return errors.CustomErr(nil, http.StatusBadRequest, err.Error())
+			return errors.CustomErr(http.StatusBadRequest, err.Error())
 		}
 		if leaveDays <= 0 {
-			return errors.CustomErr(nil, http.StatusBadRequest, "Calculated leave days must be greater than zero. Please check the dates and timing")
+			return errors.CustomErr(http.StatusBadRequest, "Calculated leave days must be greater than zero. Please check the dates and timing")
 		}
-		leave.Days = &Days
 		Days = leaveDays
+		leave.Days = &Days
 
 		if err := service.ValidateUnpaidLeaveApplication(s.CommRepo, tx, leave.EmployeeID, leave.LeaveTypeID); err != nil {
-			return errors.CustomErr(nil, http.StatusBadRequest, err.Error())
+			return errors.CustomErr(http.StatusBadRequest, err.Error())
 		}
 
 		validationParams := ValidateLeaveApplicationParams{
@@ -98,7 +97,7 @@ func (s *leaveFlow) Create(ctx context.Context, leave *models.LeaveInput, role s
 			ExcludeLeaveID: nil,
 		}
 		if err := s.LeaveValidationSvc.ValidateLeaveApplication(tx, validationParams, LeaveTypeInfo.LeaveType); err != nil {
-			return errors.CustomErr(nil, http.StatusBadRequest, err.Error())
+			return errors.CustomErr(http.StatusBadRequest, err.Error())
 		}
 
 		var leaveTimingStr *string
@@ -107,7 +106,7 @@ func (s *leaveFlow) Create(ctx context.Context, leave *models.LeaveInput, role s
 		}
 		id, err := s.Repo.InsertLeave(tx, leave, leaveTimingStr)
 		if err != nil {
-			return errors.CustomErr(nil, http.StatusInternalServerError, "Failed to apply leave: "+err.Error())
+			return errors.CustomErr(http.StatusInternalServerError, "Failed to apply leave: "+err.Error())
 		}
 		leaveID = id
 		if err := s.LeaveFlowLogService.Create(ctx, tx, id, leaveTypeRres, role); err != nil {
@@ -130,7 +129,7 @@ func (s *leaveFlow) ActionLeave(ctx context.Context, req models.ActionLeaveReq, 
 		return err
 	}
 	if leave.EmployeeID == empID {
-		return errors.CustomErr(nil, http.StatusForbidden, "You cannot process your own leave request")
+		return errors.CustomErr(http.StatusForbidden, "You cannot process your own leave request")
 	}
 	leaveLogFlow, err := s.LeaveFlowLogService.GetByLeaveID(ctx, uuid.MustParse(leaveID))
 	if err != nil {
@@ -143,7 +142,7 @@ func (s *leaveFlow) ActionLeave(ctx context.Context, req models.ActionLeaveReq, 
 
 	leavePolicy, err := s.LeavePolicyRepo.GetById(ctx, strconv.Itoa(leave.LeaveTypeID))
 	if err != nil {
-		return errors.CustomErr(nil, 500, "Failed to fetch leave type: "+err.Error())
+		return errors.CustomErr(500, "Failed to fetch leave type: "+err.Error())
 	}
 
 	// Resolve the processor for the requested action via the registry
@@ -153,6 +152,7 @@ func (s *leaveFlow) ActionLeave(ctx context.Context, req models.ActionLeaveReq, 
 	}
 
 	// Fetch approver name for notification before the transaction
+	// ponytail: best-effort — empty name/email in notification is acceptable if DB read fails
 	approverDetails, _ := s.CommRepo.GetEmployeeDetailsForNotification(empID)
 
 	// Build the context object — single place where all data is assembled
@@ -198,20 +198,20 @@ func (s *leaveFlow) CancleLeave(ctx context.Context, leaveId string) (string, er
 	leave, err := s.Repo.GetByID(ctx, leaveId)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return "", errors.CustomErr(nil, http.StatusNotFound, "Leave not found")
+			return "", errors.CustomErr(http.StatusNotFound, "Leave not found")
 		}
-		return "", errors.CustomErr(nil, http.StatusInternalServerError, "Failed to fetch leave: "+err.Error())
+		return "", errors.CustomErr(http.StatusInternalServerError, "Failed to fetch leave: "+err.Error())
 	}
 	switch leave.Status {
 	case constant.LEAVE_APPLOVED:
-		return "", errors.CustomErr(nil, http.StatusBadRequest, "Cannot cancel approved leave. Please contact your manager or admin")
+		return "", errors.CustomErr(http.StatusBadRequest, "Cannot cancel approved leave. Please contact your manager or admin")
 	case constant.LEAVE_REJECTED:
-		return "", errors.CustomErr(nil, http.StatusBadRequest, "Leave is already rejected")
+		return "", errors.CustomErr(http.StatusBadRequest, "Leave is already rejected")
 	case constant.LEAVE_CANCELLED:
-		return "", errors.CustomErr(nil, http.StatusBadRequest, "Leave is already cancelled")
+		return "", errors.CustomErr(http.StatusBadRequest, "Leave is already cancelled")
 	}
 	if err := s.Repo.UpdateLeaveStatus(leaveId, constant.LEAVE_CANCELLED); err != nil {
-		return "", errors.CustomErr(nil, http.StatusInternalServerError, "Failed to cancel leave: "+err.Error())
+		return "", errors.CustomErr(http.StatusInternalServerError, "Failed to cancel leave: "+err.Error())
 	}
 
 	// Publish cancellation notification after successful status update
@@ -237,11 +237,11 @@ func (s *leaveFlow) GetLeaves(ctx context.Context, empID uuid.UUID, role string,
 		result, err = s.Repo.GetAllLeaveByMonthYear(month, year)
 
 	default:
-		return nil, errors.CustomErr(nil, http.StatusForbidden, "invalid role")
+		return nil, errors.CustomErr(http.StatusForbidden, "invalid role")
 	}
 
 	if err != nil {
-		return nil, errors.CustomErr(nil, http.StatusInternalServerError, "failed to fetch leaves")
+		return nil, errors.CustomErr(http.StatusInternalServerError, "failed to fetch leaves")
 	}
 
 	if result == nil {
@@ -275,8 +275,7 @@ func (s *leaveFlow) GetMyLeave(empID uuid.UUID, month int, year int) (gin.H, err
 	result, err := s.Repo.GetMyLeavesByMonthYear(empID, month, year)
 
 	if err != nil {
-		fmt.Printf("GetAllMyLeave DB Error: %v\n", err)
-		return nil, errors.CustomErr(nil, http.StatusInternalServerError, "Failed to fetch my leaves: "+err.Error())
+		return nil, errors.CustomErr(http.StatusInternalServerError, "Failed to fetch my leaves: "+err.Error())
 	}
 
 	if result == nil {
@@ -296,7 +295,7 @@ func (s *leaveFlow) GetMyLeave(empID uuid.UUID, month int, year int) (gin.H, err
 func (s *leaveFlow) GetByID(ctx context.Context, leaveID string) (*models.Leave, error) {
 	leave, err := s.Repo.GetByID(ctx, leaveID)
 	if err != nil {
-		return nil, errors.CustomErr(nil, http.StatusBadRequest, err.Error())
+		return nil, errors.CustomErr(http.StatusBadRequest, err.Error())
 	}
 	return leave, err
 }
@@ -305,7 +304,7 @@ func (s *leaveFlow) UpdateLeave(ctx context.Context, empID uuid.UUID, leaveId st
 	// Parse leave UUID from the URL param
 	leaveUUID, err := uuid.Parse(leaveId)
 	if err != nil {
-		return errors.CustomErr(nil, http.StatusBadRequest, "invalid leave ID")
+		return errors.CustomErr(http.StatusBadRequest, "invalid leave ID")
 	}
 
 	LeaveTypeInfo, leaveTiming, err := s.ValidateLeave(ctx, leave)
@@ -321,16 +320,16 @@ func (s *leaveFlow) UpdateLeave(ctx context.Context, empID uuid.UUID, leaveId st
 	err = database.ExecuteTransaction(ctx, s.DB, func(tx *sqlx.Tx) error {
 		leaveDays, err := service.CalculateWorkingDaysWithTiming(s.CommRepo, tx, leave.StartDate, leave.EndDate, LeaveTypeInfo.TimingID, leaveTiming)
 		if err != nil {
-			return errors.CustomErr(nil, http.StatusBadRequest, err.Error())
+			return errors.CustomErr(http.StatusBadRequest, err.Error())
 		}
 		if leaveDays <= 0 {
-			return errors.CustomErr(nil, http.StatusBadRequest, "Calculated leave days must be greater than zero. Please check the dates and timing")
+			return errors.CustomErr(http.StatusBadRequest, "Calculated leave days must be greater than zero. Please check the dates and timing")
 		}
 		leave.Days = &leaveDays
 		Days = leaveDays
 
 		if err := service.ValidateUnpaidLeaveApplication(s.CommRepo, tx, leave.EmployeeID, leave.LeaveTypeID); err != nil {
-			return errors.CustomErr(nil, http.StatusBadRequest, err.Error())
+			return errors.CustomErr(http.StatusBadRequest, err.Error())
 		}
 
 		validationParams := ValidateLeaveApplicationParams{
@@ -342,11 +341,11 @@ func (s *leaveFlow) UpdateLeave(ctx context.Context, empID uuid.UUID, leaveId st
 			ExcludeLeaveID: &leaveUUID, // exclude current leave from balance & overlap checks
 		}
 		if err := s.LeaveValidationSvc.ValidateLeaveApplication(tx, validationParams, LeaveTypeInfo.LeaveType); err != nil {
-			return errors.CustomErr(nil, http.StatusBadRequest, err.Error())
+			return errors.CustomErr(http.StatusBadRequest, err.Error())
 		}
 
 		if err = s.Repo.UpdateLeave(tx, leaveUUID, empID, leave, leaveDays); err != nil {
-			return errors.CustomErr(nil, http.StatusInternalServerError, "failed to update leave: "+err.Error())
+			return errors.CustomErr(http.StatusInternalServerError, "failed to update leave: "+err.Error())
 		}
 		if err := s.LeaveFlowLogService.RegenerateApprovalLog(ctx, tx, leaveUUID, leaveTypeRes, accessrole.ROLE_EMPLOYEE); err != nil {
 			return err
@@ -490,29 +489,29 @@ func (s *leaveFlow) ValidateLeave(ctx context.Context, leave *models.LeaveInput)
 	if leave.LeaveTiming != nil {
 		leaveTiming, err = service.ValidateLeaveTiming(*leave.LeaveTiming)
 		if err != nil {
-			return nil, time.Time{}, errors.CustomErr(nil, http.StatusBadRequest, err.Error())
+			return nil, time.Time{}, errors.CustomErr(http.StatusBadRequest, err.Error())
 		}
 	}
 
 	// Validate leave timing ID
 	if err := s.LeaveValidationSvc.ValidateLeaveTimingID(leave.LeaveTimingID); err != nil {
-		return nil, time.Time{}, errors.CustomErr(nil, http.StatusBadRequest, err.Error())
+		return nil, time.Time{}, errors.CustomErr(http.StatusBadRequest, err.Error())
 	}
 
 	// Validate reason
 	if err := s.LeaveValidationSvc.ValidateLeaveReason(leave.Reason); err != nil {
-		return nil, time.Time{}, errors.CustomErr(nil, http.StatusBadRequest, err.Error())
+		return nil, time.Time{}, errors.CustomErr(http.StatusBadRequest, err.Error())
 	}
 
 	// Validate start and end dates
 	if err := s.LeaveValidationSvc.ValidateLeaveDates(leave.StartDate, leave.EndDate); err != nil {
-		return nil, time.Time{}, errors.CustomErr(nil, http.StatusBadRequest, err.Error())
+		return nil, time.Time{}, errors.CustomErr(http.StatusBadRequest, err.Error())
 	}
 
 	// Get leave type and resolve timing
 	leaveTypeInfo, err := s.LeaveValidationSvc.GetLeaveTypeAndResolveTimingID(leave.LeaveTypeID, leave.LeaveTimingID)
 	if err != nil {
-		return nil, time.Time{}, errors.CustomErr(nil, http.StatusBadRequest, err.Error())
+		return nil, time.Time{}, errors.CustomErr(http.StatusBadRequest, err.Error())
 	}
 
 	return leaveTypeInfo, leaveTiming, nil
@@ -533,7 +532,7 @@ func (s *leaveFlow) ActionValidator(ctx context.Context, flow *models.LeaveFlow,
 	}
 
 	if stage == nil {
-		return errors.CustomErr(nil, http.StatusForbidden, "role not allowed for this flow")
+		return errors.CustomErr(http.StatusForbidden, "role not allowed for this flow")
 	}
 
 	switch action {
@@ -541,13 +540,13 @@ func (s *leaveFlow) ActionValidator(ctx context.Context, flow *models.LeaveFlow,
 	case string(models.APPROVE):
 		// APPROVE requires ordered processing — stage must be WAITING
 		if status != string(constant.LEAVE_PENDING) {
-			return errors.CustomErr(nil, http.StatusBadRequest, "process only pending leave")
+			return errors.CustomErr(http.StatusBadRequest, "process only pending leave")
 		}
 		if stage.State != models.WAITING {
 			if status != string(constant.LEAVE_PENDING) {
-				return errors.CustomErr(nil, http.StatusBadRequest, "process only pending leave")
+				return errors.CustomErr(http.StatusBadRequest, "process only pending leave")
 			}
-			return errors.CustomErr(nil, http.StatusBadRequest, "approve allowed only in waiting state")
+			return errors.CustomErr(http.StatusBadRequest, "approve allowed only in waiting state")
 		}
 		return nil
 
@@ -555,7 +554,7 @@ func (s *leaveFlow) ActionValidator(ctx context.Context, flow *models.LeaveFlow,
 		// REJECT is a single final action — only check that stage is WAITING,
 		// no ordering constraint applies
 		if stage.State != models.WAITING {
-			return errors.CustomErr(nil, http.StatusBadRequest, "reject allowed only in waiting state")
+			return errors.CustomErr(http.StatusBadRequest, "reject allowed only in waiting state")
 		}
 		return nil
 
@@ -563,10 +562,10 @@ func (s *leaveFlow) ActionValidator(ctx context.Context, flow *models.LeaveFlow,
 		// Stage must be APPROVED (original approver) or WAITING
 		// (reset to WAITING by a lower-stage withdrawal that needs higher confirmation)
 		if status != string(constant.LEAVE_APPLOVED) && status != string(constant.LEAVE_WITHDRAWAL_PENDING) {
-			return errors.CustomErr(nil, http.StatusBadRequest, "withdraw allowed only after approval")
+			return errors.CustomErr(http.StatusBadRequest, "withdraw allowed only after approval")
 		}
 		return nil
 	default:
-		return errors.CustomErr(nil, http.StatusBadRequest, "invalid action")
+		return errors.CustomErr(http.StatusBadRequest, "invalid action")
 	}
 }

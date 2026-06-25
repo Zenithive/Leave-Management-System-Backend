@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"database/sql"
+	"fmt"
 	"math"
 	"time"
 
@@ -183,11 +184,13 @@ func (r *Repository) UpdateInternLeaveBalancesForEntitlementChange(tx *sqlx.Tx, 
 		JoiningDate *time.Time `db:"joining_date"`
 	}
 	var employees []empRow
-	err := tx.Select(&employees, `SELECT e.id, e.joining_date
+	if err := tx.Select(&employees, `SELECT e.id, e.joining_date
 		FROM Tbl_Employee e
 		JOIN Tbl_Role r ON e.role_id = r.id
 		WHERE  r.type  = 'INTERN'
-	`)
+	`); err != nil {
+		return fmt.Errorf("failed to fetch INTERN employees: %w", err)
+	}
 	for _, emp := range employees {
 		var newOpening int
 		if emp.JoiningDate != nil && emp.JoiningDate.Year() == currentYear {
@@ -197,15 +200,16 @@ func (r *Repository) UpdateInternLeaveBalancesForEntitlementChange(tx *sqlx.Tx, 
 		}
 		_, err := r.GetLeaveBalance(tx, emp.ID, leaveTypeID)
 		if err == sql.ErrNoRows {
-			// Create balance if it doesn't exist
 			if err := r.CreateLeaveBalance(tx, emp.ID, leaveTypeID, newOpening); err != nil {
 				return err
 			}
 		} else {
-			err = r.UpdateLeaveBalance(tx, newOpening, emp.ID, leaveTypeID, currentYear)
+			if err := r.UpdateLeaveBalance(tx, newOpening, emp.ID, leaveTypeID, currentYear); err != nil {
+				return err
+			}
 		}
 	}
-	return err
+	return nil
 }
 
 // UpdateLeaveBalancesForEntitlementChange recalculates leave balances for all non-INTERN employees
@@ -225,12 +229,14 @@ func (r *Repository) UpdateLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveT
 		JoiningDate *time.Time `db:"joining_date"`
 	}
 	var employees []empRow
-	err := tx.Select(&employees, `
+	if err := tx.Select(&employees, `
 		SELECT e.id, e.joining_date
 		FROM Tbl_Employee e
 		JOIN Tbl_Role r ON e.role_id = r.id
 		WHERE  r.type != 'INTERN'
-	`)
+	`); err != nil {
+		return fmt.Errorf("failed to fetch non-INTERN employees: %w", err)
+	}
 
 	for _, emp := range employees {
 		var newOpening int
@@ -241,15 +247,16 @@ func (r *Repository) UpdateLeaveBalancesForEntitlementChange(tx *sqlx.Tx, leaveT
 		}
 		_, err := r.GetLeaveBalance(tx, emp.ID, leaveTypeID)
 		if err == sql.ErrNoRows {
-			// Create balance if it doesn't exist
 			if err := r.CreateLeaveBalance(tx, emp.ID, leaveTypeID, newOpening); err != nil {
 				return err
 			}
 		} else {
-			err = r.UpdateLeaveBalance(tx, newOpening, emp.ID, leaveTypeID, currentYear)
+			if err := r.UpdateLeaveBalance(tx, newOpening, emp.ID, leaveTypeID, currentYear); err != nil {
+				return err
+			}
 		}
 	}
-	return err
+	return nil
 }
 
 // AdjustLeaveBalancesForRoleChange recalculates all leave balances for an employee
@@ -271,6 +278,9 @@ func (r *Repository) AdjustLeaveBalancesForRoleChange(tx *sqlx.Tx, employeeID uu
 	isJoiningThisYear := joiningDate != nil && joiningDate.Year() == currentYear
 
 	leaveTypes, err := r.GetAllLeaveTypes(tx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch leave types: %w", err)
+	}
 
 	for _, lt := range leaveTypes {
 		// Resolve entitlement for the new role
@@ -286,9 +296,11 @@ func (r *Repository) AdjustLeaveBalancesForRoleChange(tx *sqlx.Tx, employeeID uu
 			newOpening = newEntitlement
 		}
 
-		err = r.UpdateLeaveBalance(tx, newOpening, employeeID, lt.ID, currentYear)
+		if err := r.UpdateLeaveBalance(tx, newOpening, employeeID, lt.ID, currentYear); err != nil {
+			return err
+		}
 	}
-	return err
+	return nil
 }
 
 // BulkAllocateLeaveBalanceForNewLeaveType allocates a leave balance row for every active employee
@@ -325,6 +337,9 @@ func (r *Repository) BulkAllocateLeaveBalanceForNewLeaveType(tx *sqlx.Tx, leaveT
 func (r *Repository) RecalculateLeaveBalancesForJoiningDateChange(tx *sqlx.Tx, employeeID uuid.UUID, newJoiningDate *time.Time, empRole string, currentYear int) error {
 	// Fetch all leave types (non-early) with entitlements
 	leaveTypes, err := r.GetAllLeaveTypes(tx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch leave types: %w", err)
+	}
 
 	isJoiningThisYear := newJoiningDate != nil && newJoiningDate.Year() == currentYear
 	for _, lt := range leaveTypes {
@@ -339,9 +354,11 @@ func (r *Repository) RecalculateLeaveBalancesForJoiningDateChange(tx *sqlx.Tx, e
 		} else {
 			newOpening = fullEntitlement
 		}
-		err = r.UpdateLeaveBalance(tx, newOpening, employeeID, lt.ID, currentYear)
+		if err := r.UpdateLeaveBalance(tx, newOpening, employeeID, lt.ID, currentYear); err != nil {
+			return err
+		}
 	}
-	return err
+	return nil
 }
 
 func (r *Repository) UpdateLeaveBalance(tx *sqlx.Tx, newOpening int, employeeID uuid.UUID, ID int, currentYear int) error {

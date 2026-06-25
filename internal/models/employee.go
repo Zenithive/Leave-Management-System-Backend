@@ -6,9 +6,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type Employee struct {
-}
-
 // EmployeeFilterParams - Query parameters for filtering, sorting, and pagination
 type EmployeeFilterParams struct {
 	// Pagination

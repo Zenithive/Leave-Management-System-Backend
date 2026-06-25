@@ -44,7 +44,7 @@ type action string
 const (
 	APPROVE        action = "APPROVE"
 	REJECT         action = "REJECT"
-	WITHDRAWaction        = "WITHDRAW"
+	WITHDRAW action = "WITHDRAW"
 )
 
 type ActionLeaveReq struct {

@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -33,7 +33,7 @@ func (h *HandlerFunc) DailyLeaveSlackNotification(c *gin.Context) {
 
 	// 2️ Check Slack webhook is configured
 	if h.Env.EXTERNAL_API_URL == "" {
-		fmt.Println("[Cron] EXTERNAL_API_URL not configured")
+		slog.Warn("[Cron] EXTERNAL_API_URL not configured")
 		errors.RespondWithError(c, http.StatusServiceUnavailable, "Slack webhook not configured")
 		return
 	}
@@ -42,15 +42,15 @@ func (h *HandlerFunc) DailyLeaveSlackNotification(c *gin.Context) {
 	now := time.Now()
 	skip, err := service.ShouldSkipCronToday(now, h.Query)
 	if err != nil {
-		fmt.Printf("[Cron] Holiday check error: %v\n", err)
+		slog.Error("[Cron] holiday check error", "err", err)
 		errors.RespondWithError(c, http.StatusInternalServerError, "Holiday check failed: "+err.Error())
 		return
 	}
 	if skip != nil {
-		fmt.Printf("[Cron] Skipping notification — %s\n", skip.Error())
+		slog.Info("[Cron] skipping notification", "reason", skip.Reason, "date", skip.Date)
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
-			"message": fmt.Sprintf("Skipped: today is a %s", skip.Reason),
+			"message": "Skipped: today is a " + skip.Reason,
 			"date":    skip.Date,
 		})
 		return
@@ -59,7 +59,7 @@ func (h *HandlerFunc) DailyLeaveSlackNotification(c *gin.Context) {
 	// 4️ Fetch today's approved/active leaves
 	leaves, err := h.Query.GetTodaysActiveLeaves()
 	if err != nil {
-		fmt.Printf("[Cron] Failed to fetch today's leaves: %v\n", err)
+		slog.Error("[Cron] failed to fetch today's leaves", "err", err)
 		errors.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leaves: "+err.Error())
 		return
 	}
@@ -68,29 +68,27 @@ func (h *HandlerFunc) DailyLeaveSlackNotification(c *gin.Context) {
 
 	// 5️ Nothing on leave today — skip silently
 	if len(leaves) == 0 {
-		fmt.Printf("[Cron] No active leaves for %s — notification skipped\n", today)
+		slog.Info("[Cron] no active leaves, notification skipped", "date", today)
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
-			"message": fmt.Sprintf("No active leaves today (%s) — notification skipped", today),
+			"message": "No active leaves today (" + today + ") — notification skipped",
 			"matched": 0,
 			"date":    today,
 		})
 		return
 	}
 
-	fmt.Printf("[Cron] Found %d active leave(s) for %s\n", len(leaves), today)
-
 	// 6️ Format and send Slack message
 	slackService := service.NewDailyLeaveSlackService(h.Env.EXTERNAL_API_URL)
 	message := slackService.FormatSlackTable(today, leaves)
 
 	if err := slackService.SendToSlack(message); err != nil {
-		fmt.Printf("[Cron] Failed to send to Slack: %v\n", err)
+		slog.Error("[Cron] failed to send to Slack", "err", err)
 		errors.RespondWithError(c, http.StatusInternalServerError, "Failed to send to Slack: "+err.Error())
 		return
 	}
 
-	fmt.Printf("[Cron] ✅ Slack leave summary sent (%d leaves, %s)\n", len(leaves), today)
+	slog.Info("[Cron] Slack leave summary sent", "leaves", len(leaves), "date", today)
 
 	// 7️ Success
 	c.JSON(http.StatusOK, gin.H{

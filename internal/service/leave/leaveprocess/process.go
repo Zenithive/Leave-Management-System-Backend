@@ -72,7 +72,7 @@ func (r *ProcessorRegistry) Register(action string, p LeaveActionProcessor) {
 func (r *ProcessorRegistry) Resolve(action string) (LeaveActionProcessor, error) {
 	p, ok := r.processors[strings.ToUpper(action)]
 	if !ok {
-		return nil, errors.CustomErr(nil, http.StatusBadRequest,
+		return nil, errors.CustomErr(http.StatusBadRequest,
 			fmt.Sprintf("unsupported leave action: %s", action))
 	}
 	return p, nil

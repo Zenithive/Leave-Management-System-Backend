@@ -40,7 +40,7 @@ func AuthMiddleware(h *handler.HandlerFunc) gin.HandlerFunc {
 		}
 
 		// 3. Validate JWT token
-		claims, err := security.ValidateToken(tokenString, h.Env.SERACT_KEY)
+		claims, err := security.ValidateToken(tokenString, h.Env.SECRET_KEY)
 		if err != nil {
 			errors.RespondWithError(c, http.StatusUnauthorized, "Invalid or expired token"+err.Error())
 			c.Abort()

@@ -121,15 +121,3 @@ func parseLeaveTypeID(c *gin.Context) (int, bool) {
 	}
 	return id, true
 }
-
-// func (h *HandlerFunc) writeLeaveTypeLog(c *gin.Context, tx *sqlx.Tx, action string, fromUserID uuid.UUID) error {
-// 	data := &models.Common{
-// 		Component:  constant.ComponentLeaveType,
-// 		Action:     action,
-// 		FromUserID: fromUserID,
-// 	}
-// 	if err := h.Query.AddLog(data, tx); err != nil {
-// 		return errors.CustomErr(c, http.StatusInternalServerError, "failed to write audit log: "+err.Error())
-// 	}
-// 	return nil
-// }

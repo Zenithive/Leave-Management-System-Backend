@@ -227,7 +227,7 @@ func buildWhere(conditions []string) string {
 	return clause
 }
 
-func (r *Repository) GetHrEamil() []string {
+func (r *Repository) GetHrEmail() []string {
 	var hrEmails []string
 	r.DB.Select(&hrEmails, `
 		SELECT e.email FROM Tbl_Employee e

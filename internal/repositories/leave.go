@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"database/sql"
-	"fmt"
 	"time"
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/models"
@@ -52,8 +51,6 @@ func (q *Repository) GetLeaveTypeByLeaveID(leaveID uuid.UUID) (int, error) {
 func (r *Repository) GetLeaveBalance(tx *sqlx.Tx, employeeID uuid.UUID, leaveTypeID int) (float64, error) {
 	var balance float64
 
-	fmt.Println("empId", employeeID)
-	fmt.Println("leaveTypeId", leaveTypeID)
 	err := tx.Get(&balance, `
 		SELECT closing
 		FROM Tbl_Leave_balance 

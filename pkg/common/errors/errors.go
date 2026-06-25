@@ -25,8 +25,8 @@ func (e *AppError) Error() string {
 	return e.Message
 }
 
-// Removed unused gin.Context parameter
-func CustomErr(ctx *gin.Context, code int, message string) error {
+// CustomErr creates an AppError with the given HTTP status code and message.
+func CustomErr(code int, message string) error {
 	return &AppError{
 		Code:    code,
 		Message: message,

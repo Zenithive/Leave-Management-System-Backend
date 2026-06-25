@@ -42,7 +42,7 @@ func (h *HandlerFunc) CreateCategory(c *gin.Context) {
 
 	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.CreateCategory(tx, req); err != nil {
-			return errors.CustomErr(c, http.StatusInternalServerError, "failed to create category: "+err.Error())
+			return errors.CustomErr(http.StatusInternalServerError, "failed to create category: "+err.Error())
 		}
 		return h.Query.AddLog(models.NewCommon(constant.EquipmentCategory, constant.ActionCreate, empID), tx)
 	}); err != nil {
@@ -107,7 +107,7 @@ func (h *HandlerFunc) UpdateCategory(c *gin.Context) {
 
 	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.UpdateCategory(tx, categoryID, req); err != nil {
-			return errors.CustomErr(c, http.StatusInternalServerError, "failed to update category: "+err.Error())
+			return errors.CustomErr(http.StatusInternalServerError, "failed to update category: "+err.Error())
 		}
 		return h.Query.AddLog(models.NewCommon(constant.EquipmentCategory, constant.ActionUpdate, empID), tx)
 	}); err != nil {
@@ -137,7 +137,7 @@ func (h *HandlerFunc) DeleteCategory(c *gin.Context) {
 
 	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.DeleteCategory(tx, categoryID); err != nil {
-			return errors.CustomErr(c, http.StatusInternalServerError, "failed to delete category: "+err.Error())
+			return errors.CustomErr(http.StatusInternalServerError, "failed to delete category: "+err.Error())
 		}
 		return h.Query.AddLog(models.NewCommon(constant.EquipmentCategory, constant.ActionDelete, empID), tx)
 	}); err != nil {
@@ -175,7 +175,7 @@ func (h *HandlerFunc) CreateEquipment(c *gin.Context) {
 
 	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.CreateEquipment(tx, req); err != nil {
-			return errors.CustomErr(c, http.StatusInternalServerError, "failed to create equipment: "+err.Error())
+			return errors.CustomErr(http.StatusInternalServerError, "failed to create equipment: "+err.Error())
 		}
 		return h.Query.AddLog(models.NewCommon(constant.Equipment, constant.ActionCreate, empID), tx)
 	}); err != nil {
@@ -283,7 +283,7 @@ func (h *HandlerFunc) UpdateEquipment(c *gin.Context) {
 
 	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.UpdateEquipment(tx, equipmentID, req); err != nil {
-			return errors.CustomErr(c, http.StatusInternalServerError, "failed to update equipment: "+err.Error())
+			return errors.CustomErr(http.StatusInternalServerError, "failed to update equipment: "+err.Error())
 		}
 		return h.Query.AddLog(models.NewCommon(constant.Equipment, constant.ActionUpdate, empID), tx)
 	}); err != nil {
@@ -313,7 +313,7 @@ func (h *HandlerFunc) DeleteEquipment(c *gin.Context) {
 
 	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.DeleteEquipment(tx, equipmentID); err != nil {
-			return errors.CustomErr(c, http.StatusInternalServerError, "failed to delete equipment: "+err.Error())
+			return errors.CustomErr(http.StatusInternalServerError, "failed to delete equipment: "+err.Error())
 		}
 		return h.Query.AddLog(models.NewCommon(constant.Equipment, constant.ActionDelete, empID), tx)
 	}); err != nil {
@@ -354,7 +354,7 @@ func (h *HandlerFunc) AssignEquipment(c *gin.Context) {
 
 	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.AssignEquipment(tx, req); err != nil {
-			return errors.CustomErr(c, http.StatusInternalServerError, "failed to assign equipment: "+err.Error())
+			return errors.CustomErr(http.StatusInternalServerError, "failed to assign equipment: "+err.Error())
 		}
 		return h.Query.AddLog(models.NewCommon(constant.EquipmentAssign, constant.ActionCreate, empID), tx)
 	}); err != nil {
@@ -440,7 +440,7 @@ func (h *HandlerFunc) RemoveEquipment(c *gin.Context) {
 
 	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.RemoveEquipment(tx, req); err != nil {
-			return errors.CustomErr(c, http.StatusInternalServerError, err.Error())
+			return errors.CustomErr(http.StatusInternalServerError, err.Error())
 		}
 		return h.Query.AddLog(models.NewCommon(constant.Equipment, constant.ActionDelete, empID), tx)
 	}); err != nil {
@@ -477,7 +477,7 @@ func (h *HandlerFunc) UpdateAssignment(c *gin.Context) {
 
 	if err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
 		if err := h.Query.UpdateAssignment(tx, req); err != nil {
-			return errors.CustomErr(c, http.StatusInternalServerError, err.Error())
+			return errors.CustomErr(http.StatusInternalServerError, err.Error())
 		}
 		return h.Query.AddLog(models.NewCommon(constant.Equipment, constant.ActionUpdate, empID), tx)
 	}); err != nil {

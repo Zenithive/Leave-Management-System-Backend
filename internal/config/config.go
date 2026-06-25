@@ -13,7 +13,7 @@ import (
 type ENV struct {
 	DB_URL               string
 	APP_PORT             string
-	SERACT_KEY           string
+	SECRET_KEY           string
 	FRONTEND_SERVER      string
 	ALLOWED_ORIGINS      []string
 	RESEND_API_KEY       string
@@ -59,7 +59,7 @@ func LoadENV() *ENV {
 		cfg = &ENV{
 			DB_URL:               os.Getenv("DB_URL"),
 			APP_PORT:             os.Getenv("APP_PORT"),
-			SERACT_KEY:           os.Getenv("SECRATE_KEY"),
+			SECRET_KEY:           os.Getenv("SECRET_KEY"),
 			FRONTEND_SERVER:      os.Getenv("F_SERVER"),
 			ALLOWED_ORIGINS:      origins,
 			RESEND_API_KEY:       os.Getenv("RESEND_API_KEY"),

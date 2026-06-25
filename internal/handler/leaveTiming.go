@@ -2,7 +2,7 @@ package handler
 
 import (
 	"database/sql"
-	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/config/database"
@@ -18,7 +18,7 @@ func (h *HandlerFunc) GetLeaveTiming(c *gin.Context) {
 	// 2 Fetch from DB
 	data, err := h.Query.GetLeaveTiming()
 	if err != nil {
-		fmt.Printf("GetLeaveTiming DB Error: %v\n", err)
+		slog.Error("GetLeaveTiming DB error", "err", err)
 		errors.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leave timing")
 		return
 	}
@@ -111,10 +111,10 @@ func (h *HandlerFunc) UpdateLeaveTiming(c *gin.Context) {
 		err := h.Query.UpdateLeaveTiming(tx, req.ID, req.Timing)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				return errors.CustomErr(c, http.StatusNotFound, "Leave timing not found")
+				return errors.CustomErr(http.StatusNotFound, "Leave timing not found")
 
 			}
-			return errors.CustomErr(c, http.StatusInternalServerError, "Failed to update leave timing")
+			return errors.CustomErr(http.StatusInternalServerError, "Failed to update leave timing")
 		}
 		return nil
 	})

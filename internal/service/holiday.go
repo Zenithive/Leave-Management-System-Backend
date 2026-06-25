@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -43,7 +42,6 @@ func (s *holidayService) AddHoliday(ctx context.Context, input *models.Holiday) 
 
 	id, err := s.Repo.AddHoliday(ctx, input.Name, normalizedDate, input.Type)
 	if err != nil {
-		fmt.Println(err.Error())
 		return "", err
 	}
 
@@ -59,7 +57,7 @@ func (s *holidayService) GetAllHolidays(ctx context.Context) ([]models.Holiday, 
 func (s *holidayService) DeleteHoliday(ctx context.Context, id string) error {
 
 	if err := s.Repo.DeleteHoliday(ctx, id); err != nil {
-		return errors.CustomErr(nil, http.StatusInternalServerError, err.Error())
+		return errors.CustomErr(http.StatusInternalServerError, err.Error())
 	}
 	return nil
 }

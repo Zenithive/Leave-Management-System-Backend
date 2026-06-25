@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -138,7 +138,7 @@ func (h *HandlerFunc) GetLeaveReport(c *gin.Context) {
 	// 5️ Call service layer
 	response, err := h.LeaveReportSvc.GetLeaveReport(&req)
 	if err != nil {
-		fmt.Printf("GetLeaveReport Service Error: %v\n", err)
+		slog.Error("GetLeaveReport service error", "err", err)
 		errors.RespondWithError(c, http.StatusInternalServerError, "Failed to fetch leave report: "+err.Error())
 		return
 	}

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
@@ -11,14 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
-
-type EmployeeAuthData struct {
-	ID       string `db:"id"`
-	Email    string `db:"email"`
-	Password string `db:"password"`
-	Role     string `db:"role"`
-	Status   string `db:"status"`
-}
 
 // GetAllRoles — GET /api/auth/roles
 // Returns all available role types from Tbl_Role.
@@ -48,7 +39,7 @@ func (s *HandlerFunc) Login(c *gin.Context) {
 
 		// If token exists and is valid, user is already logged in
 		if tokenString != "" {
-			claims, err := security.ValidateToken(tokenString, s.Env.SERACT_KEY)
+			claims, err := security.ValidateToken(tokenString, s.Env.SECRET_KEY)
 			if err == nil {
 				// Token is valid, user already logged in
 				userID, parseErr := uuid.Parse(claims.UserID)
@@ -82,14 +73,15 @@ func (s *HandlerFunc) Login(c *gin.Context) {
 	// 2. Fetch employee + role name
 	emp, err := s.Query.GetEmployeeByEmail(input.Email)
 	if err != nil {
-		errors.RespondWithError(c, http.StatusUnauthorized, fmt.Sprintf("Login failed — email not found: %v", err.Error()))
+		// ponytail: generic message — don't confirm whether the email exists
+		errors.RespondWithError(c, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 
 	// 3. Validate password
 	if !security.CheckPassword(input.Password, emp.Password) {
-		log.Printf("Login failed — wrong password for email: %s", input.Email)
-		errors.RespondWithError(c, http.StatusUnauthorized, "Login failed — wrong password for email: "+input.Email)
+		// ponytail: same message as above — prevent user enumeration
+		errors.RespondWithError(c, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 
@@ -100,7 +92,7 @@ func (s *HandlerFunc) Login(c *gin.Context) {
 	}
 
 	// 4. Generate JWT with role name
-	token, err := security.GenerateToken(emp.ID, emp.Role, s.Env.SERACT_KEY)
+	token, err := security.GenerateToken(emp.ID, emp.Role, s.Env.SECRET_KEY)
 	if err != nil {
 		log.Printf("JWT generation error: %v", err)
 		errors.RespondWithError(c, http.StatusInternalServerError, "Failed to generate authentication token")
@@ -143,7 +135,7 @@ func (s *HandlerFunc) VerifyToken(c *gin.Context) {
 	}
 
 	// Validate token
-	claims, err := security.ValidateToken(tokenString, s.Env.SERACT_KEY)
+	claims, err := security.ValidateToken(tokenString, s.Env.SECRET_KEY)
 	if err != nil {
 		errors.RespondWithError(c, http.StatusUnauthorized, "Invalid or expired token")
 		return
@@ -211,7 +203,7 @@ func (s *HandlerFunc) CheckAuthStatus(c *gin.Context) {
 	}
 
 	// Validate token
-	claims, err := security.ValidateToken(tokenString, s.Env.SERACT_KEY)
+	claims, err := security.ValidateToken(tokenString, s.Env.SECRET_KEY)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"authenticated": false,
@@ -264,7 +256,7 @@ func (s *HandlerFunc) Logout(c *gin.Context) {
 	userIDRaw, _ := c.Get("user_id")
 	userRoleRaw, _ := c.Get("role")
 
-	expiredToken, err := security.GenerateExpiredToken(userIDRaw.(string), userRoleRaw.(string), s.Env.SERACT_KEY)
+	expiredToken, err := security.GenerateExpiredToken(userIDRaw.(string), userRoleRaw.(string), s.Env.SECRET_KEY)
 	if err != nil {
 		errors.RespondWithError(c, http.StatusInternalServerError, "Failed to generate expired token")
 		return

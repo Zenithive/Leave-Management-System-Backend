@@ -2,7 +2,6 @@ package handler
 
 import (
 	"database/sql"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -95,8 +94,6 @@ func (s *HandlerFunc) GetLeaveBalances(c *gin.Context) {
 			Available:   cb.Available,
 		}
 	}
-	fmt.Println(balances)
-
 	// 8. Send response
 	c.JSON(http.StatusOK, gin.H{
 		"employee_id": employeeID,

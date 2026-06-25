@@ -189,7 +189,6 @@ func (r *Repository) InsertEmployee(tx *sqlx.Tx, fullName, email, roleID, passwo
 		Scan(&employeeID)
 
 	if err != nil {
-		fmt.Println("========", err.Error())
 		return employeeID, err
 	}
 	return employeeID, nil
@@ -209,20 +208,6 @@ func (r *Repository) GetEmployeeCurrentRole(empID string) (string, error) {
 
 // ------------------ UPDATE ROLE ------------------
 func (r *Repository) UpdateEmployeeRole(tx *sqlx.Tx, empID uuid.UUID, newRole string) (string, error) {
-	var id string
-	query := `
-        UPDATE TBL_EMPLOYEE
-        SET ROLE_ID = (SELECT ID FROM TBL_ROLE WHERE TYPE=$1),
-            UPDATED_AT = NOW()
-        WHERE ID = $2
-        RETURNING ID;
-    `
-	err := tx.QueryRow(query, newRole, empID).Scan(&id)
-	return id, err
-}
-
-// UpdateEmployeeRoleTx updates an employee's role within a transaction.
-func (r *Repository) UpdateEmployeeRoleTx(tx *sqlx.Tx, empID uuid.UUID, newRole string) (string, error) {
 	var id string
 	query := `
         UPDATE TBL_EMPLOYEE
@@ -399,7 +384,7 @@ func (r *Repository) UpdateEmployeePassword(empID uuid.UUID, hashedPassword stri
 	return err
 }
 
-func (r *Repository) ChackManagerPermission() (bool, error) {
+func (r *Repository) CheckManagerPermission() (bool, error) {
 	var exists bool
 	query := `SELECT allow_manager_add_leave FROM Tbl_Company_Settings LIMIT 1`
 
