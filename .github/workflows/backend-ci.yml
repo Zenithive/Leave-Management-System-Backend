@@ -1,0 +1,72 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches: ["main"]
+    paths-ignore:
+      - "frontend/**"
+  pull_request:
+    branches: ["main"]
+    paths-ignore:
+      - "frontend/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-lint:
+    name: Build, Test & Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          check-latest: true
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Verify go.mod / go.sum are tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum || \
+            (echo "go.mod/go.sum are not tidy — run 'go mod tidy' locally and commit the result" && exit 1)
+
+      - name: Check formatting (gofmt)
+        run: |
+          UNFORMATTED=$(gofmt -l .)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "The following files are not gofmt-formatted:"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
+          echo "All files are properly formatted"
+
+      - name: Lint (go vet)
+        run: go vet ./...
+
+      - name: Run tests
+        run: go test ./... -v -race -timeout 120s
+
+      - name: Build binary
+        run: go build -o ums-backend ./cmd/server
+
+      - name: Verify build artifact
+        run: |
+          if [ -f "ums-backend" ]; then
+            echo "Build successful"
+            ls -lh ums-backend
+          else
+            echo "Build failed — binary not found"
+            exit 1
+          fi

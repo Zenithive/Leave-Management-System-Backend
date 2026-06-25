@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -382,13 +383,12 @@ func (s *leaveFlow) publishLeaveApplied(ctx context.Context, leave *models.Leave
 	}
 	employee, err := s.CommRepo.GetEmployeeDetailsForNotification(leave.EmployeeID)
 	if err != nil {
+		log.Println("failed to get emp details", err.Error())
 		return
-	}
-	if err != nil {
-		return // non-critical — DB read for notification; don't fail the request
 	}
 	recipients, err := s.getRecipientsWaiting(ctx, leave.EmployeeID, leaveID)
 	if err != nil {
+		log.Println("failed to get all role base details info details", err.Error())
 		return
 	}
 
@@ -464,7 +464,7 @@ func (s *leaveFlow) getRecipientsWaiting(ctx context.Context, employeeID uuid.UU
 
 	for _, stage := range flow.ApprovalLog {
 
-		if stage.State == models.WAITING {
+		if stage.State == models.WAITING || stage.State == models.SKIPPED {
 			roleMap[string(stage.ApproverRole)] = struct{}{}
 		}
 	}
@@ -478,6 +478,8 @@ func (s *leaveFlow) getRecipientsWaiting(ctx context.Context, employeeID uuid.UU
 	if len(roles) == 0 {
 		return nil, nil
 	}
+	
+
 	return s.CommRepo.GetRecipientsByRoles(ctx, employeeID, roles)
 }
 
