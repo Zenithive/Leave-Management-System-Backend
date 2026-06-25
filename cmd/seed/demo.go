@@ -22,7 +22,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -81,19 +80,19 @@ func buildDemoAccounts() []struct {
 
 // ─── entry point ─────────────────────────────────────────────────────────────
 
-func main() {
-	teardown := flag.Bool("teardown", false, "Remove all demo accounts and their associated data")
-	flag.Parse()
+// func main() {
+// 	teardown := flag.Bool("teardown", false, "Remove all demo accounts and their associated data")
+// 	flag.Parse()
 
-	db := connectDB()
-	defer db.Close()
+// 	db := connectDB()
+// 	defer db.Close()
 
-	if *teardown {
-		runTeardown(db)
-	} else {
-		runSeed(db)
-	}
-}
+// 	if *teardown {
+// 		runTeardown(db)
+// 	} else {
+// 		runSeed(db)
+// 	}
+// }
 
 // ─── database connection ──────────────────────────────────────────────────────
 
