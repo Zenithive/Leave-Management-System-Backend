@@ -76,7 +76,7 @@ func SetupRoutes(r *gin.Engine, h *handler.HandlerFunc, env *config.ENV) {
 	leaveLog.GET("/", h.GetLeaveLog)
 
 	approver := leaves.Group("/approver-flow")
-	approver.Use(middleware.AuthMiddleware(h), accessrole.RoleMiddleware(accessrole.SuperAdminOnly...))
+	approver.Use(middleware.AuthMiddleware(h), accessrole.RoleMiddleware(accessrole.AdminAccessRoles...))
 	{
 		approver.POST("", h.CreateApprovelFlow)
 		approver.GET("", h.GetAllApprovelFlow)
