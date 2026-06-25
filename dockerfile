@@ -16,8 +16,9 @@ WORKDIR /app
 
 RUN apk add --no-cache ca-certificates
 
+
 COPY --from=builder /app/ums-backend .
-COPY pkg/migration ./pkg/migration
+COPY /migration ./migration
 
 
 
