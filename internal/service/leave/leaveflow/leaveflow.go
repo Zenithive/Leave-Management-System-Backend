@@ -179,10 +179,7 @@ func (s *leaveFlow) ActionLeave(ctx context.Context, req models.ActionLeaveReq, 
 	switch action {
 	case "APPROVE":
 		// Re-fetch leave to get final status (APPROVED or still Pending for multi-stage)
-		updated, _ := s.GetByID(ctx, leaveID)
-		if updated != nil && updated.Status == constant.LEAVE_APPLOVED {
-			s.publishLeaveAction(ctx, notification.LeaveApproved, leave, approverDetails.FullName, approverDetails.Email, role, leaveID)
-		}
+		s.publishLeaveAction(ctx, notification.LeaveApproved, leave, approverDetails.FullName, approverDetails.Email, role, leaveID)
 	case "REJECT":
 		s.publishLeaveAction(ctx, notification.LeaveRejected, leave, approverDetails.FullName, approverDetails.Email, role, leaveID)
 	case "WITHDRAW":
@@ -478,7 +475,6 @@ func (s *leaveFlow) getRecipientsWaiting(ctx context.Context, employeeID uuid.UU
 	if len(roles) == 0 {
 		return nil, nil
 	}
-	
 
 	return s.CommRepo.GetRecipientsByRoles(ctx, employeeID, roles)
 }

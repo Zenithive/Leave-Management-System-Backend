@@ -27,11 +27,11 @@ type EmailProvider interface {
 
 // ResendEmailProvider implements EmailProvider using the Resend REST API.
 type ResendEmailProvider struct {
-	apiKey            string
-	from              string
-	companyDomain     string // used for demo-account filtering
-	httpClient        *http.Client
-	logger            *slog.Logger
+	apiKey        string
+	from          string
+	companyDomain string // used for demo-account filtering
+	httpClient    *http.Client
+	logger        *slog.Logger
 }
 
 // NewResendEmailProvider constructs a provider from environment variables.
@@ -52,10 +52,10 @@ func NewResendEmailProvider(logger *slog.Logger) *ResendEmailProvider {
 }
 
 func (p *ResendEmailProvider) Send(to, subject, body string) error {
-	if p.isDemoEmail(to) {
-		p.logger.Info("skipping email to demo account", "to", to)
-		return nil
-	}
+	// if p.isDemoEmail(to) {
+	// 	p.logger.Info("skipping email to demo account", "to", to)
+	// 	return nil
+	// }
 	return p.send([]string{to}, subject, body)
 }
 
