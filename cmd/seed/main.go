@@ -7,17 +7,17 @@
 //	go run ./cmd/seed            → create demo accounts for all 6 roles
 //	go run ./cmd/seed --teardown → remove all demo accounts and their data
 //
-// All demo accounts use the email pattern:  demo.<role>@<COMPANY_EMAIL_DOMAIN>
+// Demo accounts use fixed yopmail.com addresses (see demoAccountEmails below).
 // Password is read from DEMO_SEED_PASSWORD env var (default: Demo@1234)
 //
 // Org structure created:
 //
-//	SUPERADMIN  demo.superadmin@<domain>
-//	ADMIN       demo.admin@<domain>
-//	HR          demo.hr@<domain>
-//	MANAGER     demo.manager@<domain>
-//	  └─ EMPLOYEE  demo.employee@<domain>   (reports to demo manager)
-//	  └─ INTERN    demo.intern@<domain>     (reports to demo manager)
+//	SUPERADMIN  demosuperadminzenithive@yopmail.com
+//	ADMIN       demoadminzenithive@yopmail.com
+//	HR          demohrzenithive@yopmail.com
+//	MANAGER     demomanagerzenithive@yopmail.com
+//	  └─ EMPLOYEE  demoemployeezenithive@yopmail.com   (reports to demo manager)
+//	  └─ INTERN    demointernzenithive@yopmail.com     (reports to demo manager)
 
 package main
 
@@ -37,7 +37,8 @@ import (
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
-const demoEmailMark = "demo." // prefix that identifies all demo accounts
+// demoAccountDomain is the fixed domain used for all demo accounts.
+const demoAccountDomain = "yopmail.com"
 
 // demoPassword returns the seed password from the environment, with a safe default.
 func demoPassword() string {
@@ -47,24 +48,21 @@ func demoPassword() string {
 	return "Demo@1234"
 }
 
-// emailDomain returns the company email domain from the environment.
-func emailDomain() string {
-	d := os.Getenv("COMPANY_EMAIL_DOMAIN")
-	if d == "" {
-		log.Fatal("COMPANY_EMAIL_DOMAIN environment variable is not set")
-	}
-	return d
-}
-
-// buildDemoAccounts constructs the demo account list using the configured domain.
-func buildDemoAccounts(domain string) []struct {
+// buildDemoAccounts returns the fixed list of demo accounts and their
+// hardcoded yopmail.com addresses.
+//
+// NOTE: these addresses do NOT use the "demo." prefix (with a dot) that
+// ResendEmailProvider.isDemoEmail checks for. That filter will NOT recognize
+// these as demo accounts, so emails sent to them will go out as normal,
+// real emails via Resend — see the warning printed at the end of runSeed.
+func buildDemoAccounts() []struct {
 	fullName     string
 	email        string
 	role         string
 	salary       float64
 	managerEmail string
 } {
-	mgr := "demo.manager@" + domain
+	mgr := "demomanagerzenithive@" + demoAccountDomain
 	return []struct {
 		fullName     string
 		email        string
@@ -72,12 +70,12 @@ func buildDemoAccounts(domain string) []struct {
 		salary       float64
 		managerEmail string
 	}{
-		{"Demo SuperAdmin", "demo.superadmin@" + domain, "SUPERADMIN", 0, ""},
-		{"Demo Admin", "demo.admin@" + domain, "ADMIN", 0, ""},
-		{"Demo HR", "demo.hr@" + domain, "HR", 0, ""},
-		{"Demo Manager", "demo.manager@" + domain, "MANAGER", 50000, ""},
-		{"Demo Employee", "demo.employee@" + domain, "EMPLOYEE", 30000, mgr},
-		{"Demo Intern", "demo.intern@" + domain, "INTERN", 15000, mgr},
+		{"Demo SuperAdmin", "demosuperadminzenithive@" + demoAccountDomain, "SUPERADMIN", 0, ""},
+		{"Demo Admin", "demoadminzenithive@" + demoAccountDomain, "ADMIN", 0, ""},
+		{"Demo HR", "demohrzenithive@" + demoAccountDomain, "HR", 0, ""},
+		{"Demo Manager", "demomanagerzenithive@" + demoAccountDomain, "MANAGER", 50000, ""},
+		{"Demo Employee", "demoemployeezenithive@" + demoAccountDomain, "EMPLOYEE", 30000, mgr},
+		{"Demo Intern", "demointernzenithive@" + demoAccountDomain, "INTERN", 15000, mgr},
 	}
 }
 
@@ -139,7 +137,7 @@ func runSeed(db *sqlx.DB) {
 		log.Println("   Run the application at least once so migrations create the leave types, then re-run the seeder.")
 	}
 
-	demoAccounts := buildDemoAccounts(emailDomain())
+	demoAccounts := buildDemoAccounts()
 
 	// Track manager UUID so EMPLOYEE and INTERN can reference it
 	managerIDs := map[string]string{} // email → uuid string
@@ -223,15 +221,19 @@ func runSeed(db *sqlx.DB) {
 	fmt.Println("╠══════════════════════════════════════════════════════════════════╣")
 	fmt.Printf("║  Created: %-3d   Skipped (already existed): %-3d                  ║\n", created, skipped)
 	fmt.Println("╚══════════════════════════════════════════════════════════════════╝")
-	domain := emailDomain()
 	fmt.Println()
 	fmt.Println("Org structure:")
-	fmt.Printf("  SUPERADMIN  demo.superadmin@%s\n", domain)
-	fmt.Printf("  ADMIN       demo.admin@%s\n", domain)
-	fmt.Printf("  HR          demo.hr@%s\n", domain)
-	fmt.Printf("  MANAGER     demo.manager@%s\n", domain)
-	fmt.Printf("    └─ EMPLOYEE  demo.employee@%s\n", domain)
-	fmt.Printf("    └─ INTERN    demo.intern@%s\n", domain)
+	fmt.Println("  SUPERADMIN  demosuperadminzenithive@yopmail.com")
+	fmt.Println("  ADMIN       demoadminzenithive@yopmail.com")
+	fmt.Println("  HR          demohrzenithive@yopmail.com")
+	fmt.Println("  MANAGER     demomanagerzenithive@yopmail.com")
+	fmt.Println("    └─ EMPLOYEE  demoemployeezenithive@yopmail.com")
+	fmt.Println("    └─ INTERN    demointernzenithive@yopmail.com")
+	fmt.Println()
+	fmt.Println("⚠  NOTE: these addresses do not start with \"demo.\" (with a dot), so")
+	fmt.Println("   ResendEmailProvider's demo-account filter will NOT skip them.")
+	fmt.Println("   Any leave/notification emails triggered for these accounts will be")
+	fmt.Println("   sent for real via Resend to yopmail.com, not silently dropped.")
 	fmt.Println()
 	fmt.Println("To remove all demo accounts run:")
 	fmt.Println("  go run ./cmd/seed --teardown")
@@ -243,7 +245,7 @@ func runTeardown(db *sqlx.DB) {
 	log.Println("Starting demo account teardown...")
 
 	// Collect all demo employee IDs
-	rows, err := db.Query(`SELECT id, email FROM Tbl_Employee WHERE email LIKE $1`, demoEmailMark+"%@"+emailDomain())
+	rows, err := db.Query(`SELECT id, email FROM Tbl_Employee WHERE email LIKE $1`, "demo%@"+demoAccountDomain)
 	if err != nil {
 		log.Fatalf("Failed to query demo accounts: %v", err)
 	}
