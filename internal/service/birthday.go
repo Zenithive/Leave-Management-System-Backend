@@ -34,21 +34,10 @@ func RenderBirthdayMessage(template, name string, birthDate *time.Time) string {
 func calculateAge(birthDate time.Time) int {
 	now := time.Now()
 	age := now.Year() - birthDate.Year()
-	// Adjust if birthday hasn't occurred yet this year
-	// if now.YearDay() < birthDate.YearDay() {
-	// 	age--
-	// }
 	return age
 }
 
-// Calculation classifies each employee's birthday as PAST, TODAY, or UPCOMING
-// relative to today's actual date, within the requested calendar scope.
-//
-// month > 0 && year > 0  → specific month/year view (e.g. April 2027)
-// year > 0 only          → full year view (e.g. all of 2027)
-// default (0,0)          → upcoming 30 days from today
-//
-// Age is calculated as of the birthday in the target year (not current year).
+
 func Calculation(list []models.BirthdayEmployee, month, year int) []models.BirthdayEmployee {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())

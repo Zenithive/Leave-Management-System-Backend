@@ -5,8 +5,8 @@ import (
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/config"
 	"github.com/Zenithive/LeaveManagementSystem/internal/handler"
-	middleware "github.com/Zenithive/LeaveManagementSystem/middlewere"
-	accessrole "github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
+	"github.com/Zenithive/LeaveManagementSystem/middleware"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )

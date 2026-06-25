@@ -214,21 +214,6 @@ func (h *LeaveNotificationHandler) renderAndSend(vm templates.LeaveVM, subject, 
 	}
 }
 
-// renderAndSendBulk renders leave.html with vm and sends to multiple recipients.
-func (h *LeaveNotificationHandler) renderAndSendBulk(vm templates.LeaveVM, subject string, recipients []string) {
-	if len(recipients) == 0 {
-		return
-	}
-	body, err := templates.Render("leave.html", vm)
-	if err != nil {
-		h.logger.Error("leave template render failed", "template", "leave.html", "subject", subject, "err", err)
-		return
-	}
-	if err := h.email.SendBulk(recipients, subject, body); err != nil {
-		h.logger.Error("leave notification bulk send failed", "subject", subject, "err", err)
-	}
-}
-
 // renderAndSendRecipients renders vm for each recipient (personalizing
 // RecipientName) and sends individually.
 //
