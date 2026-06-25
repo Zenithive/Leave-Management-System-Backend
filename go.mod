@@ -11,7 +11,7 @@ require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
 	github.com/jung-kurt/gofpdf v1.16.2
-	github.com/lib/pq v1.10.9
+	github.com/lib/pq v1.12.3
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/crypto v0.40.0
