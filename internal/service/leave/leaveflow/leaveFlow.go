@@ -455,6 +455,9 @@ func (s *leaveFlow) getRecipientsWaiting(ctx context.Context, employeeID uuid.UU
 	if err != nil {
 		return nil, err
 	}
+	if flow == nil {
+		return nil, nil
+	}
 
 	roleMap := make(map[string]struct{})
 
