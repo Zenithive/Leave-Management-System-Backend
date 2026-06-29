@@ -42,8 +42,8 @@ type LeaveInput struct {
 type action string
 
 const (
-	APPROVE        action = "APPROVE"
-	REJECT         action = "REJECT"
+	APPROVE  action = "APPROVE"
+	REJECT   action = "REJECT"
 	WITHDRAW action = "WITHDRAW"
 )
 

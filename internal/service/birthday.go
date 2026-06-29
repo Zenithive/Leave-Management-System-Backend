@@ -37,7 +37,6 @@ func calculateAge(birthDate time.Time) int {
 	return age
 }
 
-
 func Calculation(list []models.BirthdayEmployee, month, year int) []models.BirthdayEmployee {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())

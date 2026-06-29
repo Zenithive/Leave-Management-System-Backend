@@ -5,12 +5,12 @@ type Type string
 
 const (
 	// Leave events
-	LeaveApplied          Type = "LEAVE_APPLIED"
-	LeaveApproved         Type = "LEAVE_APPROVED"
-	LeaveRejected         Type = "LEAVE_REJECTED"
-	LeaveWithdrawn        Type = "LEAVE_WITHDRAWN"
+	LeaveApplied           Type = "LEAVE_APPLIED"
+	LeaveApproved          Type = "LEAVE_APPROVED"
+	LeaveRejected          Type = "LEAVE_REJECTED"
+	LeaveWithdrawn         Type = "LEAVE_WITHDRAWN"
 	LeaveWithdrawalPending Type = "LEAVE_WITHDRAWAL_PENDING"
-	LeaveCancelled        Type = "LEAVE_CANCELLED"
+	LeaveCancelled         Type = "LEAVE_CANCELLED"
 
 	// Employee events
 	EmployeeCreated Type = "EMPLOYEE_CREATED"

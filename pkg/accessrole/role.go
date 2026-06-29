@@ -46,6 +46,7 @@ var EmployeeAccessRoles = []string{
 var SuperAdminOnly = []string{
 	ROLE_SUPER_ADMIN,
 }
+
 func RoleMiddleware(allowedRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roleValue, exists := c.Get("role")

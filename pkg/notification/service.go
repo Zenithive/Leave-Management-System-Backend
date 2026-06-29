@@ -130,8 +130,8 @@ func (d *dispatcher) Start(ctx context.Context) {
 func (d *dispatcher) Stop() {
 	d.once.Do(func() {
 		d.logger.Info("notification: shutting down worker pool")
-		close(d.stopCh)   // signal workers to stop accepting new events
-		close(d.events)   // let workers drain the remaining buffered events
+		close(d.stopCh) // signal workers to stop accepting new events
+		close(d.events) // let workers drain the remaining buffered events
 
 		done := make(chan struct{})
 		go func() {
