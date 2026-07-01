@@ -133,13 +133,21 @@ func SetupRoutes(r *gin.Engine, h *handler.HandlerFunc, env *config.ENV) {
 
 	}
 
+	// ----------------- Static files -----------------
+	// Serve uploaded files (logos, etc.) directly by path
+	r.Static("/uploads", "./uploads")
+
 	// ----------------- Settings -----------------
 	settings := r.Group("/api/settings")
-	settings.Use(middleware.AuthMiddleware(h)) // Only admin/superadmin
+	{
+		// Public — no auth: used by frontend to show company logo on login page etc.
+		settings.GET("/logo", h.GetCompanyLogo)
+	}
+	settings.Use(middleware.AuthMiddleware(h)) // remaining settings routes require auth
 	{
 		settings.GET("", h.GetCompanySettings)                      // Get current settings
 		settings.PUT("", h.UpdateCompanySettings)                   // Update settings
-		settings.GET("/birthday-preview", h.PreviewBirthdayMessage) // Preview rendered birthday message      // Get today's employee birthdays
+		settings.GET("/birthday-preview", h.PreviewBirthdayMessage) // Preview rendered birthday message
 	}
 	holidays := r.Group("/api/settings/holidays")
 	holidays.Use(middleware.AuthMiddleware(h))

@@ -38,3 +38,10 @@ func (r *Repository) GetBirthdayMessageTemplate() (string, error) {
 	err := r.DB.Get(&tmpl, `SELECT birthday_message_template FROM Tbl_Company_Settings LIMIT 1`)
 	return tmpl, err
 }
+
+// GetCompanyLogoPath returns only the logo_path column from settings.
+// Returns an empty string (not an error) when no logo has been set yet.
+func (r *Repository) GetCompanyLogoPath(path *string) error {
+	err := r.DB.Get(path, `SELECT COALESCE(logo_path, '') FROM Tbl_Company_Settings LIMIT 1`)
+	return err
+}
