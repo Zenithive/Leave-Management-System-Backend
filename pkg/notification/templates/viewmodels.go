@@ -31,9 +31,9 @@ type LeaveEmailConfig struct {
 	Intro template.HTML
 
 	// Table row visibility
-	ShowEmployeeInfo bool // show Employee / Email rows (HR/admin-facing emails)
-	ShowReason       bool // show Reason row
-	ShowActor        bool // show "Approved By / Rejected By / …" row
+	ShowEmployeeInfo bool   // show Employee / Email rows (HR/admin-facing emails)
+	ShowReason       bool   // show Reason row
+	ShowActor        bool   // show "Approved By / Rejected By / …" row
 	ActorLabel       string // label for the actor row, e.g. "Approved By"
 
 	// Status badge
@@ -42,9 +42,9 @@ type LeaveEmailConfig struct {
 	BadgeFg   string // badge text colour, e.g. "#065f46"
 
 	// Optional extras
-	FooterNote     string // paragraph after the table, e.g. "Your balance has been restored."
-	CTALabel       string // button text; empty = no button
-	IsAdminNotice  bool   // true → greeting says "Dear Admin / HR"
+	FooterNote    string // paragraph after the table, e.g. "Your balance has been restored."
+	CTALabel      string // button text; empty = no button
+	IsAdminNotice bool   // true → greeting says "Dear Admin / HR"
 }
 
 // LeaveVM is the single data object passed to leave.html.
@@ -55,16 +55,17 @@ type LeaveVM struct {
 	EmployeeName  string
 	EmployeeEmail string
 
-	RecipientName string 
-	LeaveType  string
-	StartDate  string
-	EndDate    string
-	Days       float64
-	Reason     string
-	ActorName  string
-	ActorEmail string
-	ActorRole  string
+	RecipientName string
+	LeaveType     string
+	StartDate     string
+	EndDate       string
+	Days          float64
+	Reason        string
+	ActorName     string
+	ActorEmail    string
+	ActorRole     string
 }
+
 // newLeaveVM is the internal constructor used by every preset builder below.
 func newLeaveVM(
 	appName, appURL string,
