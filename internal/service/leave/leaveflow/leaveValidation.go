@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 	"github.com/Zenithive/LeaveManagementSystem/internal/repositories"
@@ -28,16 +29,95 @@ func (s *LeaveValidationService) ValidateLeaveTimingID(timingID *int) error {
 	return nil
 }
 
-// ValidateLeaveReason validates reason length (10-500 characters)
+const (
+	minLeaveReasonLength = 10
+	maxLeaveReasonLength = 500
+	minLeaveReasonWords  = 2
+	maxRepeatedRunes     = 6
+)
+
 func (s *LeaveValidationService) ValidateLeaveReason(reason string) error {
-	trimmed := strings.TrimSpace(reason)
-	if len(trimmed) < 10 {
-		return fmt.Errorf("leave reason must be at least 10 characters long")
+	reason = strings.TrimSpace(reason)
+
+	if reason == "" {
+		return fmt.Errorf("leave reason is required")
 	}
-	if len(trimmed) > 500 {
-		return fmt.Errorf("leave reason is too long. Maximum 500 characters allowed")
+
+	if len(reason) < minLeaveReasonLength {
+		return fmt.Errorf("leave reason must be at least %d characters long", minLeaveReasonLength)
 	}
+
+	if len(reason) > maxLeaveReasonLength {
+		return fmt.Errorf("leave reason cannot exceed %d characters", maxLeaveReasonLength)
+	}
+
+	words := strings.Fields(reason)
+	if len(words) < minLeaveReasonWords {
+		return fmt.Errorf("please provide a more descriptive leave reason")
+	}
+
+	var (
+		hasLetter bool
+		hasDigit  bool
+
+		prev      rune
+		repeatCnt int
+	)
+
+	for i, r := range reason {
+		switch {
+		case unicode.IsLetter(r):
+			hasLetter = true
+		case unicode.IsDigit(r):
+			hasDigit = true
+		}
+
+		if i == 0 {
+			prev = r
+			repeatCnt = 1
+			continue
+		}
+
+		if r == prev {
+			repeatCnt++
+			if repeatCnt >= maxRepeatedRunes {
+				return fmt.Errorf("leave reason contains too many repeated characters")
+			}
+		} else {
+			prev = r
+			repeatCnt = 1
+		}
+	}
+
+	if !hasLetter {
+		return fmt.Errorf("leave reason must contain alphabetic characters")
+	}
+
+	if hasDigit && !hasLetter {
+		return fmt.Errorf("leave reason cannot contain only numbers")
+	}
+	if containsDeniedKeyword(reason) {
+		return fmt.Errorf("leave reason contains restricted words, please rephrase")
+	}
+
 	return nil
+}
+
+var denyKeywords = []string{
+	"personal",
+	"casual",
+	"sick",
+}
+
+func containsDeniedKeyword(reason string) bool {
+	reason = strings.ToLower(reason)
+
+	for _, k := range denyKeywords {
+		if strings.Contains(reason, k) {
+			return true
+		}
+	}
+	return false
 }
 
 // ValidateLeaveDates validates end date is not before start date
