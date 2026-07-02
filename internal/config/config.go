@@ -24,6 +24,7 @@ type ENV struct {
 	COMPANY_EMAIL_DOMAIN string // e.g. "yourdomain.com" — used for email validation and demo seeder
 	APP_NAME             string // display name used in notification emails
 	APP_URL              string // frontend URL appended to credential emails
+	COMPANY_LOGO         string // URL or path to the company logo served by GET /api/settings/logo
 }
 
 var (
@@ -70,6 +71,7 @@ func LoadENV() *ENV {
 			COMPANY_EMAIL_DOMAIN: os.Getenv("COMPANY_EMAIL_DOMAIN"),
 			APP_NAME:             appName,
 			APP_URL:              os.Getenv("APP_URL"),
+			COMPANY_LOGO:         os.Getenv("COMPANY_LOGO"),
 		}
 	})
 

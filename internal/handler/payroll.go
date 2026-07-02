@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -353,9 +352,10 @@ func renderHeaderSection(pdf *gofpdf.Fpdf, d PayslipReportData, config PDFConfig
 	pdf.SetFillColor(config.PrimaryColor[0], config.PrimaryColor[1], config.PrimaryColor[2])
 	pdf.Rect(0, 0, 210, 4, "F")
 
-	// Handle Logo
-	if config.LogoPath != "" {
-		// We use a small offset from the top bar (10mm down)
+	// Handle Logo — only embed if it's a local file path (gofpdf cannot load URLs)
+	if config.LogoPath != "" &&
+		!strings.HasPrefix(config.LogoPath, "http://") &&
+		!strings.HasPrefix(config.LogoPath, "https://") {
 		// Adjust the '30' to make logo bigger or smaller
 		pdf.Image(config.LogoPath, 15, 10, 30, 0, false, "", 0, "")
 	}
@@ -469,12 +469,12 @@ func (h *HandlerFunc) GetPayslipPDF(c *gin.Context) {
 
 	// 1. FETCH BRANDING
 	var settings models.CompanySettings
-	err = h.Query.DB.Get(&settings, `SELECT company_name, logo_path, primary_color FROM Tbl_Company_Settings LIMIT 1`)
+	err = h.Query.DB.Get(&settings, `SELECT company_name, primary_color FROM Tbl_Company_Settings LIMIT 1`)
 
 	// If no settings found or name is the generic "Company", override it
 	if err != nil || settings.CompanyName == "" || strings.EqualFold(settings.CompanyName, "Company") {
-		if envName := os.Getenv("APP_NAME"); envName != "" {
-			settings.CompanyName = envName
+		if h.Env.APP_NAME != "" {
+			settings.CompanyName = h.Env.APP_NAME
 		} else {
 			settings.CompanyName = "Company"
 		}
@@ -484,7 +484,7 @@ func (h *HandlerFunc) GetPayslipPDF(c *gin.Context) {
 	config := PDFConfig{
 		PrimaryColor: []int{r, g, b},
 		CompanyName:  settings.CompanyName,
-		LogoPath:     settings.LogoPath,
+		LogoPath:     h.Env.COMPANY_LOGO,
 	}
 
 	// 2. FETCH PAYSLIP DATA
@@ -574,10 +574,10 @@ func (h *HandlerFunc) PreviewPayslipPDF(c *gin.Context) {
 
 	// 1. FETCH BRANDING (same as real payslip)
 	var settings models.CompanySettings
-	err := h.Query.DB.Get(&settings, `SELECT company_name, logo_path, primary_color FROM Tbl_Company_Settings LIMIT 1`)
+	err := h.Query.DB.Get(&settings, `SELECT company_name, primary_color FROM Tbl_Company_Settings LIMIT 1`)
 	if err != nil || settings.CompanyName == "" || strings.EqualFold(settings.CompanyName, "Company") {
-		if envName := os.Getenv("APP_NAME"); envName != "" {
-			settings.CompanyName = envName
+		if h.Env.APP_NAME != "" {
+			settings.CompanyName = h.Env.APP_NAME
 		} else {
 			settings.CompanyName = "Company"
 		}
@@ -587,7 +587,7 @@ func (h *HandlerFunc) PreviewPayslipPDF(c *gin.Context) {
 	config := PDFConfig{
 		PrimaryColor: []int{r, g, b},
 		CompanyName:  settings.CompanyName,
-		LogoPath:     settings.LogoPath,
+		LogoPath:     h.Env.COMPANY_LOGO,
 	}
 
 	// 2. BUILD DUMMY DATA

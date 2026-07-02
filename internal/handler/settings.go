@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -61,18 +60,7 @@ func (h *HandlerFunc) UpdateCompanySettings(c *gin.Context) {
 		BirthdayMessageTemplate: c.PostForm("BirthdayMessageTemplate"),
 	}
 
-	// 3. Handle Logo File Upload
-	var newLogoPath string
-	file, err := c.FormFile("Logo")
-	if err == nil {
-		newLogoPath = "uploads/logos/" + uuid.New().String() + "-" + file.Filename
-		if err := c.SaveUploadedFile(file, newLogoPath); err != nil {
-			errors.RespondWithError(c, 500, "Failed to save logo file")
-			return
-		}
-	}
-
-	// 4. Get Employee ID for Audit Logs
+	// 3. Get Employee ID for Audit Logs
 	empIDRaw, ok := c.Get("user_id")
 	if !ok {
 		errors.RespondWithError(c, http.StatusUnauthorized, "Employee ID missing")
@@ -80,54 +68,34 @@ func (h *HandlerFunc) UpdateCompanySettings(c *gin.Context) {
 	}
 	empID, _ := uuid.Parse(empIDRaw.(string))
 
-	// 5. Fetch old logo path before overwriting — so we can delete it after commit
-	var oldLogoPath string
-	if newLogoPath != "" {
-		_ = h.Query.GetCompanyLogoPath(&oldLogoPath)
-	}
-
-	// 6. Execute Database Transaction
-	err = database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
-		if err := h.Query.UpdateCompanySettings(tx, input, newLogoPath); err != nil {
+	// 4. Execute Database Transaction
+	err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+		if err := h.Query.UpdateCompanySettings(tx, input); err != nil {
 			return err
 		}
 		return h.Query.AddLog(models.NewCommon(constant.CompanySettings, constant.ActionUpdate, empID), tx)
 	})
 	if err != nil {
-		// Transaction failed — remove the newly saved file to avoid orphans
-		if newLogoPath != "" {
-			_ = os.Remove(newLogoPath)
-		}
 		errors.RespondWithError(c, 500, "Failed to update settings: "+err.Error())
 		return
 	}
 
-	// 7. Delete the old logo file now that the DB is committed
-	if oldLogoPath != "" && oldLogoPath != newLogoPath {
-		_ = os.Remove(oldLogoPath)
-	}
-
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Company settings updated successfully",
-		"logo":    newLogoPath,
 	})
 }
 
 // GetCompanyLogo - GET /api/settings/logo  (public — no auth required)
-// Returns the company logo file directly as an image response.
-// If no logo has been uploaded yet, returns 404.
+// Returns the company logo URL from the COMPANY_LOGO environment variable.
+// Falls back to a placeholder image URL if the env var is not set.
 func (h *HandlerFunc) GetCompanyLogo(c *gin.Context) {
-	var logoPath string
-	err := h.Query.GetCompanyLogoPath(&logoPath)
-	if err != nil {
-		errors.RespondWithError(c, http.StatusInternalServerError, "failed to fetch logo: "+err.Error())
-		return
-	}
-	if logoPath == "" {
-		errors.RespondWithError(c, http.StatusNotFound, "no logo uploaded yet")
-		return
-	}
-	c.File(logoPath)
+	logoURL := h.Env.COMPANY_LOGO
+	if logoURL == "" {
+	logoURL = "https://ui-avatars.com/api/?name=Z&background=000000&color=ffffff&size=256&rounded=true"
+}
+	c.JSON(http.StatusOK, gin.H{
+		"logo": logoURL,
+	})
 }
 // Returns the rendered birthday message using the current template and provided placeholders.
 func (h *HandlerFunc) PreviewBirthdayMessage(c *gin.Context) {
