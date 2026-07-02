@@ -3,16 +3,18 @@ package routes
 import (
 	"time"
 
+	"github.com/Zenithive/LeaveManagementSystem/internal/config"
+	"github.com/Zenithive/LeaveManagementSystem/internal/handler"
+	"github.com/Zenithive/LeaveManagementSystem/middleware"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/sanjayk-eng/UserMenagmentSystem_Backend/controllers"
-	middleware "github.com/sanjayk-eng/UserMenagmentSystem_Backend/middlewere"
 )
 
-func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
+func SetupRoutes(r *gin.Engine, h *handler.HandlerFunc, env *config.ENV) {
 
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
+		AllowOrigins:     env.ALLOWED_ORIGINS,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Authorization", "token"},
@@ -27,6 +29,7 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 		auth.GET("/verify", h.VerifyToken)                           // Verify token validity
 		auth.GET("/status", h.CheckAuthStatus)                       // Check auth status without requiring auth
 		auth.POST("/logout", middleware.AuthMiddleware(h), h.Logout) // Logout (requires valid token)
+		auth.GET("/roles", h.GetAllRoles)                            // Get all available role types (public)
 	}
 
 	// ----------------- Employees -----------------
@@ -54,20 +57,31 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 	{
 		leaves.POST("/apply", h.ApplyLeave) // Employee applies for leave
 
-		leaves.PUT("/edit/:id", h.EditMyLeave)                         // New Route
-		leaves.POST("/admin-add/policy", h.AdminAddLeavePolicy)        // Admin creates leave policy
-		leaves.PUT("/admin-update/policy/:id", h.UpdateLeavePolicy)    // Admin, SuperAdmin, HR update leave policy
-		leaves.DELETE("/admin-delete/policy/:id", h.DeleteLeavePolicy) // Admin, SuperAdmin, HR delete leave policy
-		leaves.GET("/Get-All-Leave-Policy", h.GetAllLeavePolicies)     // Get all leave policies
-		leaves.GET("/manager/history", h.GetManagerLeaveHistory)       // Manager gets team leave history
-		leaves.POST("/:id/action", h.ActionLeave)                      // Approve/Reject leave
-		leaves.DELETE("/:id/cancel", h.CancelLeave)                    // Cancel pending leave (Employee/Admin)
-		leaves.POST("/:id/withdraw", h.WithdrawLeave)                  // Withdraw approved leave (Admin/Manager)
-		leaves.GET("/all", h.GetAllLeaves)                             // Get all leaves (filtered by role)
-		leaves.GET("/my-leaves", h.GetAllMyLeave)                      // Get current user's own leaves with month/year filtering
-		leaves.GET("/:id", h.GetLeaveByID)                             // Get leave by ID (role-based access)
-		leaves.GET("/timming", h.GetLeaveTiming)                       // Get all Leave Timing
-		leaves.PUT("/timming", h.UpdateLeaveTiming)                    // Update leave timing by super admin and admin
+		//leaves.PUT("/edit/:id", h.EditMyLeave)                                                                         // New Route
+		leaves.POST("/admin-add/policy", h.LeavePolicy)                                                              // Admin creates leave policy
+		leaves.PUT("/admin-update/policy/:id", h.UpdateLeavePolicy)                                                  // Admin, SuperAdmin, HR update leave policy
+		leaves.DELETE("/admin-delete/policy/:id", h.DeleteLeavePolicy)                                               // Admin, SuperAdmin, HR delete leave policy
+		leaves.GET("/Get-All-Leave-Policy", h.GetAllLeavePolicies)                                                   // Get all leave policies                                                  // Manager gets team leave history
+		leaves.GET("/all", h.GetLeaves)                                                                              // Get all leaves (filtered by role)
+		leaves.GET("/monthly-report", h.GetLeaveReport)                                                              // Leave report: monthly / yearly / range (HR, ADMIN, SUPERADMIN)
+		leaves.GET("/Get-Leave-Report", accessrole.RoleMiddleware(accessrole.AdminAccessRoles...), h.GetLeaveReport) // Alias for monthly-report
+		leaves.GET("/my-leaves", h.GetAllMyLeave)                                                                    // Get current user's own leaves with month/year filtering
+		leaves.GET("/timming", h.GetLeaveTiming)                                                                     // Get all Leave Timing
+		leaves.PUT("/timming", h.UpdateLeaveTiming)                                                                  // Update leave timing by super admin and admin
+		leaves.POST("/:id/action", h.LeaveAction)                                                                    // Approve/Reject leave
+		leaves.DELETE("/:id/cancel", h.CancelLeave)
+		leaves.PUT("edit/:id", h.EditLeave) // Cancel pending leave (Employee/Admin)
+	}
+	leaveLog := leaves.Group("/log")
+	leaveLog.GET("/", h.GetLeaveLog)
+
+	approver := leaves.Group("/approver-flow")
+	approver.Use(middleware.AuthMiddleware(h), accessrole.RoleMiddleware(accessrole.AdminAccessRoles...))
+	{
+		approver.POST("", h.CreateApprovelFlow)
+		approver.GET("", h.GetAllApprovelFlow)
+		approver.PUT("/:id", h.UpdateLeaveApprovelFlow)
+		approver.DELETE("/:id", h.DeleteLeaveApprovelFlow)
 	}
 
 	// ----------------- Leave Balances -----------------
@@ -77,6 +91,23 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 
 		leaveBalances.GET("/employee/:id", h.GetLeaveBalances)  // GET /api/employees/:id/leave-balances
 		leaveBalances.POST("/:id/adjust", h.AdjustLeaveBalance) // POST /api/leave-balances/:id/adjust
+	}
+
+	// ----------------- Admin: Leave Accrual -----------------
+	admin := r.Group("/api/admin")
+	admin.Use(middleware.AuthMiddleware(h))
+	{
+		// Manually trigger monthly leave accrual (SUPERADMIN only)
+		// ?month=5&year=2026  (defaults to current month/year)
+		admin.POST("/leave-accrual/run", h.TriggerLeaveAccrual)
+	}
+
+	// ----------------- Cron Jobs (No Auth - Token Protected) -----------------
+	cron := r.Group("/api/cron")
+	{
+		// Daily leave Slack notification
+		// GET /api/cron/daily-leave-slack?token=<CRON_SECRET_TOKEN>
+		cron.GET("/daily-leave-slack", h.DailyLeaveSlackNotification)
 	}
 
 	// ----------------- Payroll -----------------
@@ -102,13 +133,21 @@ func SetupRoutes(r *gin.Engine, h *controllers.HandlerFunc) {
 
 	}
 
+	// ----------------- Static files -----------------
+	// Serve uploaded files (logos, etc.) directly by path
+	r.Static("/uploads", "./uploads")
+
 	// ----------------- Settings -----------------
 	settings := r.Group("/api/settings")
-	settings.Use(middleware.AuthMiddleware(h)) // Only admin/superadmin
+	{
+		// Public — no auth: used by frontend to show company logo on login page etc.
+		settings.GET("/logo", h.GetCompanyLogo)
+	}
+	settings.Use(middleware.AuthMiddleware(h)) // remaining settings routes require auth
 	{
 		settings.GET("", h.GetCompanySettings)                      // Get current settings
 		settings.PUT("", h.UpdateCompanySettings)                   // Update settings
-		settings.GET("/birthday-preview", h.PreviewBirthdayMessage) // Preview rendered birthday message      // Get today's employee birthdays
+		settings.GET("/birthday-preview", h.PreviewBirthdayMessage) // Preview rendered birthday message
 	}
 	holidays := r.Group("/api/settings/holidays")
 	holidays.Use(middleware.AuthMiddleware(h))

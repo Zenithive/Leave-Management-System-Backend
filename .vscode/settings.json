@@ -1,0 +1,13 @@
+{
+  // Go template files contain {{...}} tokens inside style="" attributes.
+  // The VS Code CSS linter cannot parse Go template syntax and reports false errors.
+  // Validation is disabled for these files only — the templates are valid at runtime.
+  "css.validate": true,
+  "files.associations": {
+    "notification/templates/*.html": "html"
+  },
+  "[html]": {
+    "editor.defaultFormatter": "vscode.html-language-features"
+  },
+  "html.validate.styles": false
+}
