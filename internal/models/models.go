@@ -119,7 +119,6 @@ type CompanySettings struct {
 	UpdatedAt            string    `db:"updated_at" json:"updated_at"`
 
 	CompanyName    string `db:"company_name" json:"company_name"`
-	LogoPath       string `db:"logo_path" json:"logo_path"`
 	PrimaryColor   string `db:"primary_color" json:"primary_color"`
 	SecondaryColor string `db:"secondary_color" json:"secondary_color"`
 
@@ -133,6 +132,5 @@ type CompanyField struct {
 	CompanyName             string `form:"CompanyName" json:"company_name"`
 	PrimaryColor            string `form:"PrimaryColor" json:"primary_color"`
 	SecondaryColor          string `form:"SecondaryColor" json:"secondary_color"`
-	LogoPath                string `json:"logo_path"`
 	BirthdayMessageTemplate string `form:"BirthdayMessageTemplate" json:"birthday_message_template"`
 }
