@@ -3,7 +3,7 @@
 -- =====================================================
 -- Database: PostgreSQL
 -- Last Updated: April 9, 2026
--- Total Tables: 17
+-- Total Tables: 18
 -- =====================================================
 
 -- Enable UUID generation
@@ -25,7 +25,8 @@ INSERT INTO Tbl_Role (type) VALUES
     ('HR'),
     ('ADMIN'),
     ('MANAGER'),
-    ('EMPLOYEE')
+    ('EMPLOYEE'),
+    ('INTERN')
 ON CONFLICT (type) DO NOTHING;
 
 -- =====================================================
@@ -61,14 +62,38 @@ CREATE TABLE IF NOT EXISTS Tbl_Employee (
 -- =====================================================
 -- 4. TBL_LEAVE_TYPE - Leave Type Master
 -- =====================================================
-CREATE TABLE IF NOT EXISTS Tbl_Leave_type (
+CREATE TABLE IF NOT EXISTS Tbl_Leave_Type (
     id SERIAL PRIMARY KEY,
+
+    -- Leave Type Information
     name TEXT NOT NULL,
-    is_paid BOOLEAN,
-    default_entitlement INT,
-    is_early BOOLEAN DEFAULT FALSE,  -- Allows early leave (partial day)
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+    -- Whether leave is paid or unpaid
+    is_paid BOOLEAN NOT NULL DEFAULT TRUE,
+
+    -- Default yearly entitlement
+    default_entitlement INT NOT NULL DEFAULT 0,
+
+    -- Override entitlement for interns
+    intern_entitlement INT DEFAULT NULL,
+
+    -- Allows early leave (partial day)
+    is_early BOOLEAN NOT NULL DEFAULT FALSE,
+
+    -- Indicates this leave type is Work From Home
+    is_work_from_home BOOLEAN NOT NULL DEFAULT FALSE,
+
+    -- Approval workflow assigned to this leave type
+    approval_flow_id UUID NULL,
+
+    -- Audit fields
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_leave_type_approval_flow
+        FOREIGN KEY (approval_flow_id)
+        REFERENCES leave_approval_flow(id)
+        ON DELETE SET NULL
 );
 
 -- =====================================================
@@ -111,13 +136,15 @@ CREATE TABLE IF NOT EXISTS Tbl_Leave (
     -- Status constraint
     CONSTRAINT chk_leave_status CHECK (
         status IN (
-            'Pending', 
-            'MANAGER_APPROVED', 
-            'MANAGER_REJECTED', 
-            'APPROVED', 
-            'REJECTED', 
-            'CANCELLED', 
-            'WITHDRAWAL_PENDING', 
+            'Pending',
+            'MANAGER_APPROVED',
+            'MANAGER_REJECTED',
+            'ADMIN_APPROVED',
+            'ADMIN_REJECTED',
+            'APPROVED',
+            'REJECTED',
+            'CANCELLED',
+            'WITHDRAWAL_PENDING',
             'WITHDRAWN'
         )
     )
@@ -137,11 +164,29 @@ CREATE TABLE IF NOT EXISTS Tbl_Leave_balance (
     adjusted NUMERIC,  -- Manual adjustments
     closing NUMERIC,   -- Closing balance = opening + accrued - used + adjusted
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT uq_leave_balance UNIQUE (employee_id, leave_type_id, year)
 );
 
 -- =====================================================
--- 8. TBL_LEAVE_ADJUSTMENT - Manual Leave Adjustments
+-- 8. TBL_LEAVE_ACCRUAL_LOG - Monthly Accrual Tracking
+-- =====================================================
+CREATE TABLE IF NOT EXISTS Tbl_Leave_accrual_log (
+    id            UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
+    employee_id   UUID    NOT NULL REFERENCES Tbl_Employee(id),
+    leave_type_id INT     NOT NULL REFERENCES Tbl_Leave_type(id),
+    month         INT     NOT NULL,  -- 1-12
+    year          INT     NOT NULL,
+    days_credited NUMERIC NOT NULL,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Prevents double-crediting the same employee+type+month+year
+    CONSTRAINT uq_accrual_log UNIQUE (employee_id, leave_type_id, month, year)
+);
+
+-- =====================================================
+-- 9. TBL_LEAVE_ADJUSTMENT - Manual Leave Adjustments
 -- =====================================================
 CREATE TABLE IF NOT EXISTS Tbl_Leave_adjustment (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -156,7 +201,7 @@ CREATE TABLE IF NOT EXISTS Tbl_Leave_adjustment (
 );
 
 -- =====================================================
--- 9. TBL_HOLIDAY - Company Holidays
+-- 10. TBL_HOLIDAY - Company Holidays
 -- =====================================================
 CREATE TABLE IF NOT EXISTS Tbl_Holiday (
     id SERIAL PRIMARY KEY,
@@ -169,7 +214,7 @@ CREATE TABLE IF NOT EXISTS Tbl_Holiday (
 );
 
 -- =====================================================
--- 10. TBL_PAYROLL_RUN - Monthly Payroll Processing
+-- 11. TBL_PAYROLL_RUN - Monthly Payroll Processing
 -- =====================================================
 CREATE TABLE IF NOT EXISTS Tbl_Payroll_run (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -181,7 +226,7 @@ CREATE TABLE IF NOT EXISTS Tbl_Payroll_run (
 );
 
 -- =====================================================
--- 11. TBL_PAYSLIP - Employee Payslips
+-- 12. TBL_PAYSLIP - Employee Payslips
 -- =====================================================
 CREATE TABLE IF NOT EXISTS Tbl_Payslip (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -203,7 +248,7 @@ CREATE TABLE IF NOT EXISTS Tbl_Payslip (
 );
 
 -- =====================================================
--- 12. TBL_EQUIPMENT_CATEGORY - Equipment Categories
+-- 13. TBL_EQUIPMENT_CATEGORY - Equipment Categories
 -- =====================================================
 CREATE TABLE IF NOT EXISTS tbl_equipment_category (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -214,7 +259,7 @@ CREATE TABLE IF NOT EXISTS tbl_equipment_category (
 );
 
 -- =====================================================
--- 13. TBL_EQUIPMENT - Equipment Inventory
+-- 14. TBL_EQUIPMENT - Equipment Inventory
 -- =====================================================
 CREATE TABLE IF NOT EXISTS tbl_equipment (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -233,7 +278,7 @@ CREATE TABLE IF NOT EXISTS tbl_equipment (
 );
 
 -- =====================================================
--- 14. TBL_EQUIPMENT_ASSIGNMENT - Equipment Assignment History
+-- 15. TBL_EQUIPMENT_ASSIGNMENT - Equipment Assignment History
 -- =====================================================
 CREATE TABLE IF NOT EXISTS tbl_equipment_assignment (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -246,13 +291,13 @@ CREATE TABLE IF NOT EXISTS tbl_equipment_assignment (
 );
 
 -- =====================================================
--- 15. TBL_COMPANY_SETTINGS - Global Company Configuration
+-- 16. TBL_COMPANY_SETTINGS - Global Company Configuration
 -- =====================================================
 CREATE TABLE IF NOT EXISTS Tbl_Company_Settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     working_days_per_month INT NOT NULL DEFAULT 22,
     allow_manager_add_leave BOOLEAN NOT NULL DEFAULT FALSE,
-    company_name VARCHAR(255) DEFAULT 'ZENITHIVE',
+    company_name VARCHAR(255) DEFAULT 'DEMO',
     logo_path TEXT DEFAULT '',
     primary_color VARCHAR(7) DEFAULT '#2980b9',
     secondary_color VARCHAR(7) DEFAULT '#2ecc71',
@@ -264,11 +309,11 @@ CREATE TABLE IF NOT EXISTS Tbl_Company_Settings (
 
 -- Insert default settings
 INSERT INTO Tbl_Company_Settings (id, working_days_per_month, allow_manager_add_leave, company_name, primary_color, secondary_color)
-VALUES (gen_random_uuid(), 22, false, 'ZENITHIVE', '#2980b9', '#2ecc71')
+VALUES (gen_random_uuid(), 22, false, 'DEMO', '#2980b9', '#2ecc71')
 ON CONFLICT DO NOTHING;
 
 -- =====================================================
--- 16. TBL_LOG - System Activity Logging
+-- 17. TBL_LOG - System Activity Logging
 -- =====================================================
 CREATE TABLE IF NOT EXISTS tbl_log (
     id SERIAL PRIMARY KEY,
@@ -279,7 +324,7 @@ CREATE TABLE IF NOT EXISTS tbl_log (
 );
 
 -- =====================================================
--- 17. TBL_AUDIT - Detailed Audit Trail
+-- 18. TBL_AUDIT - Detailed Audit Trail
 -- =====================================================
 CREATE TABLE IF NOT EXISTS Tbl_Audit (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -293,8 +338,54 @@ CREATE TABLE IF NOT EXISTS Tbl_Audit (
 );
 
 -- =====================================================
+-- 19. TBL_LEAVE_APPROVAL_FLOW - Approval Workflow Engine
+-- =====================================================
+CREATE TABLE leave_approval_flow (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    name TEXT NOT NULL,
+
+    is_system BOOLEAN DEFAULT false,
+
+    flow JSONB NOT NULL,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO leave_approval_flow (
+    name,
+    is_system,
+    flow
+)
+VALUES (
+    'Default Flows',
+    true,
+    '[
+        {"stage_no": 1, "approver_role": "MANAGER"},
+        {"stage_no": 2, "approver_role": "ADMIN"},
+        {"stage_no": 3, "approver_role": "HR"},
+        {"stage_no": 4, "approver_role": "SUPERADMIN"}
+    ]'::jsonb
+);
+-- =====================================================
+-- 20. TBL_LEAVE_FFLOW - Approval Workflow log Engine
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS Tbl_Leave_Flow (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    leave_id UUID NOT NULL,
+    approval_log JSONB NOT NULL DEFAULT '[]'::jsonb,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL
+);
+
+-- =====================================================
 -- INDEXES FOR PERFORMANCE
 -- =====================================================
+
 
 -- Employee indexes
 CREATE INDEX IF NOT EXISTS idx_employee_email ON Tbl_Employee(email);
@@ -312,6 +403,10 @@ CREATE INDEX IF NOT EXISTS idx_leave_type ON Tbl_Leave(leave_type_id);
 -- Leave balance indexes
 CREATE INDEX IF NOT EXISTS idx_leave_balance_employee ON Tbl_Leave_balance(employee_id);
 CREATE INDEX IF NOT EXISTS idx_leave_balance_year ON Tbl_Leave_balance(year);
+
+-- Leave accrual log indexes
+CREATE INDEX IF NOT EXISTS idx_accrual_log_employee   ON Tbl_Leave_accrual_log(employee_id);
+CREATE INDEX IF NOT EXISTS idx_accrual_log_month_year ON Tbl_Leave_accrual_log(year, month);
 
 -- Payslip indexes
 CREATE INDEX IF NOT EXISTS idx_payslip_employee ON Tbl_Payslip(employee_id);
@@ -334,13 +429,14 @@ CREATE INDEX IF NOT EXISTS idx_audit_entity ON Tbl_Audit(entity, entity_id);
 -- COMMENTS ON TABLES
 -- =====================================================
 
-COMMENT ON TABLE Tbl_Role IS 'User roles: SUPERADMIN, HR, ADMIN, MANAGER, EMPLOYEE';
+COMMENT ON TABLE Tbl_Role IS 'User roles: SUPERADMIN, HR, ADMIN, MANAGER, EMPLOYEE, INTERN';
 COMMENT ON TABLE Tbl_Employee IS 'Core employee information with hierarchical structure';
 COMMENT ON TABLE Tbl_Designation IS 'Job designations/positions';
 COMMENT ON TABLE Tbl_Leave_type IS 'Leave type definitions with paid/unpaid and early leave support';
 COMMENT ON TABLE Tbl_Half IS 'Leave timing master: FIRST_HALF, SECOND_HALF, FULL';
 COMMENT ON TABLE Tbl_Leave IS 'Leave applications with approval workflow';
 COMMENT ON TABLE Tbl_Leave_balance IS 'Annual leave balance tracking per employee';
+COMMENT ON TABLE Tbl_Leave_accrual_log IS 'Monthly accrual log — prevents double-crediting per employee/type/month/year';
 COMMENT ON TABLE Tbl_Leave_adjustment IS 'Manual leave balance adjustments';
 COMMENT ON TABLE Tbl_Holiday IS 'Company holidays calendar';
 COMMENT ON TABLE Tbl_Payroll_run IS 'Monthly payroll processing runs';

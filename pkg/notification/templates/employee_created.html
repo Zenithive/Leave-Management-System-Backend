@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Welcome</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f7; margin: 0; padding: 0; }
+    .wrapper { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+    .header  { background: #4f46e5; padding: 24px 32px; }
+    .header h1 { color: #fff; margin: 0; font-size: 20px; }
+    .body    { padding: 32px; color: #374151; font-size: 15px; line-height: 1.6; }
+    .cred-box { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 16px 20px; margin: 20px 0; font-family: monospace; font-size: 14px; }
+    .cred-box p { margin: 6px 0; }
+    .cred-box .key { color: #0369a1; font-weight: 700; }
+    .warn    { background: #fff7ed; border-left: 4px solid #f97316; padding: 12px 16px; font-size: 13px; color: #7c2d12; border-radius: 0 4px 4px 0; margin-top: 16px; }
+    a.btn    { display: inline-block; margin-top: 24px; padding: 12px 24px; background: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 600; }
+    .footer  { background: #f9fafb; padding: 20px 32px; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <h1>👋 Welcome to {{.AppName}}</h1>
+    </div>
+    <div class="body">
+      <p>Dear {{.EmployeeName}},</p>
+      <p>Your employee account has been created. Here are your login credentials:</p>
+
+      <div class="cred-box">
+        <p><span class="key">Email    :</span> {{.EmployeeEmail}}</p>
+        <p><span class="key">Password :</span> {{.GeneratedPassword}}</p>
+      </div>
+
+      <div class="warn">
+        ⚠️ Please log in and change your password immediately.
+      </div>
+
+      {{if .AppURL}}<a class="btn" href="{{.AppURL}}">Log In Now</a>{{end}}
+
+      <p style="margin-top:24px;">If you have any questions, please contact your HR department.</p>
+    </div>
+    <div class="footer">{{.AppName}} HR Team &mdash; This is an automated notification.</div>
+  </div>
+</body>
+</html>

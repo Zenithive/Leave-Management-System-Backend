@@ -1,0 +1,127 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"log/slog"
+	"os"
+	"time"
+
+	"github.com/Zenithive/LeaveManagementSystem/internal/config"
+	"github.com/Zenithive/LeaveManagementSystem/internal/config/database"
+	"github.com/Zenithive/LeaveManagementSystem/internal/handler"
+	"github.com/Zenithive/LeaveManagementSystem/internal/models"
+	"github.com/Zenithive/LeaveManagementSystem/internal/repositories"
+	"github.com/Zenithive/LeaveManagementSystem/internal/service"
+	"github.com/Zenithive/LeaveManagementSystem/internal/service/leave/leaveflow"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/notification"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/notification/handlers"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/notification/providers"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/timezone"
+	"github.com/Zenithive/LeaveManagementSystem/routes"
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+	// ── Structured logger ────────────────────────────────────────────────────
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+
+	// ── Config + DB ──────────────────────────────────────────────────────────
+	env := config.LoadENV()
+	db := database.Connection(env)
+	validator := models.InitValidator()
+	repo := repositories.InitializeRepo(db)
+
+	// Initialize application timezone before any time operations.
+	// This must happen before cron, birthday calculations, or any time.Now() calls.
+	timezone.Initialize(env.TIMEZONE)
+
+	// ── Timezone diagnostic — verify timezone is active on every environment ──
+	// On Railway (UTC server), this confirms the timezone loaded correctly.
+	// Look for this log line after deployment to confirm timezone correctness.
+	nowUTC := time.Now().UTC()
+	nowApp := timezone.Now()
+	slog.Info("[startup] timezone check",
+		"server_local", time.Now().Location().String(),
+		"configured_tz", env.TIMEZONE,
+		"utc_now", nowUTC.Format("2006-01-02 15:04:05"),
+		"app_tz_now", nowApp.Format("2006-01-02 15:04:05"),
+		"app_tz_offset", nowApp.Format("-07:00"),
+	)
+	// ── Notification stack ───────────────────────────────────────────────────
+	// 1. Email transport provider (Resend HTTP API)
+	emailProvider := providers.NewResendEmailProvider(logger)
+
+	// 2. Domain handlers — own the email body composition, no transport knowledge
+	leaveHandler := handlers.NewLeaveNotificationHandler(emailProvider, logger, env)
+	employeeHandler := handlers.NewEmployeeNotificationHandler(emailProvider, logger, env)
+
+	// 3. Event processor — routes Event → correct handler (single dispatch point)
+	processor := notification.NewEventProcessor(leaveHandler, employeeHandler, logger)
+
+	// 4. Notification service — channel + worker pool (async, non-blocking)
+	notifCfg := notification.DefaultConfig() // Workers:3, Buffer:256, MaxRetries:3
+	notifSvc := notification.NewService(processor, notifCfg, logger)
+
+	// Start worker pool — graceful shutdown via context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	notifSvc.Start(ctx)
+	defer notifSvc.Stop()
+
+	// ── Domain services ──────────────────────────────────────────────────────
+	leaveApproverFlowRepo := repositories.NewLeaveApprovalFlowRepository(db)
+	leaveApporverService := service.NewLeaveApprovalFlowService(db, leaveApproverFlowRepo)
+
+	leavePolicyRepo := repositories.NewLeavePolicy(db)
+	leavePolicyService := service.NewLeavePolicy(db, leaveApporverService, leavePolicyRepo, repo)
+
+	leaveFlowLogRepo := repositories.NewLeaveFlowLog(db)
+	leaveFlowLogService := service.NewLeaveFlowLog(db, leavePolicyService, leaveFlowLogRepo)
+
+	leaveFlowRepo := repositories.NewLeaveFlow(db)
+	leaveFlowService := leaveflow.NewLeaveFlow(
+		db,
+		leaveFlowLogService,
+		leavePolicyService,
+		leaveFlowRepo,
+		leavePolicyRepo,
+		leaveFlowLogRepo,
+		repo,
+		notifSvc, // injected — leaveflow publishes events, never touches email directly
+	)
+	holidayRepo := repositories.NewHolidayRepository(db)
+	holidayservice := service.NewHolidayService(holidayRepo)
+
+	// ── HTTP handler ─────────────────────────────────────────────────────────
+	handlerFunc := handler.NewHandler(
+		env, repo, validator,
+		leaveApporverService, leavePolicyService,
+		leaveFlowService, leaveFlowLogService,
+		notifSvc, holidayservice,
+	)
+
+	// ── Cron jobs ────────────────────────────────────────────────────────────
+	birthdayCron := service.NewBirthdayCronService(repo, env, emailProvider)
+	birthdayCron.Start()
+	defer birthdayCron.Stop()
+
+	leaveAccrual := service.NewLeaveAccrualService(repo)
+	leaveAccrual.Start()
+	defer leaveAccrual.Stop()
+	handlerFunc.SetLeaveAccrualService(leaveAccrual)
+
+	// ── Router ───────────────────────────────────────────────────────────────
+	r := gin.Default()
+	models.InitValidator()
+	routes.SetupRoutes(r, handlerFunc, env)
+
+	fmt.Printf("Starting server on port %s\n", env.APP_PORT)
+	if err := r.Run(":" + env.APP_PORT); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
+}

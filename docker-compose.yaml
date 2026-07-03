@@ -1,15 +1,32 @@
-
 services:
   backend:
     build: .
     container_name: ums-backend
     ports:
       - "8082:8082"
-    environment:
-      DB_URL: postgresql://postgres.reiwplujhjytvdlowsqq:sanjay110@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true
-      APP_PORT: 8082
-      SECRATE_KEY: sanjay110
-      F_SERVER: http://localhost:8089
-      ALLOW_MANAGER_ADD_LEAVE: "true"
+    env_file:
+      - .env
     restart: unless-stopped
-    
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ums-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: yourpassword
+      POSTGRES_DB: dbname
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
