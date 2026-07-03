@@ -25,6 +25,7 @@ type ENV struct {
 	APP_NAME             string // display name used in notification emails
 	APP_URL              string // frontend URL appended to credential emails
 	COMPANY_LOGO         string // URL or path to the company logo served by GET /api/settings/logo
+	TIMEZONE             string
 }
 
 var (
@@ -56,6 +57,10 @@ func LoadENV() *ENV {
 		if appName == "" {
 			appName = "Leave Management System"
 		}
+		timezone := os.Getenv("TIMEZONE")
+		if timezone == "" {
+			timezone = "Asia/Kolkata" // default for India-based businesses
+		}
 
 		cfg = &ENV{
 			DB_URL:               os.Getenv("DB_URL"),
@@ -72,6 +77,7 @@ func LoadENV() *ENV {
 			APP_NAME:             appName,
 			APP_URL:              os.Getenv("APP_URL"),
 			COMPANY_LOGO:         os.Getenv("COMPANY_LOGO"),
+			TIMEZONE:             timezone,
 		}
 	})
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/constant"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/timezone"
 )
 
 // RenderBirthdayMessage replaces supported placeholders in the template:
@@ -32,14 +33,17 @@ func RenderBirthdayMessage(template, name string, birthDate *time.Time) string {
 }
 
 func calculateAge(birthDate time.Time) int {
-	now := time.Now()
+	// Always compute age in the configured application timezone.
+	now := timezone.Now()
 	age := now.Year() - birthDate.Year()
 	return age
 }
 
 func Calculation(list []models.BirthdayEmployee, month, year int) []models.BirthdayEmployee {
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	// Use the configured application timezone for all calculations so that
+	// "today" and countdown timers are always correct, regardless of server timezone.
+	now := timezone.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, timezone.AppLocation)
 
 	// Determine the reference year for birthday placement
 	refYear := now.Year()
@@ -53,13 +57,13 @@ func Calculation(list []models.BirthdayEmployee, month, year int) []models.Birth
 			continue
 		}
 
-		// Place the birthday in the reference year
+		// Place the birthday in the reference year (in configured timezone — keeps calendar day correct)
 		birthdayInRefYear := time.Date(
 			refYear,
 			emp.BirthDate.Month(),
 			emp.BirthDate.Day(),
 			0, 0, 0, 0,
-			now.Location(),
+			timezone.AppLocation,
 		)
 
 		// Age turning on this birthday (birth_year → refYear)
@@ -75,7 +79,8 @@ func Calculation(list []models.BirthdayEmployee, month, year int) []models.Birth
 				targetTime = birthdayInRefYear
 			case birthdayInRefYear.Equal(today):
 				emp.Status = string(constant.StatusToday)
-				targetTime = today.AddDate(0, 0, 1)
+				// Countdown to end-of-day in configured timezone (tomorrow 00:00)
+				targetTime = time.Date(today.Year(), today.Month(), today.Day()+1, 0, 0, 0, 0, timezone.AppLocation)
 			default:
 				emp.Status = string(constant.StatusUpcoming)
 				targetTime = birthdayInRefYear
@@ -89,7 +94,8 @@ func Calculation(list []models.BirthdayEmployee, month, year int) []models.Birth
 			}
 			if targetTime.Equal(today) {
 				emp.Status = string(constant.StatusToday)
-				targetTime = today.AddDate(0, 0, 1)
+				// Countdown to end-of-day in configured timezone (tomorrow 00:00)
+				targetTime = time.Date(today.Year(), today.Month(), today.Day()+1, 0, 0, 0, 0, timezone.AppLocation)
 			} else {
 				emp.Status = string(constant.StatusUpcoming)
 			}

@@ -11,6 +11,7 @@ import (
 	"github.com/Zenithive/LeaveManagementSystem/internal/config"
 	"github.com/Zenithive/LeaveManagementSystem/internal/repositories"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/notification/providers"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/timezone"
 	"github.com/robfig/cron/v3"
 )
 
@@ -28,20 +29,22 @@ func NewBirthdayCronService(repo *repositories.Repository, env *config.ENV, emai
 		repo:  repo,
 		env:   env,
 		Email: email,
-		// Use seconds-level precision so "0 1 0 * * *" = 00:01:00 every day
-		cron: cron.New(cron.WithSeconds()),
+		// WithSeconds() enables 6-field cron expressions.
+		// WithLocation(timezone.AppLocation) ensures the schedule is always interpreted in the configured timezone,
+		// regardless of the server's system timezone (UTC on Railway).
+		cron: cron.New(cron.WithSeconds(), cron.WithLocation(timezone.AppLocation)),
 	}
 }
 
 // Start registers the birthday job and starts the cron scheduler.
-// Schedule: every day at 00:01:00 (midnight + 1 minute)
+// Schedule: every day at 00:01:00 in the configured timezone (midnight + 1 minute)
 func (s *BirthdayCronService) Start() {
-	schedule := "0 1 0 * * *" // sec min hour day month weekday
-
-	//schedule := "*/5 * * * * *"
+	schedule := "0 1 0 * * *" // sec min hour day month weekday — interpreted in configured timezone
 
 	_, err := s.cron.AddFunc(schedule, func() {
-		log.Println("[BirthdayCron] Running birthday notification job...")
+		nowApp := timezone.Now()
+		log.Printf("[BirthdayCron] Running birthday notification job at %s %s",
+			nowApp.Format("2006-01-02 15:04:05"), timezone.AppLocation.String())
 		if err := s.runBirthdayJob(); err != nil {
 			log.Printf("[BirthdayCron] Job failed: %v\n", err)
 		}
@@ -51,7 +54,7 @@ func (s *BirthdayCronService) Start() {
 	}
 
 	s.cron.Start()
-	log.Printf("[BirthdayCron] Scheduled at '%s' (daily 00:01)\n", schedule)
+	log.Printf("[BirthdayCron] Scheduled at '%s' in %s (daily 00:01)\n", schedule, timezone.AppLocation.String())
 }
 
 // Stop gracefully shuts down the cron scheduler.

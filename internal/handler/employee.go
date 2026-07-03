@@ -15,6 +15,7 @@ import (
 	"github.com/Zenithive/LeaveManagementSystem/pkg/notification"
 	notifmodels "github.com/Zenithive/LeaveManagementSystem/pkg/notification/models"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/security"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/timezone"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -833,9 +834,12 @@ func (h *HandlerFunc) GetTodayBirthdays(c *gin.Context) {
 		})
 	}
 
+	// Always report "today" in the configured application timezone so the date matches the birthday query
+	todayIST := timezone.Now().Format("2006-01-02")
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "success",
-		"date":    time.Now().Format("2006-01-02"),
+		"date":    todayIST,
 		"total":   len(result),
 		"data":    result,
 	})
