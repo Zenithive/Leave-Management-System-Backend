@@ -7,6 +7,7 @@ import (
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/models"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/accessrole"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/timezone"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
@@ -237,21 +238,27 @@ func (r *Repository) GetHrEmail() []string {
 	return hrEmails
 }
 
-// GetTodayBirthdays returns all active employees whose birth_date month+day matches today.
+// GetTodayBirthdays returns all active employees whose birth_date month+day matches today in the configured timezone.
+// We pass today's date explicitly instead of relying on PostgreSQL's CURRENT_DATE,
+// which would use UTC on Railway and return the wrong day near midnight.
 func (r *Repository) GetTodayBirthdays() ([]models.BirthdayEmployee, error) {
+	year, month, day := timezone.TodayDate()
+
 	rows, err := r.DB.Query(`
 		SELECT id::text, full_name, email, birth_date
 		FROM Tbl_Employee
 		WHERE status = 'active'
 		  AND birth_date IS NOT NULL
-		  AND EXTRACT(MONTH FROM birth_date) = EXTRACT(MONTH FROM CURRENT_DATE)
-		  AND EXTRACT(DAY   FROM birth_date) = EXTRACT(DAY   FROM CURRENT_DATE)
+		  AND EXTRACT(MONTH FROM birth_date) = $1
+		  AND EXTRACT(DAY   FROM birth_date) = $2
 		ORDER BY full_name
-	`)
+	`, month, day)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+
+	_ = year // used for logging/debugging if needed
 
 	var result []models.BirthdayEmployee
 	for rows.Next() {
@@ -268,7 +275,7 @@ func (r *Repository) GetTodayBirthdays() ([]models.BirthdayEmployee, error) {
 //
 // month=4&year=2026  → employees whose birth month = April (any year), shown in context of 2026
 // year=2026          → all employees, shown across full year 2026
-// (no params)        → upcoming 30 days from today (year-wrap safe)
+// (no params)        → upcoming 30 days from today IST (year-wrap safe)
 func (r *Repository) GetBirthdays(month, year int) ([]models.BirthdayEmployee, error) {
 	base := `
 	SELECT id::text, full_name, email, birth_date
@@ -296,28 +303,33 @@ func (r *Repository) GetBirthdays(month, year int) ([]models.BirthdayEmployee, e
 		query = base + `ORDER BY EXTRACT(MONTH FROM birth_date), EXTRACT(DAY FROM birth_date)`
 
 	default:
-		// Upcoming 30 days (handles year-wrap into next year)
-		// Order by days-from-today so the soonest birthday comes first
+		// Upcoming 30 days from today in the configured application timezone.
+		// We pass the app-timezone date as a parameter instead of relying on PostgreSQL's CURRENT_DATE
+		// (which uses UTC on Railway and would return the wrong day near midnight).
+		now := timezone.Now()
+		todayStr := fmt.Sprintf("%04d-%02d-%02d", now.Year(), int(now.Month()), now.Day())
+
 		query = base + `
 		AND (
 			make_date(
-				EXTRACT(YEAR FROM CURRENT_DATE)::int,
+				EXTRACT(YEAR FROM $1::date)::int,
 				EXTRACT(MONTH FROM birth_date)::int,
 				EXTRACT(DAY FROM birth_date)::int
-			) BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+			) BETWEEN $1::date AND $1::date + INTERVAL '30 days'
 			OR
 			make_date(
-				EXTRACT(YEAR FROM CURRENT_DATE)::int + 1,
+				EXTRACT(YEAR FROM $1::date)::int + 1,
 				EXTRACT(MONTH FROM birth_date)::int,
 				EXTRACT(DAY FROM birth_date)::int
-			) BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+			) BETWEEN $1::date AND $1::date + INTERVAL '30 days'
 		)
 		ORDER BY
 			LEAST(
-				make_date(EXTRACT(YEAR FROM CURRENT_DATE)::int,     EXTRACT(MONTH FROM birth_date)::int, EXTRACT(DAY FROM birth_date)::int),
-				make_date(EXTRACT(YEAR FROM CURRENT_DATE)::int + 1, EXTRACT(MONTH FROM birth_date)::int, EXTRACT(DAY FROM birth_date)::int)
+				make_date(EXTRACT(YEAR FROM $1::date)::int,     EXTRACT(MONTH FROM birth_date)::int, EXTRACT(DAY FROM birth_date)::int),
+				make_date(EXTRACT(YEAR FROM $1::date)::int + 1, EXTRACT(MONTH FROM birth_date)::int, EXTRACT(DAY FROM birth_date)::int)
 			)
 		`
+		args = append(args, todayStr)
 	}
 
 	rows, err := r.DB.Query(query, args...)

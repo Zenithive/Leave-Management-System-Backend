@@ -60,18 +60,7 @@ func (h *HandlerFunc) UpdateCompanySettings(c *gin.Context) {
 		BirthdayMessageTemplate: c.PostForm("BirthdayMessageTemplate"),
 	}
 
-	// 3. Handle Logo File Upload
-	var logoPath string
-	file, err := c.FormFile("Logo")
-	if err == nil {
-		logoPath = "uploads/logos/" + uuid.New().String() + "-" + file.Filename
-		if err := c.SaveUploadedFile(file, logoPath); err != nil {
-			errors.RespondWithError(c, 500, "Failed to save logo file")
-			return
-		}
-	}
-
-	// 4. Get Employee ID for Audit Logs
+	// 3. Get Employee ID for Audit Logs
 	empIDRaw, ok := c.Get("user_id")
 	if !ok {
 		errors.RespondWithError(c, http.StatusUnauthorized, "Employee ID missing")
@@ -79,9 +68,9 @@ func (h *HandlerFunc) UpdateCompanySettings(c *gin.Context) {
 	}
 	empID, _ := uuid.Parse(empIDRaw.(string))
 
-	// 5. Execute Database Transaction
-	err = database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
-		if err := h.Query.UpdateCompanySettings(tx, input, logoPath); err != nil {
+	// 4. Execute Database Transaction
+	err := database.ExecuteTransaction(c, h.Query.DB, func(tx *sqlx.Tx) error {
+		if err := h.Query.UpdateCompanySettings(tx, input); err != nil {
 			return err
 		}
 		return h.Query.AddLog(models.NewCommon(constant.CompanySettings, constant.ActionUpdate, empID), tx)
@@ -93,11 +82,21 @@ func (h *HandlerFunc) UpdateCompanySettings(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Company settings updated successfully",
-		"logo":    logoPath,
 	})
 }
 
-// PreviewBirthdayMessage - GET /api/settings/birthday-preview?name=John&birth_date=1995-04-16
+// GetCompanyLogo - GET /api/settings/logo  (public — no auth required)
+// Returns the company logo URL from the COMPANY_LOGO environment variable.
+// Falls back to a placeholder image URL if the env var is not set.
+func (h *HandlerFunc) GetCompanyLogo(c *gin.Context) {
+	logoURL := h.Env.COMPANY_LOGO
+	if logoURL == "" {
+	logoURL = "https://ui-avatars.com/api/?name=Z&background=000000&color=ffffff&size=256&rounded=true"
+}
+	c.JSON(http.StatusOK, gin.H{
+		"logo": logoURL,
+	})
+}
 // Returns the rendered birthday message using the current template and provided placeholders.
 func (h *HandlerFunc) PreviewBirthdayMessage(c *gin.Context) {
 	if err := accessrole.Admin_SuperAdmin(c.GetString("role"), "not authorized"); err != nil {

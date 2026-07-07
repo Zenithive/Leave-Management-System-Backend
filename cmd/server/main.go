@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/Zenithive/LeaveManagementSystem/internal/config"
 	"github.com/Zenithive/LeaveManagementSystem/internal/config/database"
@@ -17,6 +18,7 @@ import (
 	"github.com/Zenithive/LeaveManagementSystem/pkg/notification"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/notification/handlers"
 	"github.com/Zenithive/LeaveManagementSystem/pkg/notification/providers"
+	"github.com/Zenithive/LeaveManagementSystem/pkg/timezone"
 	"github.com/Zenithive/LeaveManagementSystem/routes"
 	"github.com/gin-gonic/gin"
 )
@@ -34,6 +36,22 @@ func main() {
 	validator := models.InitValidator()
 	repo := repositories.InitializeRepo(db)
 
+	// Initialize application timezone before any time operations.
+	// This must happen before cron, birthday calculations, or any time.Now() calls.
+	timezone.Initialize(env.TIMEZONE)
+
+	// ── Timezone diagnostic — verify timezone is active on every environment ──
+	// On Railway (UTC server), this confirms the timezone loaded correctly.
+	// Look for this log line after deployment to confirm timezone correctness.
+	nowUTC := time.Now().UTC()
+	nowApp := timezone.Now()
+	slog.Info("[startup] timezone check",
+		"server_local", time.Now().Location().String(),
+		"configured_tz", env.TIMEZONE,
+		"utc_now", nowUTC.Format("2006-01-02 15:04:05"),
+		"app_tz_now", nowApp.Format("2006-01-02 15:04:05"),
+		"app_tz_offset", nowApp.Format("-07:00"),
+	)
 	// ── Notification stack ───────────────────────────────────────────────────
 	// 1. Email transport provider (Resend HTTP API)
 	emailProvider := providers.NewResendEmailProvider(logger)

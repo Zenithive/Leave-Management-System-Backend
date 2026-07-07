@@ -6,10 +6,14 @@ import (
 )
 
 func (r *Repository) GetCompanySettings(settings *models.CompanySettings) error {
-	return r.DB.Get(settings, `SELECT * FROM Tbl_Company_Settings LIMIT 1`)
+	return r.DB.Get(settings, `
+		SELECT id, working_days_per_month, allow_manager_add_leave,
+		       company_name, primary_color, secondary_color,
+		       birthday_message_template, created_at, updated_at
+		FROM Tbl_Company_Settings LIMIT 1`)
 }
 
-func (r *Repository) UpdateCompanySettings(tx *sqlx.Tx, input models.CompanyField, logoPath string) error {
+func (r *Repository) UpdateCompanySettings(tx *sqlx.Tx, input models.CompanyField) error {
 	_, err := tx.Exec(`
 		UPDATE Tbl_Company_Settings
 		SET working_days_per_month        = $1,
@@ -17,8 +21,7 @@ func (r *Repository) UpdateCompanySettings(tx *sqlx.Tx, input models.CompanyFiel
 		    company_name                  = $3,
 		    primary_color                 = $4,
 		    secondary_color               = $5,
-		    logo_path                     = COALESCE(NULLIF($6, ''), logo_path),
-		    birthday_message_template     = CASE WHEN $7 = '' THEN birthday_message_template ELSE $7 END,
+		    birthday_message_template     = CASE WHEN $6 = '' THEN birthday_message_template ELSE $6 END,
 		    updated_at                    = NOW()
 	`,
 		input.WorkingDaysPerMonth,
@@ -26,7 +29,6 @@ func (r *Repository) UpdateCompanySettings(tx *sqlx.Tx, input models.CompanyFiel
 		input.CompanyName,
 		input.PrimaryColor,
 		input.SecondaryColor,
-		logoPath,
 		input.BirthdayMessageTemplate,
 	)
 	return err
