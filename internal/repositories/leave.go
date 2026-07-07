@@ -242,7 +242,7 @@ func (r *Repository) GetTodaysActiveLeaves() ([]models.DailyLeaveRecord, error) 
 		LEFT JOIN Tbl_Employee approver ON l.approved_by = approver.id
 		WHERE l.start_date <= CURRENT_DATE
 		  AND l.end_date >= CURRENT_DATE
-		  AND l.status IN ('APPROVED', 'MANAGER_APPROVED')
+		  AND l.status IN ('APPROVED', 'MANAGER_APPROVED','Pending')
 		ORDER BY e.full_name
 	`
 
